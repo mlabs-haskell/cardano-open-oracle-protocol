@@ -9,8 +9,8 @@ implementation.
 ### General design ideas 
 
 1. Data structured similarly to `Data.Row`, see [row-types](https://hackage.haskell.org/package/row-types)
-2. Commitment scheme similar to Merkle Trees 
-3. [Product Nodes](product-nodes)
+2. Commitment scheme similar to [Merkle Trees](https://en.wikipedia.org/wiki/Merkle_tree)
+3. [Product Nodes](#product-nodes)
 4. Tabular form higher order nodes 
 
 #### Graph
@@ -25,19 +25,17 @@ implementation.
             └──────────► Transaction that◄───┘
                        │ requires info   │
                        │ A x B x C x D   │
-                       │ at time 1       │
+                       │ at Time 1       │
                        └─────────▲───────┘
-                                 │
-┌────────┐                       │
-│User    │                       │
-│        ├───────────────────────┘
-└────────┘
+ ┌────────┐                      │
+ │User    ├──────────────────────┘
+ └────────┘
 ```
 
 ### Product Nodes 
 
-- any user can combine information from any `n` nodes and manipulate it using a function as long as it can 
-  proof that the combination maintains trust according to the specification of trust given by the authority. 
+- any user can combine information from any `n` nodes and manipulate it using a function as long as they can 
+  prove that the combination maintains trust according to the specification of trust given by the authority. 
   The result is provided in a new Datum.
 - `f : [Data] -> ([Data] -> Data) -> MintingPolicy -> (CurrencySymbol, Data)` (rough sketch, this doesn't 
   correspond with the actual implementation) 
@@ -151,12 +149,12 @@ type family MkPredecessor (arity :: Arity) (isSequential :: Bool) where
 
 ```
 
-*To avoid unnecessary onchain data the UTXOData can be specialised to not contain a 
-predecessor field (depending on the usecase a datum might not depend on a previous datum)*
+*To avoid unnecessary onchain data the `UTXOData` can be specialized to not contain a 
+predecessor field (depending on the use-case a datum might not depend on a previous datum)*
 
 ## Open questions
 
-- what could be usecases of linking datums onchain
+- what could be use-cases of linking datums onchain
 - how do we make sure that if we compute a new datum from a number of other datums 
   trust is maintained (in the general case)
 
