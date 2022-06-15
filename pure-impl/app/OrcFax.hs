@@ -1,5 +1,3 @@
-{-# LANGUAGE DataKinds, TypeFamilies, GADTs #-}
-{-# OPTIONS_GHC -Wall #-}
 module OrcFax where 
 
 import Data.ByteString 

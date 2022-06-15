@@ -29,6 +29,65 @@ executable cardano-open-oracle-protocol
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
-    build-depends:    base
+    ghc-options: 
+      -Wall -Werror
+    default-extensions: 
+        NoStarIsType
+        BangPatterns
+        ConstraintKinds
+        DataKinds
+        DefaultSignatures
+        DeriveAnyClass
+        DeriveDataTypeable
+        DeriveFoldable
+        DeriveFunctor
+        DeriveGeneric
+        DeriveLift
+        DeriveTraversable
+        DerivingStrategies
+        DerivingVia
+        EmptyDataDecls
+        EmptyDataDeriving
+        ExistentialQuantification
+        ExplicitForAll
+        FlexibleContexts
+        FlexibleInstances
+        FunctionalDependencies
+        GeneralisedNewtypeDeriving
+        HexFloatLiterals
+        InstanceSigs
+        LambdaCase
+        NoMonomorphismRestriction
+        NamedFieldPuns
+        NamedWildCards
+        NumericUnderscores
+        OverloadedStrings
+        PartialTypeSignatures
+        PatternGuards
+        PatternSynonyms
+        PolyKinds
+        PostfixOperators
+        QuantifiedConstraints
+        RankNTypes
+        RoleAnnotations
+        ScopedTypeVariables
+        StandaloneDeriving
+        StandaloneKindSignatures
+        TupleSections
+        TypeApplications
+        TypeFamilyDependencies
+        TypeOperators
+        TypeSynonymInstances
+        ViewPatterns
+
+    build-depends:    
+      , base
+      , relude
+      , row-types
+
+    mixins: 
+      , base hiding (Prelude)
+      , relude (Relude as Prelude)
+      , relude
     hs-source-dirs:   app
     default-language: Haskell2010
