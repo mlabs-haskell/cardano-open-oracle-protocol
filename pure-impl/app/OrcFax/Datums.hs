@@ -1,8 +1,4 @@
-module OrcFax where 
-
-import Data.ByteString 
-import Data.Map (Map)
-import Data.Void (Void)
+module OrcFax.Datums where 
 
 -- TODO: rewrite this using `Data.Row`
 
@@ -68,5 +64,3 @@ data POSIXInterval
 data Extended a 
 data POSIXTime
 data CurrencySymbol
-
-

@@ -25,7 +25,8 @@ executable cardano-open-oracle-protocol
     main-is:          Main.hs
 
     -- Modules included in this executable, other than Main.
-    -- other-modules:    OrxFax
+    other-modules:    OrcFax.Datums
+                    , OrcFax.MerkleTree
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -82,8 +83,13 @@ executable cardano-open-oracle-protocol
 
     build-depends:    
       , base
+      , aeson
+      , cryptohash
       , relude
+      , containers
       , row-types
+      , QuickCheck
+      , generic-arbitrary
 
     mixins: 
       , base hiding (Prelude)

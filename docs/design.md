@@ -6,7 +6,7 @@ implementation.
 
 ## Initial proposal/ concepts
 
-### General design ideas 
+### Vlads ideas
 
 1. Data structured similarly to `Data.Row`, see [row-types](https://hackage.haskell.org/package/row-types)
 2. Commitment scheme similar to [Merkle Trees](https://en.wikipedia.org/wiki/Merkle_tree)
@@ -76,6 +76,8 @@ is non-trivial in the general case*
     gaining back funds.
 
 2. Commitment Scheme
+  - this can be the scheme proposed by Las or basically any other commitment scheme, the designs 
+    are not mutually exclusive
 
 3. Naming scheme in the data registry; the datum-`URI`
   - two main requirements for the URI: representative (searchable), unique
@@ -98,7 +100,7 @@ data Arity = Primitive
 data UTXOData (arity :: Arity) (isSequential :: Bool) = MkUTXOData
   -- | specifies whether you have a primitive datum or a composition
   --   of them
-  { isPrimitive :: Bool 
+  { isPrimitive :: SBool isSequential
   -- | function(s) from the URI of the Datum, see URI type
   --   to the NFT identifying the UTXOData
   , typeId :: MkTypeId arity
@@ -130,7 +132,7 @@ data URI = MkURI
   , categorization :: ByteString
   -- | the UID specialising the instance of a category of `dataStreamName`
   , dataUid :: ByteString
-}
+  }
 
 -- | The (onchain-computable) hash of a datum-URI 
 newtype URIHash = MkURIHash ByteString
@@ -147,6 +149,9 @@ type family MkPredecessor (arity :: Arity) (isSequential :: Bool) where
   MkPredecessor 'Primitive 'False = PrevURIHash
   MkPredecessor 'Multiple 'False = [(PrevURIHash, URIHash)]
 
+data SBool b where 
+  STrue :: SBool 'True
+  SFalse :: SBool 'False
 ```
 
 *To avoid unnecessary onchain data the `UTXOData` can be specialized to not contain a 
@@ -157,8 +162,10 @@ predecessor field (depending on the use-case a datum might not depend on a previ
 - what could be use-cases of linking datums onchain
 - how do we make sure that if we compute a new datum from a number of other datums 
   trust is maintained (in the general case)
+- what are the exact costs for the different approaches; what would be a good way to mix and 
+  match the different ideas
 
-## Las' thoughts
+## Las' ideas
 
 ### Concurrency
 
@@ -179,6 +186,47 @@ The datum will carry a timestamp.
 
 We can use commitment schemes to prove past data if necessary.
 A very trivial example is a Merkle tree.
+
+Simple example of how we could map the onchain data to the offchain
+
+```haskell
+-- | the tree that contains the data in form of a Bytesstring, that 
+--   is basically the offchain datastructure
+data Tree = Leaf ByteString | Node Tree Tree
+
+-- | the hash representing a hash of a Tree at a certain depth
+newtype MerkleTree = MerkleTree Hash
+
+
+-- | hashes a bytestring, assumes a hash primitive
+mkHash :: ByteString -> Hash
+mkHash = hash
+
+-- | the leaf of a tree
+mkLeaf :: ByteString -> MerkleTree
+mkLeaf = MerkleTree $ mkHash $ "0" <> bs
+
+-- | the node of a tree based off of two child nodes
+mkNode :: MerkleTree -> MerkleTree -> MerkleTree
+mkNode (MerkleTree (MkHash h1)) (MerkleTree (MkHash h2)) = MerkleTree $ mkHash $ "1" <> h1 <> h2
+
+-- | create the tree to put from the offchain to the onchain as a commitment
+mkTree :: Tree -> MerkleTree
+mkTree (Leaf bs) = mkLeaf bs
+mkTree (Node left right) = mkNode (mkTree left) (mkTree right)
+
+data Path = Here
+          | LeftPath MerkleTree MerkleTree Path 
+          | RightPath MerkleTree MerkleTree Path
+
+proveIn :: Path -> MerkleTree -> ByteString -> Bool
+proveIn Here t bs = mkLeaf bs == t
+proveIn (LeftPath left right p) t bs = mkNode left right == t && proveIn p left bs
+proveIn (RightPath left right p) t bs = mkNode left right == t && proveIn p right bs
+
+
+newtype Hash = MkHash ByteString
+```
 
 ### Authenticity
 
