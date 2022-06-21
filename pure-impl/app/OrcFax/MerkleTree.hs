@@ -91,7 +91,7 @@ lookupRegistry i = note "lookup in oracle tree failed" . lookupOracleTree i . fs
     lookupOracleTree id'' (Node t0 t1) =
         let mt0 = mkTree t0
             mt1 = mkTree t1
-         in (first (LeftPath mt0 mt1) <$> (lookupOracleTree id'' t0)) <|> (first (RightPath mt0 mt1) <$> (lookupOracleTree id'' t1))
+         in (first (LeftPath mt0 mt1) <$> lookupOracleTree id'' t0) <|> (first (RightPath mt0 mt1) <$> lookupOracleTree id'' t1)
 
 obtainRegistryHash :: Registry rec -> MerkleTree
 obtainRegistryHash = snd . unRegistry
