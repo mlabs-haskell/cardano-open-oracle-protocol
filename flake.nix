@@ -6,7 +6,6 @@
     nixpkgs.follows = "haskell-nix/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     flake-utils.inputs.nixpkgs.follows = "haskell-nix/nixpkgs-unstable";
-    haskell-language-server.url = "github:haskell/haskell-language-server";
   };
 
   outputs = inputs@{ self, nixpkgs, flake-utils, haskell-nix, ... }:
@@ -17,11 +16,14 @@
 
         pkgs = import nixpkgs { inherit system; inherit (haskell-nix) config; };
         pkgsWithOverlay = import nixpkgs { inherit system overlays; inherit (haskell-nix) config; };
-
-        ghcVersion = "922";
+        ghcVersion = "921";
         compiler-nix-name = "ghc" + ghcVersion;
+        
+        hls = pkgs.haskell-language-server.override 
+          {
+            supportedGhcVersions = [ghcVersion];
+          };
 
-        hls = inputs.haskell-language-server.packages.${system}."haskell-language-server-${ghcVersion}";
 
         overlays = [
           haskell-nix.overlay
@@ -35,6 +37,7 @@
                     pkgs.nixpkgs-fmt
                     pkgs.haskellPackages.cabal-fmt
                     pkgs.haskellPackages.fourmolu
+                    pkgs.haskellPackages.haskell-language-server
                     hls
                   ] ++ extra-tools;
                   tools = {
