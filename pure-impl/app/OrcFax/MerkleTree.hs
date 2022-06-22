@@ -1,12 +1,12 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module OrcFax.MerkleTree (proveIn, prop_in_oracle_tree, inLeaf, wrongData, wrongId, sampleOracle) where
+module OrcFax.MerkleTree (proveIn, prop_proof_holds_for_id_in_tree, prop_proof_does_not_hold_for_id_not_in_tree, prop_in_oracle_tree, inLeaf, wrongData, wrongId, sampleOracle) where
 
 import Crypto.Hash.SHA256 (hash)
 import Data.Aeson (ToJSON, encode)
 import Data.ByteString (pack)
 import GHC.Records (HasField (getField))
-import Test.QuickCheck (Arbitrary (arbitrary))
+import Test.QuickCheck (Arbitrary (arbitrary), Property, elements, suchThat, (===))
 import Test.QuickCheck.Arbitrary.Generic (GenericArbitrary (GenericArbitrary))
 
 -- TODO:
@@ -20,11 +20,13 @@ import Test.QuickCheck.Arbitrary.Generic (GenericArbitrary (GenericArbitrary))
 data Tree a
   = Leaf a
   | Node (Tree a) (Tree a)
+  deriving stock (Eq, Generic, Show, Functor)
+  deriving (Arbitrary) via GenericArbitrary (Tree a)
 
 -- | a merkle tree, this corresponds to the top node of the tree
 newtype MerkleTree = MerkleTree Hash
   deriving stock (Eq, Generic)
-  deriving (Arbitrary) via (GenericArbitrary MerkleTree)
+  deriving (Arbitrary) via GenericArbitrary MerkleTree
 
 -- | a sha256 hash
 newtype Hash = MkHash ByteString
@@ -47,6 +49,14 @@ mkNode (MerkleTree (MkHash h1)) (MerkleTree (MkHash h2)) = MerkleTree $ mkHash $
 mkTree :: ToJSON a => Tree a -> MerkleTree
 mkTree (Leaf odata) = mkLeaf $ toStrict $ encode odata
 mkTree (Node left right) = mkNode (mkTree left) (mkTree right)
+
+-- | flattens a tree to a list
+flattenTree :: Tree a -> [a]
+flattenTree (Leaf a) = [a]
+flattenTree (Node a b) = flattenTree a <> flattenTree b
+
+instance Foldable Tree where
+  foldr f a t = foldr f a $ flattenTree t
 
 {- | the Path into the MerkleTree, this has to be provided with the
    redeemer
@@ -97,7 +107,7 @@ obtainRegistryHash :: Registry rec -> MerkleTree
 obtainRegistryHash = snd . unRegistry
 
 newtype Id = MkId Int
-  deriving stock (Generic)
+  deriving stock (Generic, Show)
   deriving newtype (Arbitrary, Eq, Ord)
   deriving anyclass (ToJSON)
 
@@ -106,7 +116,7 @@ data OracleData = MkOracleData
   , name :: String
   , contents :: String
   }
-  deriving stock (Generic)
+  deriving stock (Generic, Eq, Show)
   deriving anyclass (ToJSON)
   deriving (Arbitrary) via (GenericArbitrary OracleData)
 
@@ -130,6 +140,31 @@ prop_in_oracle_tree datumID tree = do
       encodedDatum :: ByteString
       encodedDatum = toStrict $ encode datum
   pure $ proveIn path onchainHashLookup encodedDatum
+
+newtype IdAndOracleTree = MkIdInOracleTree (Id, Tree OracleData)
+  deriving stock (Show)
+newtype IdNotInOracleTree = MkIdNotInOracleTree (Id, Tree OracleData)
+  deriving stock (Show)
+
+instance Arbitrary IdAndOracleTree where
+  arbitrary = do
+    oracleTree :: Tree OracleData <- arbitrary
+    oracleId :: Id <- i <$> elements (flattenTree oracleTree)
+    pure $ MkIdInOracleTree (oracleId, oracleTree)
+
+instance Arbitrary IdNotInOracleTree where
+  arbitrary = do
+    oracleTree :: Tree OracleData <- arbitrary
+    oracleId :: Id <- arbitrary `suchThat` (\e -> not $ e `elem` fmap i oracleTree)
+    pure $ MkIdNotInOracleTree (oracleId, oracleTree)
+
+prop_proof_holds_for_id_in_tree :: IdAndOracleTree -> Property
+prop_proof_holds_for_id_in_tree (MkIdInOracleTree (id', tree)) =
+  prop_in_oracle_tree id' tree === Right True
+
+prop_proof_does_not_hold_for_id_not_in_tree :: IdNotInOracleTree -> Property
+prop_proof_does_not_hold_for_id_not_in_tree (MkIdNotInOracleTree (id', tree)) =
+  prop_in_oracle_tree id' tree === Left "lookup in oracle tree failed"
 
 inLeaf :: OracleData
 inLeaf =
