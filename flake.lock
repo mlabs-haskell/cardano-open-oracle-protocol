@@ -370,6 +370,20 @@
         "type": "github"
       }
     },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1655567057,
+        "narHash": "sha256-Cc5hQSMsTzOHmZnYm8OSJ5RNUp22bd5NADWLHorULWQ=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "e0a42267f73ea52adc061a64650fddc59906fc99",
+        "type": "github"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "type": "indirect"
+      }
+    },
     "old-ghc-nix": {
       "flake": false,
       "locked": {
@@ -387,6 +401,27 @@
         "type": "github"
       }
     },
+    "pre-commit-hooks": {
+      "inputs": {
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "lastModified": 1655906603,
+        "narHash": "sha256-wwyJc0VPm7NQlQRspMrFFQQak1hHJwRfcNgGTL2onDA=",
+        "owner": "cachix",
+        "repo": "pre-commit-hooks.nix",
+        "rev": "b7a131d06a23b02ab8eaa12d249d282f3590cbf9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "cachix",
+        "repo": "pre-commit-hooks.nix",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
@@ -394,7 +429,8 @@
         "nixpkgs": [
           "haskell-nix",
           "nixpkgs-unstable"
-        ]
+        ],
+        "pre-commit-hooks": "pre-commit-hooks"
       }
     },
     "stackage": {

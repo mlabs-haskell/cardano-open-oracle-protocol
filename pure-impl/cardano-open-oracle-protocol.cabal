@@ -18,82 +18,83 @@ maintainer:         info@mlabs.city
 -- copyright:
 category:           Network
 extra-source-files:
-    CHANGELOG.md
-    README.md
+  CHANGELOG.md
+  README.md
 
 executable cardano-open-oracle-protocol
-    main-is:          Main.hs
+  main-is:            Main.hs
 
-    -- Modules included in this executable, other than Main.
-    other-modules:    OrcFax.Datums
-                    , OrcFax.MerkleTree
+  -- Modules included in this executable, other than Main.
+  other-modules:
+    OrcFax.Datums
+    OrcFax.MerkleTree
 
-    -- LANGUAGE extensions used by modules in this package.
-    -- other-extensions:
-    ghc-options: 
-      -Wall -Werror
-    default-extensions: 
-        NoStarIsType
-        BangPatterns
-        ConstraintKinds
-        DataKinds
-        DefaultSignatures
-        DeriveAnyClass
-        DeriveDataTypeable
-        DeriveFoldable
-        DeriveFunctor
-        DeriveGeneric
-        DeriveLift
-        DeriveTraversable
-        DerivingStrategies
-        DerivingVia
-        EmptyDataDecls
-        EmptyDataDeriving
-        ExistentialQuantification
-        ExplicitForAll
-        FlexibleContexts
-        FlexibleInstances
-        FunctionalDependencies
-        GeneralisedNewtypeDeriving
-        HexFloatLiterals
-        InstanceSigs
-        LambdaCase
-        NoMonomorphismRestriction
-        NamedFieldPuns
-        NamedWildCards
-        NumericUnderscores
-        OverloadedStrings
-        PartialTypeSignatures
-        PatternGuards
-        PatternSynonyms
-        PolyKinds
-        PostfixOperators
-        QuantifiedConstraints
-        RankNTypes
-        RoleAnnotations
-        ScopedTypeVariables
-        StandaloneDeriving
-        StandaloneKindSignatures
-        TupleSections
-        TypeApplications
-        TypeFamilyDependencies
-        TypeOperators
-        TypeSynonymInstances
-        ViewPatterns
+  -- LANGUAGE extensions used by modules in this package.
+  -- other-extensions:
+  ghc-options:        -Wall -Werror
+  default-extensions:
+    NoMonomorphismRestriction
+    NoStarIsType
+    BangPatterns
+    ConstraintKinds
+    DataKinds
+    DefaultSignatures
+    DeriveAnyClass
+    DeriveDataTypeable
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    EmptyDataDecls
+    EmptyDataDeriving
+    ExistentialQuantification
+    ExplicitForAll
+    FlexibleContexts
+    FlexibleInstances
+    FunctionalDependencies
+    GeneralisedNewtypeDeriving
+    HexFloatLiterals
+    InstanceSigs
+    LambdaCase
+    NamedFieldPuns
+    NamedWildCards
+    NumericUnderscores
+    OverloadedStrings
+    PartialTypeSignatures
+    PatternGuards
+    PatternSynonyms
+    PolyKinds
+    PostfixOperators
+    QuantifiedConstraints
+    RankNTypes
+    RoleAnnotations
+    ScopedTypeVariables
+    StandaloneDeriving
+    StandaloneKindSignatures
+    TupleSections
+    TypeApplications
+    TypeFamilyDependencies
+    TypeOperators
+    TypeSynonymInstances
+    ViewPatterns
 
-    build-depends:    
-      , base
-      , aeson
-      , cryptohash
-      , relude
-      , containers
-      , row-types
-      , QuickCheck
-      , generic-arbitrary
+  build-depends:
+    , aeson
+    , base
+    , containers
+    , cryptohash
+    , generic-arbitrary
+    , QuickCheck
+    , relude
+    , row-types
 
-    mixins: 
-      , base hiding (Prelude)
-      , relude (Relude as Prelude)
-      , relude
-    hs-source-dirs:   app
-    default-language: Haskell2010
+  mixins:
+    base hiding (Prelude),
+    relude (Relude as Prelude),
+    relude
+
+  hs-source-dirs:     app
+  default-language:   Haskell2010

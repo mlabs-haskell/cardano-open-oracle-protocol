@@ -18,18 +18,18 @@ import Test.QuickCheck.Arbitrary.Generic (GenericArbitrary (GenericArbitrary))
 
 -- | a generic tree type
 data Tree a
-    = Leaf a
-    | Node (Tree a) (Tree a)
+  = Leaf a
+  | Node (Tree a) (Tree a)
 
 -- | a merkle tree, this corresponds to the top node of the tree
 newtype MerkleTree = MerkleTree Hash
-    deriving stock (Eq, Generic)
-    deriving (Arbitrary) via (GenericArbitrary MerkleTree)
+  deriving stock (Eq, Generic)
+  deriving (Arbitrary) via (GenericArbitrary MerkleTree)
 
 -- | a sha256 hash
 newtype Hash = MkHash ByteString
-    deriving stock (Eq, Generic)
-    deriving (Arbitrary) via (GenericArbitrary Hash)
+  deriving stock (Eq, Generic)
+  deriving (Arbitrary) via (GenericArbitrary Hash)
 
 -- | smart constructor for a Hash
 mkHash :: ByteString -> Hash
@@ -52,9 +52,9 @@ mkTree (Node left right) = mkNode (mkTree left) (mkTree right)
    redeemer
 -}
 data Path
-    = Here
-    | LeftPath MerkleTree MerkleTree Path
-    | RightPath MerkleTree MerkleTree Path
+  = Here
+  | LeftPath MerkleTree MerkleTree Path
+  | RightPath MerkleTree MerkleTree Path
 
 {- | the proof that some redeemer datum is part of the commitment of
    an oracle. We can prove this given a path into the tree, the topmost node
@@ -86,117 +86,117 @@ lookupRegistry i = note "lookup in oracle tree failed" . lookupOracleTree i . fs
   where
     lookupOracleTree :: (HasField "i" rec Id, ToJSON rec) => Id -> Tree rec -> Maybe (Path, rec)
     lookupOracleTree id' (Leaf odata)
-        | getField @"i" odata == id' = Just (Here, odata)
-        | otherwise = Nothing
+      | getField @"i" odata == id' = Just (Here, odata)
+      | otherwise = Nothing
     lookupOracleTree id'' (Node t0 t1) =
-        let mt0 = mkTree t0
-            mt1 = mkTree t1
-         in (first (LeftPath mt0 mt1) <$> lookupOracleTree id'' t0) <|> (first (RightPath mt0 mt1) <$> lookupOracleTree id'' t1)
+      let mt0 = mkTree t0
+          mt1 = mkTree t1
+       in (first (LeftPath mt0 mt1) <$> lookupOracleTree id'' t0) <|> (first (RightPath mt0 mt1) <$> lookupOracleTree id'' t1)
 
 obtainRegistryHash :: Registry rec -> MerkleTree
 obtainRegistryHash = snd . unRegistry
 
 newtype Id = MkId Int
-    deriving stock (Generic)
-    deriving newtype (Arbitrary, Eq, Ord)
-    deriving anyclass (ToJSON)
+  deriving stock (Generic)
+  deriving newtype (Arbitrary, Eq, Ord)
+  deriving anyclass (ToJSON)
 
 data OracleData = MkOracleData
-    { i :: Id
-    , name :: String
-    , contents :: String
-    }
-    deriving stock (Generic)
-    deriving anyclass (ToJSON)
-    deriving (Arbitrary) via (GenericArbitrary OracleData)
+  { i :: Id
+  , name :: String
+  , contents :: String
+  }
+  deriving stock (Generic)
+  deriving anyclass (ToJSON)
+  deriving (Arbitrary) via (GenericArbitrary OracleData)
 
 --------------------------------- Example ---------------------------------
 
 prop_in_oracle_tree :: Id -> Tree OracleData -> Either Text Bool
 prop_in_oracle_tree datumID tree = do
-    let sampleRegistry :: Registry OracleData
-        sampleRegistry = mkOracleRegistry tree
+  let sampleRegistry :: Registry OracleData
+      sampleRegistry = mkOracleRegistry tree
 
-        -- this corresponds to the hash lookup the script would do to
-        -- verify the redeemer is correct
-        onchainHashLookup :: MerkleTree
-        onchainHashLookup = obtainRegistryHash sampleRegistry
+      -- this corresponds to the hash lookup the script would do to
+      -- verify the redeemer is correct
+      onchainHashLookup :: MerkleTree
+      onchainHashLookup = obtainRegistryHash sampleRegistry
 
-    -- corresponds to the offchain lookup of the user of the oracle
-    (path, datum) <- lookupRegistry datumID sampleRegistry
-    let -- encode the datum to put onchain
-        -- if we were to put a different datum here, e.g. the wrongData
-        -- datum, we would get a failure (in all cases)
-        encodedDatum :: ByteString
-        encodedDatum = toStrict $ encode datum
-    pure $ proveIn path onchainHashLookup encodedDatum
+  -- corresponds to the offchain lookup of the user of the oracle
+  (path, datum) <- lookupRegistry datumID sampleRegistry
+  let -- encode the datum to put onchain
+      -- if we were to put a different datum here, e.g. the wrongData
+      -- datum, we would get a failure (in all cases)
+      encodedDatum :: ByteString
+      encodedDatum = toStrict $ encode datum
+  pure $ proveIn path onchainHashLookup encodedDatum
 
 inLeaf :: OracleData
 inLeaf =
-    MkOracleData
-        { i = MkId 0
-        , name = "ada-to-euro"
-        , contents = "1:1"
-        }
+  MkOracleData
+    { i = MkId 0
+    , name = "ada-to-euro"
+    , contents = "1:1"
+    }
 
 wrongData :: OracleData
 wrongData =
-    MkOracleData
-        { i = MkId 0
-        , name = "ada-to-euro"
-        , contents = "1:2"
-        }
+  MkOracleData
+    { i = MkId 0
+    , name = "ada-to-euro"
+    , contents = "1:2"
+    }
 
 wrongId :: OracleData
 wrongId =
-    MkOracleData
-        { i = MkId 42
-        , name = "ada-to-euro"
-        , contents = "1:1"
-        }
+  MkOracleData
+    { i = MkId 42
+    , name = "ada-to-euro"
+    , contents = "1:1"
+    }
 
 sampleOracle :: Tree OracleData
 sampleOracle =
-    Node
-        ( Node
-            ( Leaf
-                ( MkOracleData
-                    { i = MkId 0
-                    , name = "ada-to-euro"
-                    , contents = "1:1"
-                    }
-                )
-            )
-            ( Leaf
-                ( MkOracleData
-                    { i = MkId 1
-                    , name = "ada-to-dollar"
-                    , contents = "0.9:1"
-                    }
-                )
+  Node
+    ( Node
+        ( Leaf
+            ( MkOracleData
+                { i = MkId 0
+                , name = "ada-to-euro"
+                , contents = "1:1"
+                }
             )
         )
-        ( Node
-            ( Leaf
-                ( MkOracleData
-                    { i = MkId 2
-                    , name = "ada-to-ether"
-                    , contents = "1000:1"
-                    }
-                )
-            )
-            ( Leaf
-                ( MkOracleData
-                    { i = MkId 3
-                    , name = "ada-to-bc"
-                    , contents = "20000:1"
-                    }
-                )
+        ( Leaf
+            ( MkOracleData
+                { i = MkId 1
+                , name = "ada-to-dollar"
+                , contents = "0.9:1"
+                }
             )
         )
+    )
+    ( Node
+        ( Leaf
+            ( MkOracleData
+                { i = MkId 2
+                , name = "ada-to-ether"
+                , contents = "1000:1"
+                }
+            )
+        )
+        ( Leaf
+            ( MkOracleData
+                { i = MkId 3
+                , name = "ada-to-bc"
+                , contents = "20000:1"
+                }
+            )
+        )
+    )
 
 instance Arbitrary ByteString where
-    arbitrary = pack <$> arbitrary
+  arbitrary = pack <$> arbitrary
 
 note :: IsString s => s -> Maybe a -> Either s a
 note _ (Just a) = Right a
