@@ -94,7 +94,6 @@
       flake
       // {
         defaultPackage = package;
-        devShell = flake.devShell;
         inherit formatter;
         inherit checks;
       });
