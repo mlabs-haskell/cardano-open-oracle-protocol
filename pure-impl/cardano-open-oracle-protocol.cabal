@@ -1,0 +1,100 @@
+cabal-version:      3.0
+name:               cardano-open-oracle-protocol
+version:            0.1.0.0
+synopsis:
+
+-- A longer description of the package.
+-- description:
+homepage:           mlabs.city
+
+-- A URL where users can report bugs.
+-- bug-reports:
+license:            MIT
+license-file:       LICENSE
+author:             mlabs-haskell
+maintainer:         info@mlabs.city
+
+-- A copyright notice.
+-- copyright:
+category:           Network
+extra-source-files:
+  CHANGELOG.md
+  README.md
+
+executable cardano-open-oracle-protocol
+  main-is:            Main.hs
+
+  -- Modules included in this executable, other than Main.
+  other-modules:
+    OrcFax.Datums
+    OrcFax.MerkleTree
+
+  -- LANGUAGE extensions used by modules in this package.
+  -- other-extensions:
+  ghc-options:        -Wall -Werror
+  default-extensions:
+    NoMonomorphismRestriction
+    NoStarIsType
+    BangPatterns
+    ConstraintKinds
+    DataKinds
+    DefaultSignatures
+    DeriveAnyClass
+    DeriveDataTypeable
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    EmptyDataDecls
+    EmptyDataDeriving
+    ExistentialQuantification
+    ExplicitForAll
+    FlexibleContexts
+    FlexibleInstances
+    FunctionalDependencies
+    GeneralisedNewtypeDeriving
+    HexFloatLiterals
+    InstanceSigs
+    LambdaCase
+    NamedFieldPuns
+    NamedWildCards
+    NumericUnderscores
+    OverloadedStrings
+    PartialTypeSignatures
+    PatternGuards
+    PatternSynonyms
+    PolyKinds
+    PostfixOperators
+    QuantifiedConstraints
+    RankNTypes
+    RoleAnnotations
+    ScopedTypeVariables
+    StandaloneDeriving
+    StandaloneKindSignatures
+    TupleSections
+    TypeApplications
+    TypeFamilyDependencies
+    TypeOperators
+    TypeSynonymInstances
+    ViewPatterns
+
+  build-depends:
+    , aeson
+    , base
+    , containers
+    , cryptohash
+    , generic-arbitrary
+    , QuickCheck
+    , relude
+    , row-types
+
+  mixins:
+    base hiding (Prelude),
+    relude (Relude as Prelude),
+    relude
+
+  hs-source-dirs:     app
+  default-language:   Haskell2010
