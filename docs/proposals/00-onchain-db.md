@@ -10,13 +10,10 @@ status: WIP
 
 # Onchain Database
 
-## Table of Contents
-
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Table of Contents**
 
 - [Onchain Database](#onchain-database)
-  - [Table of Contents](#table-of-contents)
   - [Description](#description)
     - [Graph](#graph)
     - [Product Nodes](#product-nodes)

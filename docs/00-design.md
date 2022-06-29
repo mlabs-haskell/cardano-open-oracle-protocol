@@ -14,131 +14,121 @@ For the Cardano open oracle protocol, this document describes the design goals,
 options considered, and the rationale for the design option selected for
 implementation.
 
-## Table of contents
+**Table of contents**
 
 - [Design Document](#design-document)
-  - [Table of contents](#table-of-contents)
   - [Considered Designs](#considered-designs)
-    - [Summary of pros and cons of the different proposals](#summary-of-pros-and-cons-of-the-different-proposals)
-  - [Using a commitment scheme](#using-a-commitment-scheme)
-    - [The proposed commitment scheme using a Merkle Tree (but not limited to it)](#the-proposed-commitment-scheme-using-a-merkle-tree-but-not-limited-to-it)
-    - [Concurrency](#concurrency)
-    - [Optimizations](#optimizations)
-    - [Identification](#identification)
-    - [Authenticity](#authenticity)
-  - [Using a signature scheme](#using-a-signature-scheme)
-  - [Open questions](#open-questions)
-  - [Other relevant ideas](#other-relevant-ideas)
+  - [Orcfax On-Chain Bulletin Board](#orcfax-on-chain-bulletin-board)
+    - [Summary](#summary)
+    - [Context](#context)
+    - [Description](#description)
+      - [Example](#example)
+    - [Querying the Oracle](#querying-the-oracle)
+    - [Providing the Transaction to be Signed](#providing-the-transaction-to-be-signed)
+    - [Posting the Transaction](#posting-the-transaction)
+    - [User Motivations](#user-motivations)
   - [Resources](#resources)
 
 ## Considered Designs
 
-  1. [On-Chain Database](./proposals/00-onchain-db.md)
+As part of the design process, diverse ideas have been considered, with their
+pros and cons discussed. These ideas are captured by the following Architectural Design Records (aka. ADRs):
 
-  2. [Off-Chain Database with On-Chain knowledge representation](./proposals/01-offchain-db-mtree.md)
+  1. On-Chain Database discussed in [(docs-proposals-00-onchain-db)](./proposals/00-onchain-db.md)
+  2. Off-Chain Database with On-Chain knowledge representation discussed in [(docs-proposals-01-offchain-db-mtree)](./proposals/01-offchain-db-mtree.md)
+  3. [Off-Chain Database using signature scheme to validate correct information](./proposals/02-signature-scheme.md)
 
-  3. Off-Chain Database using signature scheme to validate correct information
+To summarise the above findings, the document
+[docs-proposals-03-comparative-summary](./proposals/03-comparative-summary.md)
+has been set-up, and captures a more condensed, comparison based critical view
+of the above ideas. Following the above exploration an emergent design has been
+reached, which will now be further expanded on in this document.
 
-  4. Off-Chain Database using signature scheme to validate correct information
-     and On-Chain representation
+---
 
-### Summary of pros and cons of the different proposals
+## Orcfax On-Chain Bulletin Board
 
-1. *Storing data on-chain*: imposes higher cost for the oracle maintainer, will
-   probably be possible to use with the second idea, especially in cases where
-   we have varying sizes in datums or datums that have to be used multiple times
-   it would make sense to mix and match (benchmarking yet to be done)
+### Summary
 
-2. *Storing data off-chain, using a commitment scheme*: this will be really
-   cheap for the oracle maintainer as they only have to recreate a utxo with the
-   e.g. the topmost hash of a merkle tree. However, the data will still have to
-   be provided, so the user provides by paying for the data when providing them
-   in the redeemer.
+The Orcfax On-Chain Bulletin Board is an emerging, novel on-chain Oracle design.
+The protocol, offers a sustainable way of posting trust-maintaining, verified
+information on-chain, in a decentralised manner. Furthermore, the protocol
+leverages the features introduced by the Vasil hardfork, allowing for seamless
+protocol interoperability. Lastly the Orcfax proposal maintains a well defined
+revenue stream for the Oracle providers. We also believe that the proposal is
+scalable and can be adopted by many Oracle providers, enabling a well
+distributed framework of decentralised information.
 
-3. *Storing data off-chain, using a signature scheme*: this will be even cheaper
-   reducing the cost of onchain storage to a utxo containing the public key of
-   the oracle that is created exactly once
+### Context
 
-## Using a commitment scheme
+FIXME: add more about the context of:
+- hardfork
+- a common Oracle design pre-hardfork
 
-### The proposed commitment scheme using a Merkle Tree (but not limited to it)
+### Description
 
-- the oracle owner serves an API that provides some data, e.g. price pairs
-- a user requests a certain datum from the API (see e.g. URI scheme proposed in the
-  data registry approach) and receives the datum, as well as a path into the merkle tree
-  which is a datum that grows linear with the depth of the tree that corresponds to the
-  utxo the oracle serves, the amount of datums contained in the tree will, however, be
-  exponential to the depth
-- a user provides the received datum within a redeemer together with the path
-- a script will lookup the latest hash in the oracle that the redeemer claimed
-  to be valid for the datum they provide and that the contract also deems trustworthy
-- the script will now for $2^n$ possible datums do $2\cdot n$ hashes onchain
-  to verify that the datum is indeed part of the commitment of the oracle
+The Orcfax proposal can be summarised as follows:
 
-For a simple example of how we could map the onchain data to the offchain see `pure-impl -> OrcFax.MerkleTree`
+> Users post Oracle approved information on-chain for themselves and other users
+to use in their own transactions. The Orcfax protocol specifies: how information
+is received by the user, how information is verified by the Oracle, a
+standardised format for the transaction and resulting EUTxO, how the information
+is consumed, and how the Oracle gets compensated for the Service.
 
-### Concurrency
+Throughout the document we will make use of scenario based examples to clarify
+the use-cases in discussion.
 
-The issue: If an oracle updates frequently, it's possible that the update cycle *can* be shorter than the
-cycle "retrieve data -> submit transaction -> transaction arrives onchain"
+![orcfax diagram](.imgs/Orcfax-orcfax-diagram.png)
 
-The solution: Have a rotating set of UTXOs to enable concurrency when
-the oracle is updated frequently. There will be a set of UTXOs that where the oracle only updates the *oldest*
-one, the other ones serve as a ring buffer. The user will have to provide which UTXO of a certain oracle
-he referred to when submitting transaction and the script has to be aware of which oracle sets are considered
-trustworthy from its standpoint. (e.g. it could look for an OrcFax-specific CurrencySymbol)
+#### Example
 
-### Optimizations
+> Imagine a public bulletin board in the Roman forum. 
+>
+> Citizens know to come look
+> at the board to find out the latest information that they care about.
+>
+> For example, if someone wants to refer to the current imperial price of gold,
+> all they have to do is point their companion to the board.
+>
+> To prevent the board from being overcrowded with messages, each message posted
+> must have a deposit of 2 denarii attached.
+>
+> Of course, the imperial administration itself can't be bothered to actually
+> post the price on the board. Instead, if citizens want the current price to be
+> visible on the board, they must go to the administration and get a signed
+> message about the current price—paying the government for this service—and
+> then post it themselves together with the required deposit.
+>
+> Later on, they can come back to rip down the message from the board and
+> recover the deposit. To ensure that the contents of the board are relatively
+> stable, messages must stay on the board for some minimum period of time. You
+> wouldn't want to tell your companion to go to the forum and verify that you're
+> telling the truth about the price, only for the message to be ripped down when
+> they get there.
+>
+> Perhaps, when a benevolent imperator is in power, he may instruct his
+> administration to waive the fee for signature and maybe even to subsidize the
+> citizen's deposit for posting on the board. If he's feeling particularly
+> generous, he can instruct the administration to just sign and post the
+> messages themselves on the board.
 
-- Merkle Trees need a significant amount of hashing, Las mentions that this can be speed up
-  as soon as we have elliptic-curve-cryptography primitives onchain
-  *note by Magnus: this has to be fleshed out by Las, maybe he can provide some resources*
-- submitting multiple datums with a redeemer and a path each could get resource-consuming, especially if the
-  datums are large or there are a lot of datums, proposed solution(s):
-  - group together similar kinds of datums so they share a common path whose hash can then computed for all
-    of them without duplicating work by (issue: this might not always be feasible as it will impose overheads
-    in terms of size and script costs)
-  - have commonly accessed datums sit very high in the tree, so the paths to them will be short onchain (if
-    there's time-tagged data, you would probably also just push them as far up as possible)
+### Querying the Oracle
 
-### Identification
+To receive some information held by the Oracle, a User can query the Oracle via an offchain API (offchain) to receive the information that the Oracle would agree to sign. This communication is standardised and includes any required fee, expiration date, and Time To Live (TTL) information regarding the posted information. It is at the latitude of the User if they want to proceed to create a transaction with the received information or not. 
 
-All the UTXOs would share a single identifying token to ensure authenticity
-from the perspective of other protocols/scripts.
-The datum will carry a timestamp. Ideas from the data-registry approach could be used here, as well.
+### Providing the Transaction to be Signed
 
-### Authenticity
+The User can provide the information back to the Oracle, having formulated the transaction as already deemed acceptable. The Oracle now signs this transaction and posts it back to the User.
 
-We can prove that the data has come from a specific website
-using zero-knowledge proofs if the connection was served over TLS.
-*note by Magnus: this has to be fleshed out by Las, maybe he can provide some resources*
+### Posting the Transaction
+With the Oracle signed transaction, all that the user must do is to.
 
-## Using a signature scheme
+### User Motivations
+FIXME
 
-This is the simplest and probably cheapest solution:
-
-- the oracle signs some datum offchain and also distributes that data offchain, e.g. serves it at some API
-- the user obtains a datum with the signature, submits it as the redeemer for some contract.
-- the contract uses the new `verifySignature` and `serialiseData` primitive builtins to Plutus to verify the datum comes from a
-  certain oracle
-- the oracle only maintains a utxos with its own public key
-
-## Open questions
-
-- What could be use-cases of linking datums onchain?
-- How do we make sure that if we compute a new datum from a number of other datums
-  Trust is maintained (in the general case)?
-- What are the exact costs for the different approaches; what would be a good way to mix and
-  match the different ideas?
-- How do the different ideas apply to decentralized oracles?
-
-## Other relevant ideas
-
-1. Additionally to the proposed ideas which are very tailored to centralized oracles which require trust, we also
-   started looking into decentralized oracles (see [this paper in resources](https://eprint.iacr.org/2022/603.pdf)),
-   especially the DOS-Network approach they explain very shortly seems interesting to Cardano, their proposed solution
-   which entails a proof of work done by the oracles don't seem very feasible on Cardano (at least in Magnus' opinion)
+---
 
 ## Resources
 
-- Leonard Lys and Maria Potop-Butucaru, Distributed Blockchain Price Oracle, <https://eprint.iacr.org/2022/603.pdf>
+- Leonard Lys and Maria Potop-Butucaru, Distributed Blockchain Price Oracle,
+  <https://eprint.iacr.org/2022/603.pdf>
