@@ -14,19 +14,21 @@ For the Cardano open oracle protocol, this document describes the design goals,
 options considered, and the rationale for the design option selected for
 implementation.
 
-**Table of contents**
+**Table of Contents**
 
 - [Design Document](#design-document)
   - [Considered Designs](#considered-designs)
   - [Orcfax On-Chain Bulletin Board](#orcfax-on-chain-bulletin-board)
     - [Summary](#summary)
     - [Context](#context)
+      - [Vasil Hardfork](#vasil-hardfork)
+      - [Oracles prior to _Vasil Hardfork_](#oracles-prior-to-vasil-hardfork)
     - [Description](#description)
       - [Example](#example)
     - [Querying the Oracle](#querying-the-oracle)
-    - [Providing the Transaction to be Signed](#providing-the-transaction-to-be-signed)
+    - [Signing the Transaction](#signing-the-transaction)
     - [Posting the Transaction](#posting-the-transaction)
-    - [User Motivations](#user-motivations)
+    - [Protocol Assumptions](#protocol-assumptions)
   - [Resources](#resources)
 
 ## Considered Designs
@@ -61,19 +63,67 @@ distributed framework of decentralised information.
 
 ### Context
 
-FIXME: add more about the context of:
-- hardfork
-- a common Oracle design pre-hardfork
+#### Vasil Hardfork
+
+Cardano introduced in Vasil Hardfork (referred to as _VH_ from now on) many
+features, from which we will focus on make reference a specific one: [CIP 31 -
+Reference Inputs](https://cips.cardano.org/cips/cip31/). As a feature, CIP 31 - Reference Inputs allow a transaction to
+include an EUTxO as part of the input set of another transaction without
+spending the referenced EUTxO (for further details please refer to the CIP
+itself).
+
+#### Oracles prior to _Vasil Hardfork_
+
+Prior to the _VH_, a trivial design for an Oracle would post its
+information on chain as an EUTxO - most likely with the information posted as a
+datum. The EUTxO would be locked to an address where the Oracle provider would
+dictate the rules of consuming the EUTxO. These rules would include, fees,
+potential rules for re-creating/propagating the information, etc. The oracle's
+EUTxO (containing the information) would then be consumed as part of a
+transaction to make proof of the supplied information, and the address' logic
+would make sure that the additional conditions were met. 
+
+This trivial Oracle design breaks with the addition of the Reference Inputs
+feature of _VH_. Given that users can now reference inputs in their transaction
+without consuming them, does not allow for the Oracle provider to impose rules
+under which the Oracle's information can be consumed. Thus the Oracle provider
+loses its financial mechanics and incentive to post information on-chain - to
+the detriment of the entire eco-system.
+
+The Orcfax protocol manages to maintain a sustainable funding strategy with the
+addition of Reference Inputs, while maintaining a balanced incentive scheme for
+both users and oracles providers.
+
 
 ### Description
 
 The Orcfax proposal can be summarised as follows:
 
 > Users post Oracle approved information on-chain for themselves and other users
-to use in their own transactions. The Orcfax protocol specifies: how information
-is received by the user, how information is verified by the Oracle, a
-standardised format for the transaction and resulting EUTxO, how the information
-is consumed, and how the Oracle gets compensated for the Service.
+received by the user, how information is verified by the Oracle, a standardised
+format for the transaction and resulting EUTxO, how the information is consumed,
+and how the Oracle gets compensated for the Service. Furthermore, Orcfax
+provides an SDK for other Oracle providers to spin up instances of the protocol,
+in a fast, secure, and proven way.
+
+As made apparent by the above summary there are a few different aspects which
+need to be clarified:
+
+1. How does a User get the information - prior to it being available
+   on-chain? Find the [answer here](#querying-the-oracle).
+
+2. How does a User validate the information? Find the [answer here](#signing-the-transaction).
+
+3. How do Users use the Posted information? Find the [answer here](#posting-the-transaction).
+
+4. What are the assumptions at the basis of the protocol? Find the [answer here](#protocol-assumptions).
+
+The document will follow up on each of these subjects and expand on its
+technical and practical implications - creating the broad picture of the
+protocol. The document will also make reference to a supporting _pure
+implementation_ of the protocol (i.e. an implementation of a model of the
+protocol that abstracts away all the _"real-world interaction"_, but allows the
+testing of the protocol's technical assumptions).
 
 Throughout the document we will make use of scenario based examples to clarify
 the use-cases in discussion.
@@ -82,10 +132,10 @@ the use-cases in discussion.
 
 #### Example
 
-> Imagine a public bulletin board in the Roman forum. 
+> Imagine a public bulletin board in the Roman forum.
 >
-> Citizens know to come look
-> at the board to find out the latest information that they care about.
+> Citizens know to come look at the board to find out the latest information
+> that they care about.
 >
 > For example, if someone wants to refer to the current imperial price of gold,
 > all they have to do is point their companion to the board.
@@ -112,23 +162,69 @@ the use-cases in discussion.
 > generous, he can instruct the administration to just sign and post the
 > messages themselves on the board.
 
+---
+
 ### Querying the Oracle
 
-To receive some information held by the Oracle, a User can query the Oracle via an offchain API (offchain) to receive the information that the Oracle would agree to sign. This communication is standardised and includes any required fee, expiration date, and Time To Live (TTL) information regarding the posted information. It is at the latitude of the User if they want to proceed to create a transaction with the received information or not. 
+> "How does the user get the information?"
 
-### Providing the Transaction to be Signed
+In short, the user asks and receives the information offchain, with a time-based
+guarantee from the Oracle for the correctness of the information provided.
 
-The User can provide the information back to the Oracle, having formulated the transaction as already deemed acceptable. The Oracle now signs this transaction and posts it back to the User.
+To expand on the above, a user sends a query to the Oracle's exposed traditional
+API (Rest API, graphQL, etc.) and receives:
+
+1. **The information** that the Oracle would agree to sign. This represents the
+   information itself.
+
+2. **The meta-information** that needs to be included or shape the  transaction
+that the Oracle will sign. This includes:
+
+- fees that need to be paid, addresses for the payment,
+- expiration date of the information (ED) - a time period for which the Oracle
+  guarantees that the provided information would not change,
+- the address at which the information will be posted,
+- time to live for the information (TTL).
+
+With this information, the user can now chose to formulate their own transaction
+that will be  signed by the Oracle provider upon request. It is worth noting
+that the signing only happens if the Oracle receives a transaction that is in
+accordance with all of the previously requested information.
+
+---
+
+### Signing the Transaction
+
+> How does a User validate the information?
+
+Having formulated their transaction that conforms with the Oracle provided
+information, the user sends the transaction to the Oracle to be signed. The
+signature of the Oracle is important because it allows for an identifying NFT to
+be minted for the EUTxO published by the user. This NFT represents the
+correctness of the posted information. When signing, the Oracle verifies that
+the transaction is handling its token correctly - but does not check the
+validity of information which it is not concerned with. This property of
+specific checking allows the User to bundle their information posting
+transaction with other actions that depend on the information itself. If the
+Oracle does not agree with the information, its API returns a HTTP response that
+gives some indication why the validation failed.
+
+---
 
 ### Posting the Transaction
-With the Oracle signed transaction, all that the user must do is to.
 
-### User Motivations
+With an Oracle signed transaction, all that the user must do is to sign their
+own transaction and submit it to the Cardano blockchain for validation. 
+
+### Protocol Assumptions
+
 FIXME
 
 ---
 
 ## Resources
 
+- CIP 31 - Reference Inputs (<https://cips.cardano.org/cips/cip31/#cddl>).
+
 - Leonard Lys and Maria Potop-Butucaru, Distributed Blockchain Price Oracle,
-  <https://eprint.iacr.org/2022/603.pdf>
+  (<https://eprint.iacr.org/2022/603.pdf>).
