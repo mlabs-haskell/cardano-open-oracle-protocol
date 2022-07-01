@@ -10,9 +10,9 @@ status:           WIP
 
 # Design Document
 
-For the Cardano open oracle protocol, this document describes the design goals,
-options considered, and the rationale for the design option selected for
-implementation.
+The following document describes the design goals, options considered, and the
+rationale for the design options selected for the implementation of the _Cardano
+Open Oracle Protocol_ (aka. Orcfax).
 
 **Table of Contents**
 
@@ -27,18 +27,27 @@ implementation.
       - [Example](#example)
     - [Querying the Oracle](#querying-the-oracle)
     - [Signing the Transaction](#signing-the-transaction)
-    - [Posting the Transaction](#posting-the-transaction)
+      - [The meaning of a signed transaction](#the-meaning-of-a-signed-transaction)
+    - [Using the Information](#using-the-information)
     - [Protocol Assumptions](#protocol-assumptions)
+    - [Additional Proposed Features](#additional-proposed-features)
+      - [Re-posting GC'ed information](#re-posting-gced-information)
   - [Resources](#resources)
 
 ## Considered Designs
 
 As part of the design process, diverse ideas have been considered, with their
-pros and cons discussed. These ideas are captured by the following Architectural Design Records (aka. ADRs):
+pros. and cons. discussed. These ideas are captured by the following
+Architectural Design Records (aka. ADRs):
 
-  1. On-Chain Database discussed in [(docs-proposals-00-onchain-db)](./proposals/00-onchain-db.md)
-  2. Off-Chain Database with On-Chain knowledge representation discussed in [(docs-proposals-01-offchain-db-mtree)](./proposals/01-offchain-db-mtree.md)
-  3. [Off-Chain Database using signature scheme to validate correct information](./proposals/02-signature-scheme.md)
+1. On-Chain Database discussed in
+   [(docs-proposals-00-onchain-db)](./proposals/00-onchain-db.md).
+
+2. Off-Chain Database with On-Chain knowledge representation discussed in
+   [(docs-proposals-01-offchain-db-mtree)](./proposals/01-offchain-db-mtree.md).
+
+3. Off-Chain Database using signature scheme to validate correct information in
+   [(docs-proposals-02-signature-schemes)](./proposals/02-signature-scheme.md).
 
 To summarise the above findings, the document
 [docs-proposals-03-comparative-summary](./proposals/03-comparative-summary.md)
@@ -74,14 +83,14 @@ itself).
 
 #### Oracles prior to _Vasil Hardfork_
 
-Prior to the _VH_, a trivial design for an Oracle would post its
-information on chain as an EUTxO - most likely with the information posted as a
-datum. The EUTxO would be locked to an address where the Oracle provider would
-dictate the rules of consuming the EUTxO. These rules would include, fees,
-potential rules for re-creating/propagating the information, etc. The oracle's
-EUTxO (containing the information) would then be consumed as part of a
-transaction to make proof of the supplied information, and the address' logic
-would make sure that the additional conditions were met. 
+Prior to the _VH_, a trivial design for an Oracle would post its information on
+chain as an EUTxO - most likely with the information posted as a datum. The
+EUTxO would be locked to an address where the Oracle provider would dictate the
+rules of consuming the EUTxO. These rules would include, fees, potential rules
+for re-creating/propagating the information, etc. The oracle's EUTxO (containing
+the information) would then be consumed as part of a transaction to make proof
+of the supplied information, and the address' logic would make sure that the
+additional conditions were met.
 
 This trivial Oracle design breaks with the addition of the Reference Inputs
 feature of _VH_. Given that users can now reference inputs in their transaction
@@ -114,7 +123,7 @@ need to be clarified:
 
 2. How does a User validate the information? Find the [answer here](#signing-the-transaction).
 
-3. How do Users use the Posted information? Find the [answer here](#posting-the-transaction).
+3. How do Users use the Posted information? Find the [answer here](#using-the-information).
 
 4. What are the assumptions at the basis of the protocol? Find the [answer here](#protocol-assumptions).
 
@@ -181,8 +190,8 @@ API (Rest API, graphQL, etc.) and receives:
 that the Oracle will sign. This includes:
 
 - fees that need to be paid, addresses for the payment,
-- expiration date of the information (ED) - a time period for which the Oracle
-  guarantees that the provided information would not change,
+- time to expire (TTE) - a time period for which the Oracle guarantees that the
+  provided information would not change,
 - the address at which the information will be posted,
 - time to live for the information (TTL).
 
@@ -209,16 +218,70 @@ transaction with other actions that depend on the information itself. If the
 Oracle does not agree with the information, its API returns a HTTP response that
 gives some indication why the validation failed.
 
+With the Oracle signed transaction, all that the user must do is to also sign
+the  transaction and submit it to the Cardano blockchain for validation.
+
+#### The meaning of a signed transaction
+
+The signature on the transaction's only purpose is to allow the minting of a
+simple script Token. All that the token verifies is that the signature of the
+oracle exists. This entails that upon signing, the Oracle verifies every aspect
+of the placement of this token into a correct eutxo locked under a correct
+address that handles its burning upon consumption of the eutxo.
+
 ---
 
-### Posting the Transaction
+### Using the Information
 
-With an Oracle signed transaction, all that the user must do is to sign their
-own transaction and submit it to the Cardano blockchain for validation. 
+> How do Users use the Posted information?
+
+After the posting of the transaction any user is able to reference the
+information provided by the EUTxO, for a specific amount of time (until the
+information is garbage collected - referred to as GC'ed). Any transaction using
+the information has access to both the information provided and the
+meta-information that is part of the transaction (namely the ET, and TTL).
+
+There is however an advantage in being the one posting the EUTxO - the user has
+the ability to chain the transaction, or bundle it with other useful
+transactions. By paying for the posting of new information, the User has also
+the possibility to leverage the information's effects on-chain. The Oracle's peg
+on published information for the duration of a TTE allows for however many users
+to try to leverage being first, without ever causing any fundamental contention
+at the level of the protocol.
+
+When it comes to the TTL interval, this is a design that allows for the user
+that posts the information to be able to recover their locked funds in the
+protocol - thus the only final expense being represented by the transaction fees
+incurred and the protocol fees.
 
 ### Protocol Assumptions
 
-FIXME
+a. Users are willing to pay for the transaction fee and the Oracle fees for two
+  reasons: "fresh" valid information (information which is not passed its TTE),
+  or be the first to access the information to satisfy the user's own
+  motivations.
+
+b. The Oracle has ultimate trust because it is the service they provide. Within
+  its core motivation to exists, an Oracle's success is based on providing
+  consistent, trustworthy information. The metrics of measuring trust in the
+  Oracle are quantified on it withholding these two characteristics.
+
+c. Information should be cheap to provide for an Oracle.
+
+---
+
+### Additional Proposed Features
+
+#### Re-posting GC'ed information
+
+To allow for the re-posting of GC'ed Oracle information, the protocol aims to
+leverage signature schemes that are provable on-chain. One idea is that each
+stored information contains the signature of the approving oracle as part of the
+information itself (similar to gpg's `clear-sign` functionality). If integrated
+into the Oracle Token's Minting Policy, this feature would theoretically allow
+any user to use a Cardano Block-Explorer to search for formerly posted
+information and re-post it to the blockchain. We believe that such a feature is
+feasible, but the implications need further exploration.
 
 ---
 
