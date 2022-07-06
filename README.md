@@ -1,4 +1,14 @@
+---
+tag: "README"
+date: 2022/06/30
+---
 # Cardano open oracle protocol
+
+**Table of Contents**
+
+- [Cardano open oracle protocol](#cardano-open-oracle-protocol)
+  - [Introduction](#introduction)
+  - [Documentation](#documentation)
 
 ## Introduction
 
@@ -15,20 +25,13 @@ allow developers in the Cardano ecosystem to implement this functionality
 in their own projects.
 
 Development of the COOP is led by [MLabs](https://mlabs.city/) with feedback and
-direction provided by the [Orcfax](https://www.orcfax.link/about/) oracle project
-which will implement the COOP on its platform.
+direction provided by the [Orcfax](https://www.orcfax.link/about/) oracle
+project which will implement the COOP on its platform.
 
-This project was graciously funded from the Cardano Treasury in Catalyst Fund 8:
-- https://cardano.ideascale.com/c/idea/402572
-
-
+This project was graciously funded from the Cardano Treasury in
+[Catalyst Fund 8](https://cardano.ideascale.com/c/idea/402572).
 
 ## Documentation
 
-The project is described in further detail by the following documents:
-- [docs/design.md](docs/design.md) — describes the design goals, options
-  considered, and the rationale for the design option selected for
-  implementation.
-- [docs/roadmap.md](docs/roadmap.md) — breaks down the project into milestones
-  that group features in a progressively expanding scope until the launch
-  version, and outlines the timeline for the milestones at a high level.
+The project is described in further detail by the following document:
+[00-orcfax](00-orcfax.md).
