@@ -32,6 +32,7 @@ Open Oracle Protocol_ (aka. Orcfax).
     - [Protocol Assumptions](#protocol-assumptions)
     - [Additional Proposed Features](#additional-proposed-features)
       - [Re-posting GC'ed information](#re-posting-gced-information)
+  - [Technical Components Involved](#technical-components-involved)
   - [Resources](#resources)
 
 ## Considered Designs
@@ -97,12 +98,13 @@ feature of _VH_. Given that users can now reference inputs in their transaction
 without consuming them, does not allow for the Oracle provider to impose rules
 under which the Oracle's information can be consumed. Thus the Oracle provider
 loses its financial mechanics and incentive to post information on-chain - to
-the detriment of the entire eco-system.
+the detriment of the entire ecosystem.
 
 The Orcfax protocol manages to maintain a sustainable funding strategy with the
 addition of Reference Inputs, while maintaining a balanced incentive scheme for
 both users and oracles providers.
 
+---
 
 ### Description
 
@@ -282,6 +284,78 @@ into the Oracle Token's Minting Policy, this feature would theoretically allow
 any user to use a Cardano Block-Explorer to search for formerly posted
 information and re-post it to the blockchain. We believe that such a feature is
 feasible, but the implications need further exploration.
+
+---
+
+## Technical Components - Type Sketch
+
+
+1. Oracle Signature
+
+The Oracle's Signature is represented by the public key of the Oracle, which
+validates the signing of a transaction with the private key of the Oracle. 
+
+```haskell
+OracleSignature = PublicKey
+```
+
+2. Oracle Token
+
+The Oracle Token is a Cardano Native Token which can only be minted if the
+minting transaction is signed by the Oracle's private key - verifiable via the
+Oracle's public key. The Oracle can and must be burnt by any consuming
+transaction. The Oracle verifies that this token always ends up in an eUTXo
+locked under its own pre-defined Oracle Address.
+
+```haskell
+SignatureCheck :: SignatureCheck  -> SimpleScript
+OracleToken    :: OracleSignature -> SignatureCheck -> Asset 
+```
+
+3. Oracle Address
+
+The Oracle Logic is a validation script that ensure the correct handling of the
+Oracle Token. Each Oracle instance has its own Script Address where users can
+find all of the posted information. The Oracle Address' logic is aware of its
+own Oracle's unique Oracle Token's Currency Symbol. The Oracle Address does not
+allow the unlocking of eUTXO's without the burning of the Oracle Token.
+
+```haskell
+OracleLogic   :: OracleToken  -> Script
+OracleAddress :: OracleLogic  -> Address 
+```
+Both the `OracleToken` and the `OracleAddress` can be computed off-chain and
+verrified by the Oracle prior to signing. It is of uttermost importance that this
+is done correctly by the Oracle to ensure the correct behaviour of the
+protocol.
+
+4. Getting the Oracle Signature/ Oracle Token/ Oracle Address 
+
+To ensure that clients have access to the correct public-key of an oracle a
+naive strategy would be the on-chain presence of the `public-key`, `asset` pair
+in an on-chain verifiable format, that also enforces uniqueness. Another method
+would be via an off-chain API call that publishes the credentials in a similar
+manner to the publishing of information.
+
+---
+
+## Decentralisation
+
+The decentralisation strategy of the protocol relies on the following
+assumptions:
+
+1. There are multiple Oracles providing the same information
+
+2. There exists an onchain, script readable representation of the set of Oracles
+   providing the information.
+
+The decentralisation strategy is inspired by Leonard Lys and Maria
+Potop-Butucaru, paper called Distributed Blockchain Price Oracle and adapted to
+fit the current design. In summary, a published information could gather many
+signatures from a list of oracles, each making note of the veracity of the
+to-be-published information. This can be packaged into a separate Oracle that
+gathers the information from its list of Oracles. The incentive system is
+similar to the one discussed in the paper.
 
 ---
 
