@@ -1,13 +1,3 @@
----
-tag:              "docs-00-design"
-date:             2022-06-28
-revision:         1
-revision-notes:   "Updated the document's structure"
-author:           FIXME
-reviewers:        FIXME
-status:           WIP
----
-
 # Design Document
 
 The following document describes the design goals, options considered, and the

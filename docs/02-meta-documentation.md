@@ -1,11 +1,3 @@
----
-tag: "docs-02-meta-documentation"
-date:             FIXME
-author:           FIXME
-reviewers:        FIXME
-status:           WIP
----
-
 # Meta Documentation
 
 ## Table of Contents

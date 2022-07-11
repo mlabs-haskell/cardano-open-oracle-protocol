@@ -1,13 +1,3 @@
----
-tag: "docs-proposals-00-onchain-db"
-date: 2022-06-28
-revision: 
-revision-summary:
-author: "cstml"
-reviewers:
-status: WIP
----
-
 # Onchain Database
 
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
@@ -106,8 +96,8 @@ is non-trivial in the general case*
 
 2. Commitment Scheme
    1. This can be the scheme proposed [beneath](#using-a-commitment-scheme) or
-     basically any other commitment scheme, the designs are not mutually
-     exclusive
+       basically any other commitment scheme, the designs are not mutually
+       exclusive
 
 3. Naming scheme in the data registry; the datum-`URI`
    1. two main requirements for the URI: representative (searchable), unique

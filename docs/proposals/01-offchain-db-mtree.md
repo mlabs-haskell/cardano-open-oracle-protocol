@@ -1,13 +1,3 @@
----
-tag: "docs-proposals-01-offchain-db-mtree"
-date: 2022-06-28
-revision: 
-revision-summary:
-author: "cstml"
-reviewers:
-status: WIP
----
-
 # OffChain Database - Merkle Tree
 
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->

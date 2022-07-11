@@ -1,13 +1,3 @@
----
-tag:              "docs-01-roadmap"
-date:             2022-06-28
-revision:         1
-revision-notes:   "Updated the document's structure"
-author:           FIXME
-reviewers:        FIXME
-status:           WIP
----
-
 # Roadmap document
 
 ## Table of Contents

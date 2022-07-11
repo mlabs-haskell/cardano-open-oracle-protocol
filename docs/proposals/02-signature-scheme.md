@@ -1,13 +1,3 @@
----
-tag: "docs-proposal-02-signature-scheme"
-date:             2022-06-28
-revision:
-revision-notes:
-author:           "cstml"
-reviewers:        FIXME
-status:           WIP
----
-
 # Signature Scheme
 
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->

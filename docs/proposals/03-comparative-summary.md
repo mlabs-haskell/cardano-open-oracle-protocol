@@ -1,7 +1,3 @@
----
-tag: "docs-proposal-03-comparative-summary"
----
-
 # Comparative Summary
 
 
