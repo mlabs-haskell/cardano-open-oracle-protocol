@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module OrcFax.MerkleTree (proveIn, prop_proof_holds_for_id_in_tree, prop_proof_does_not_hold_for_id_not_in_tree, prop_in_oracle_tree, inLeaf, wrongData, wrongId, sampleOracle) where
@@ -155,7 +156,7 @@ instance Arbitrary IdAndOracleTree where
 instance Arbitrary IdNotInOracleTree where
   arbitrary = do
     oracleTree :: Tree OracleData <- arbitrary
-    oracleId :: Id <- arbitrary `suchThat` (\e -> not $ e `elem` fmap i oracleTree)
+    oracleId :: Id <- arbitrary `suchThat` (\e -> e `notElem` fmap i oracleTree)
     pure $ MkIdNotInOracleTree (oracleId, oracleTree)
 
 prop_proof_holds_for_id_in_tree :: IdAndOracleTree -> Property

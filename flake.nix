@@ -1,100 +1,72 @@
 {
   description = "cardano-open-oracle-protocol";
+  nixConfig.bash-prompt =
+    "\\[\\e[0m\\][\\[\\e[0;2m\\]nix-develop \\[\\e[0;1m\\]cardano-open-oracle-protocol \\[\\e[0;93m\\]\\w\\[\\e[0m\\]]\\[\\e[0m\\]$ \\[\\e[0m\\]";
 
   inputs = {
-    haskell-nix.url = "github:input-output-hk/haskell.nix";
+    haskell-nix.url = "github:mlabs-haskell/haskell.nix";
     nixpkgs.follows = "haskell-nix/nixpkgs-unstable";
-    pre-commit-hooks = {
-      url = "github:cachix/pre-commit-hooks.nix";
-      inputs.flake-utils.follows = "flake-utils";
-    };
     flake-utils = {
       url = "github:numtide/flake-utils";
       inputs.nixpkgs.follows = "haskell-nix/nixpkgs-unstable";
     };
+    pre-commit-hooks.url = "github:cachix/pre-commit-hooks.nix";
+    http2-grpc-native = {
+      url = github:haskell-grpc-native/http2-grpc-haskell;
+      flake = false;
+    };
   };
 
-  outputs = inputs @ {
-    self,
-    nixpkgs,
-    flake-utils,
-    haskell-nix,
-    ...
-  }:
-    flake-utils.lib.eachSystem ["x86_64-linux" "x86_64-darwin"] (system: let
-      extra-tools = [];
-
+  outputs =
+    { self
+    , nixpkgs
+    , flake-utils
+    , haskell-nix
+    , pre-commit-hooks
+    , http2-grpc-native
+    , ...
+    }:
+    flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" ] (system:
+    let
+      inherit self;# To appease nix-linter
       pkgs = import nixpkgs {
         inherit system;
-        inherit (haskell-nix) config;
       };
       pkgsWithOverlay = import nixpkgs {
-        inherit system overlays;
+        inherit system;
         inherit (haskell-nix) config;
+        overlays = [ haskell-nix.overlay ];
       };
-      ghcVersion = "921";
+
+      pre-commit-check = pre-commit-hooks.lib.${system}.run (import ./pre-commit-check.nix);
+      pre-commit-devShell = pkgs.mkShell {
+        inherit (pre-commit-check) shellHook;
+      };
+      ghcVersion = "8107";
       compiler-nix-name = "ghc" + ghcVersion;
 
-      hls =
-        pkgs.haskell-language-server.override
-        {
-          supportedGhcVersions = [ghcVersion];
-        };
-
-      pre-commit-check = inputs.pre-commit-hooks.lib.${system}.run {
-        src = ./.;
-        settings = {
-          ormolu.defaultExtensions = [
-            "TypeApplications"
-            "QualifiedDo"
-          ];
-        };
-        hooks = {
-          alejandra.enable = true;
-          cabal-fmt.enable = true;
-          fourmolu.enable = true;
-        };
+      pureImplProj = import ./pure-impl/pure-impl.nix {
+        inherit pkgs compiler-nix-name;
+        haskell-nix = pkgsWithOverlay.haskell-nix;
       };
+      pureImplFlake = pureImplProj.flake { };
+      protoProj = import ./proto/proto.nix {
+        inherit pkgs compiler-nix-name http2-grpc-native;
+        haskell-nix = pkgsWithOverlay.haskell-nix;
+      };
+      protoFlake = protoProj.flake { };
 
-      overlays = [
-        haskell-nix.overlay
-        (final: prev: {
-          cardano-open-oracle-protocol = final.haskell-nix.project' {
-            inherit compiler-nix-name;
-            src = ./pure-impl;
-            shell = {
-              buildInputs =
-                [
-                  pkgs.nixpkgs-fmt
-                  pkgs.haskellPackages.cabal-fmt
-                  pkgs.haskellPackages.fourmolu
-                  hls
-                ]
-                ++ extra-tools;
-              tools = {
-                cabal = {};
-                hlint = {};
-              };
-              crossPlatform = [];
-              inherit (pre-commit-check) shellHook;
-            };
-          };
-        })
-      ];
-
-      flake = pkgsWithOverlay.cardano-open-oracle-protocol.flake {crossPlatforms = p: [];};
-
-      package = flake.packages."cardano-open-oracle-protocol:exe:cardano-open-oracle-protocol";
-
-      # the nix code formatter for nix fmt
-      formatter = pkgs.alejandra;
-
-      checks = {inherit pre-commit-check;};
     in
-      flake
-      // {
-        defaultPackage = package;
-        inherit formatter;
-        inherit checks;
-      });
+    {
+
+      # Standard flake attributes
+      packages = pureImplFlake.packages // protoFlake.packages;
+      checks = pureImplFlake.checks // protoFlake.checks // pre-commit-check;
+      devShells = rec {
+        proto = protoFlake.devShell;
+        pure-impl = pureImplFlake.devShell;
+        pre-commit = pre-commit-devShell;
+        default = proto;
+      };
+    });
 }
