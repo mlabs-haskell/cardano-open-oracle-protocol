@@ -11,8 +11,8 @@
     fourmolu.enable = true;
     shellcheck.enable = true;
     hlint.enable = true;
-    #FIXME hunspell.enable = true;
-    #FIXME markdownlint.enable = true;
+    #FIXME(https://github.com/mlabs-haskell/cardano-open-oracle-protocol/issues/11) hunspell.enable = true;
+    #FIXME(https://github.com/mlabs-haskell/cardano-open-oracle-protocol/issues/11) markdownlint.enable = true;
   };
 
   tools = { };
