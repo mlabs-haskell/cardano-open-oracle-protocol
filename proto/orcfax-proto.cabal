@@ -1,0 +1,36 @@
+cabal-version:      3.0
+name:               orcfax-proto
+version:            0.1.0.0
+maintainer:         drazen@mlabs.city
+author:             Drazen Popovic
+synopsis:           A Cabal project for Orcfax protobufs
+build-type:         Custom
+extra-source-files: **/*.proto
+
+custom-setup
+  setup-depends:
+    , base
+    , Cabal
+    , proto-lens-protobuf-types
+    , proto-lens-setup
+
+library
+  exposed-modules:
+    Proto.Oracle
+    Proto.Oracle_Fields
+
+  autogen-modules:
+    Proto.Oracle
+    Proto.Oracle_Fields
+
+  default-language: Haskell2010
+  build-depends:
+    , base
+    , http2-grpc-types
+    , microlens
+    , proto-lens
+    , proto-lens-protobuf-types
+    , proto-lens-runtime
+    , warp
+    , warp-grpc
+    , warp-tls
