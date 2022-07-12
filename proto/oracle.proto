@@ -32,6 +32,11 @@ message ResourceDescription {
   }
 }
 
+message Resource {
+  // JSON encoded resource
+  string value = 1;
+};
+
 message RealNumber {
 }
 
@@ -57,6 +62,11 @@ message CreateResourceTransactionRequest {
   UTXORef collateral = 3;
 }
 
-message CreateResourceTransactionResponse {}
+message CreateResourceTransactionResponse {
+  // CBOR encoded transaction to sign and submit
+  string transaction = 1;
+  // Resource that is produced by the transaction
+  Resource resource = 2;
+}
 
 message UTXORef {}

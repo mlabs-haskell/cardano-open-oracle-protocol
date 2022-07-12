@@ -5,7 +5,7 @@ maintainer:         drazen@mlabs.city
 author:             Drazen Popovic
 synopsis:           A Cabal project for Orcfax protobufs
 build-type:         Custom
-extra-source-files: **/*.proto
+extra-source-files: ../*.proto
 
 custom-setup
   setup-depends:

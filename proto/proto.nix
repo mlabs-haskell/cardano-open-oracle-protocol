@@ -1,6 +1,6 @@
 { pkgs, haskell-nix, compiler-nix-name, http2-grpc-native, shellHook }:
 haskell-nix.cabalProject' {
-  src = ./.;
+  src = ./haskell;
   name = "orcfax-proto";
   inherit compiler-nix-name;
   index-state = "2022-01-21T23:44:46Z";
@@ -65,7 +65,10 @@ haskell-nix.cabalProject' {
     nativeBuildInputs = with pkgs; [
       # Building code
       protobuf
+      protoc-gen-grpc-web
       haskellPackages.proto-lens-protoc
+      nodePackages.npm
+      nodejs
       # Code quality
       ## Haskell/Cabal
       haskellPackages.fourmolu

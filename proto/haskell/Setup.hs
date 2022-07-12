@@ -1,3 +1,3 @@
 import Data.ProtoLens.Setup (defaultMainGeneratingProtos)
 
-main = defaultMainGeneratingProtos "."
+main = defaultMainGeneratingProtos ".."
