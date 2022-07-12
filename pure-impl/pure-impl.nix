@@ -1,4 +1,4 @@
-{ pkgs, haskell-nix, compiler-nix-name }:
+{ pkgs, haskell-nix, compiler-nix-name, shellHook }:
 haskell-nix.project' {
   inherit compiler-nix-name;
   src = ./.;
@@ -14,5 +14,9 @@ haskell-nix.project' {
       hlint = { };
       # haskell-language-server = {};
     };
+    shellHook = ''
+      cd pure-impl
+      ${shellHook}
+    '';
   };
 }

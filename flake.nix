@@ -47,12 +47,14 @@
 
       pureImplProj = import ./pure-impl/pure-impl.nix {
         inherit pkgs compiler-nix-name;
-        haskell-nix = pkgsWithOverlay.haskell-nix;
+        inherit (pkgsWithOverlay) haskell-nix;
+        inherit (pre-commit-check) shellHook;
       };
       pureImplFlake = pureImplProj.flake { };
       protoProj = import ./proto/proto.nix {
         inherit pkgs compiler-nix-name http2-grpc-native;
-        haskell-nix = pkgsWithOverlay.haskell-nix;
+        inherit (pkgsWithOverlay) haskell-nix;
+        inherit (pre-commit-check) shellHook;
       };
       protoFlake = protoProj.flake { };
 

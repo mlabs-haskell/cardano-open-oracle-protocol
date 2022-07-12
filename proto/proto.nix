@@ -1,4 +1,4 @@
-{ pkgs, haskell-nix, compiler-nix-name, http2-grpc-native }:
+{ pkgs, haskell-nix, compiler-nix-name, http2-grpc-native, shellHook }:
 haskell-nix.cabalProject' {
   src = ./.;
   name = "orcfax-proto";
@@ -92,6 +92,8 @@ haskell-nix.cabalProject' {
       export LC_CTYPE=C.UTF-8
       export LC_ALL=C.UTF-8
       export LANG=C.UTF-8
+      cd proto
+      ${shellHook}
     '';
   };
 }
