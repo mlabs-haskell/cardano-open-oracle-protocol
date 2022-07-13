@@ -106,7 +106,6 @@
         checks = oraclePureFlake.checks //
           protoHsFlake.checks //
           oraclePlutusFlake.checks //
-          pre-commit-check // devShells // packages;
-
+          { inherit pre-commit-check; } // devShells // packages;
       });
 }

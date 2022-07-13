@@ -2,7 +2,7 @@ syntax = "proto3";
 
 import "google/protobuf/empty.proto";
 
-package orcfax;
+package cardano.oracle;
 
 service Oracle {
   // Get a list of all resource types supported by this oracle
