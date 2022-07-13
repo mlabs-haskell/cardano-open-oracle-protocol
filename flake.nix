@@ -105,12 +105,12 @@
 
       # Used by CI
       build-all = pkgs.runCommand "build-all"
-        (self.packages.${system} // self.devShells.${system})
+        (self.packages // self.devShells)
         "touch $out";
 
       check-all = pkgs.runCommand "check-all"
         {
-          nativeBuildInputs = builtins.attrValues self.checks.${system};
+          nativeBuildInputs = builtins.attrValues self.checks;
         } "touch $out";
 
       hydraJobs = {
