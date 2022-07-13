@@ -1,39 +1,18 @@
 { pkgs, haskell-nix, compiler-nix-name, http2-grpc-native, shellHook }:
 haskell-nix.cabalProject' {
-  src = ./haskell;
-  name = "orcfax-proto";
+  src = ./.;
+  name = "cardano-oracle-proto";
   inherit compiler-nix-name;
   index-state = "2022-01-21T23:44:46Z";
   extraSources = [
     {
-      src = http2-grpc-native + /http2-client-grpc;
+      src = http2-grpc-native;
       subdirs = [
-        "."
-      ];
-    }
-    {
-      src = http2-grpc-native + /http2-grpc-proto-lens;
-      subdirs = [
-        "."
-      ];
-    }
-    {
-      src = http2-grpc-native + /http2-grpc-proto3-wire;
-      subdirs = [
-        "."
-      ];
-    }
-    {
-      src = http2-grpc-native + /http2-grpc-types;
-      subdirs = [
-        "."
-      ];
-    }
-
-    {
-      src = http2-grpc-native + /warp-grpc;
-      subdirs = [
-        "."
+        "http2-client-grpc"
+        "http2-grpc-proto-lens"
+        #"http2-grpc-proto3-wire"
+        "http2-grpc-types"
+        "warp-grpc"
       ];
     }
   ];
@@ -48,7 +27,7 @@ haskell-nix.cabalProject' {
           pkgs.haskellPackages.proto-lens-protoc
         ];
 
-        orcfax-proto.components.library.build-tools = [
+        cardano-oracle-proto.components.library.build-tools = [
           pkgs.protobuf
           pkgs.haskellPackages.proto-lens-protoc
         ];
@@ -73,17 +52,18 @@ haskell-nix.cabalProject' {
       ## Haskell/Cabal
       haskellPackages.fourmolu
       haskellPackages.cabal-fmt
+      hlint
       ## Nix
       nixpkgs-fmt
     ];
 
-    # additional = ps: [
-    #   ps.http2-client-grpc
-    #   ps.http2-grpc-proto-lens
-    #   ps.http2-grpc-proto3-wire
-    #   ps.http2-grpc-types
-    #   ps.warp-grpc
-    # ];
+    additional = ps: [
+      ps.http2-client-grpc
+      ps.http2-grpc-proto-lens
+      #ps.http2-grpc-proto3-wire
+      ps.http2-grpc-types
+      ps.warp-grpc
+    ];
 
     tools = {
       cabal = { };

@@ -1,4 +1,4 @@
-module OrcFax.Datums where
+module Cardano.Oracle.Pure.Datums where
 
 -- TODO: rewrite this using `Data.Row`
 
