@@ -90,7 +90,7 @@
       oraclePlutusFlake = oraclePlutusProj.flake { };
 
     in
-    {
+    rec {
 
       # Standard flake attributes
       packages = pureImplFlake.packages // protoHsFlake.packages // oraclePlutusFlake.packages;
@@ -102,5 +102,20 @@
         oracle-plutus = oraclePlutusFlake.devShell;
         default = proto;
       };
+
+      # Used by CI
+      build-all = pkgs.runCommand "build-all"
+        (self.packages.${system} // self.devShells.${system})
+        "touch $out";
+
+      check-all = pkgs.runCommand "check-all"
+        {
+          nativeBuildInputs = builtins.attrValues self.checks.${system};
+        } "touch $out";
+
+      hydraJobs = {
+        inherit build-all check-all;
+      };
+
     });
 }
