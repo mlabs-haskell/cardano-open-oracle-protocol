@@ -43,6 +43,8 @@
     flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" ]
       (system:
       let
+        inherit self;
+
         pkgs = import nixpkgs {
           inherit system;
         };
@@ -87,13 +89,12 @@
           compiler-nix-name = "ghc921";
         };
         oraclePlutusFlake = oraclePlutusProj.flake { };
-
       in
-      {
+      rec {
 
         # Standard flake attributes
         packages = oraclePureFlake.packages // protoHsFlake.packages // oraclePlutusFlake.packages;
-        checks = oraclePureFlake.checks // protoHsFlake.checks // oraclePlutusFlake.checks // pre-commit-check;
+
         devShells = rec {
           proto = protoHsFlake.devShell;
           oracle-pure = oraclePureFlake.devShell;
@@ -102,20 +103,10 @@
           default = proto;
         };
 
-        # Used by CI
-        build-all = pkgs.runCommand "build-all"
-          (self.packages // self.devShells)
-          "touch $out";
+        checks = oraclePureFlake.checks //
+          protoHsFlake.checks //
+          oraclePlutusFlake.checks //
+          pre-commit-check // devShells // packages;
 
-        check-all = pkgs.runCommand "check-all"
-          {
-            nativeBuildInputs = builtins.attrValues self.checks;
-          } "touch $out";
-
-      }) // {
-      hydraJobs = {
-        build-all = self.build-all.x86_64-linux;
-        check-all = self.check-all.x86_64-linux;
-      };
-    };
+      });
 }
