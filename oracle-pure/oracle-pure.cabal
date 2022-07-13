@@ -1,37 +1,24 @@
 cabal-version:      3.0
-name:               cardano-open-oracle-protocol
+name:               oracle-pure
 version:            0.1.0.0
-synopsis:
-
--- A longer description of the package.
--- description:
-homepage:           mlabs.city
-
--- A URL where users can report bugs.
--- bug-reports:
 license:            MIT
 license-file:       LICENSE
-author:             mlabs-haskell
 maintainer:         info@mlabs.city
-
--- A copyright notice.
--- copyright:
+author:             mlabs-haskell
+homepage:           mlabs.city
 category:           Network
 extra-source-files:
   CHANGELOG.md
   README.md
 
-executable cardano-open-oracle-protocol
+executable oracle-pure-cli
   main-is:            Main.hs
-
-  -- Modules included in this executable, other than Main.
+  hs-source-dirs:     app
   other-modules:
-    OrcFax.Datums
-    OrcFax.MerkleTree
+    Cardano.Oracle.Pure.Datums
+    Cardano.Oracle.Pure.MerkleTree
 
-  -- LANGUAGE extensions used by modules in this package.
-  -- other-extensions:
-  ghc-options:        -Wall -Werror
+  default-language:   Haskell2010
   default-extensions:
     NoMonomorphismRestriction
     NoStarIsType
@@ -81,6 +68,7 @@ executable cardano-open-oracle-protocol
     TypeSynonymInstances
     ViewPatterns
 
+  ghc-options:        -Wall -Werror
   build-depends:
     , aeson
     , base
@@ -96,6 +84,3 @@ executable cardano-open-oracle-protocol
     base hiding (Prelude),
     relude (Relude as Prelude),
     relude
-
-  hs-source-dirs:     app
-  default-language:   Haskell2010

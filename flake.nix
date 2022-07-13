@@ -64,13 +64,13 @@
         inherit (pre-commit-check) shellHook;
       };
 
-      pureImplProj = import ./pure-impl/build.nix {
+      oraclePureProj = import ./oracle-pure/build.nix {
         inherit pkgs;
         inherit (pkgsWithOverlay) haskell-nix;
         inherit (pre-commit-check) shellHook;
         compiler-nix-name = "ghc8107";
       };
-      pureImplFlake = pureImplProj.flake { };
+      oraclePureFlake = oraclePureProj.flake { };
 
       protoHsProj = import ./proto/haskell/build.nix {
         inherit pkgs http2-grpc-native;
@@ -93,11 +93,11 @@
     rec {
 
       # Standard flake attributes
-      packages = pureImplFlake.packages // protoHsFlake.packages // oraclePlutusFlake.packages;
-      checks = pureImplFlake.checks // protoHsFlake.checks // oraclePlutusFlake.checks // pre-commit-check;
+      packages = oraclePureFlake.packages // protoHsFlake.packages // oraclePlutusFlake.packages;
+      checks = oraclePureFlake.checks // protoHsFlake.checks // oraclePlutusFlake.checks // pre-commit-check;
       devShells = rec {
         proto = protoHsFlake.devShell;
-        pure-impl = pureImplFlake.devShell;
+        oracle-pure = oraclePureFlake.devShell;
         pre-commit = pre-commit-devShell;
         oracle-plutus = oraclePlutusFlake.devShell;
         default = proto;
