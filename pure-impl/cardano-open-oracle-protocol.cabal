@@ -84,6 +84,7 @@ executable cardano-open-oracle-protocol
   build-depends:
     , aeson
     , base
+    , bytestring
     , containers
     , cryptohash
     , generic-arbitrary

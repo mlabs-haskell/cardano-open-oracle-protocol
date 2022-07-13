@@ -12,7 +12,7 @@ haskell-nix.project' {
     tools = {
       cabal = { };
       hlint = { };
-      # haskell-language-server = {};
+      haskell-language-server = { };
     };
     shellHook = ''
       cd pure-impl
