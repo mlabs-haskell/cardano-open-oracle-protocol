@@ -40,82 +40,82 @@
     , iohk-nix
     , ...
     }:
-    flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" ] (system:
-    let
-      inherit self;# To appease nix-linter
+    flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" ]
+      (system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+        };
+        pkgsWithOverlay = import nixpkgs {
+          inherit system;
+          inherit (haskell-nix) config;
+          overlays = [
+            haskell-nix.overlay
+            (import "${iohk-nix}/overlays/crypto")
+          ];
+        };
 
-      pkgs = import nixpkgs {
-        inherit system;
-      };
-      pkgsWithOverlay = import nixpkgs {
-        inherit system;
-        inherit (haskell-nix) config;
-        overlays = [
-          haskell-nix.overlay
-          (import "${iohk-nix}/overlays/crypto")
-        ];
-      };
+        # cardanoInputs = plutip.inputs.bot-plutus-interface.inputs;
+        # cardanoExtraSources = plutip.inputs.bot-plutus-interface.extraSources;
 
-      # cardanoInputs = plutip.inputs.bot-plutus-interface.inputs;
-      # cardanoExtraSources = plutip.inputs.bot-plutus-interface.extraSources;
+        pre-commit-check = pre-commit-hooks.lib.${system}.run (import ./pre-commit-check.nix);
+        pre-commit-devShell = pkgs.mkShell {
+          inherit (pre-commit-check) shellHook;
+        };
 
-      pre-commit-check = pre-commit-hooks.lib.${system}.run (import ./pre-commit-check.nix);
-      pre-commit-devShell = pkgs.mkShell {
-        inherit (pre-commit-check) shellHook;
-      };
+        oraclePureProj = import ./oracle-pure/build.nix {
+          inherit pkgs;
+          inherit (pkgsWithOverlay) haskell-nix;
+          inherit (pre-commit-check) shellHook;
+          compiler-nix-name = "ghc8107";
+        };
+        oraclePureFlake = oraclePureProj.flake { };
 
-      oraclePureProj = import ./oracle-pure/build.nix {
-        inherit pkgs;
-        inherit (pkgsWithOverlay) haskell-nix;
-        inherit (pre-commit-check) shellHook;
-        compiler-nix-name = "ghc8107";
-      };
-      oraclePureFlake = oraclePureProj.flake { };
+        protoHsProj = import ./proto/haskell/build.nix {
+          inherit pkgs http2-grpc-native;
+          inherit (pkgsWithOverlay) haskell-nix;
+          inherit (pre-commit-check) shellHook;
+          compiler-nix-name = "ghc8107";
+        };
+        protoHsFlake = protoHsProj.flake { };
 
-      protoHsProj = import ./proto/haskell/build.nix {
-        inherit pkgs http2-grpc-native;
-        inherit (pkgsWithOverlay) haskell-nix;
-        inherit (pre-commit-check) shellHook;
-        compiler-nix-name = "ghc8107";
-      };
-      protoHsFlake = protoHsProj.flake { };
+        oraclePlutusProj = import ./oracle-plutus/build.nix {
+          inherit pkgs plutarch;
+          plutarchHsModule = plutarch.haskellModule system;
+          inherit (pkgsWithOverlay) haskell-nix;
+          inherit (pre-commit-check) shellHook;
+          compiler-nix-name = "ghc921";
+        };
+        oraclePlutusFlake = oraclePlutusProj.flake { };
 
-      oraclePlutusProj = import ./oracle-plutus/build.nix {
-        inherit pkgs plutarch;
-        plutarchHsModule = plutarch.haskellModule system;
-        inherit (pkgsWithOverlay) haskell-nix;
-        inherit (pre-commit-check) shellHook;
-        compiler-nix-name = "ghc921";
-      };
-      oraclePlutusFlake = oraclePlutusProj.flake { };
+      in
+      {
 
-    in
-    rec {
+        # Standard flake attributes
+        packages = oraclePureFlake.packages // protoHsFlake.packages // oraclePlutusFlake.packages;
+        checks = oraclePureFlake.checks // protoHsFlake.checks // oraclePlutusFlake.checks // pre-commit-check;
+        devShells = rec {
+          proto = protoHsFlake.devShell;
+          oracle-pure = oraclePureFlake.devShell;
+          pre-commit = pre-commit-devShell;
+          oracle-plutus = oraclePlutusFlake.devShell;
+          default = proto;
+        };
 
-      # Standard flake attributes
-      packages = oraclePureFlake.packages // protoHsFlake.packages // oraclePlutusFlake.packages;
-      checks = oraclePureFlake.checks // protoHsFlake.checks // oraclePlutusFlake.checks // pre-commit-check;
-      devShells = rec {
-        proto = protoHsFlake.devShell;
-        oracle-pure = oraclePureFlake.devShell;
-        pre-commit = pre-commit-devShell;
-        oracle-plutus = oraclePlutusFlake.devShell;
-        default = proto;
-      };
+        # Used by CI
+        build-all = pkgs.runCommand "build-all"
+          (self.packages // self.devShells)
+          "touch $out";
 
-      # Used by CI
-      build-all = pkgs.runCommand "build-all"
-        (self.packages // self.devShells)
-        "touch $out";
+        check-all = pkgs.runCommand "check-all"
+          {
+            nativeBuildInputs = builtins.attrValues self.checks;
+          } "touch $out";
 
-      check-all = pkgs.runCommand "check-all"
-        {
-          nativeBuildInputs = builtins.attrValues self.checks;
-        } "touch $out";
-
+      }) // {
       hydraJobs = {
-        inherit build-all check-all;
+        build-all = self.build-all.x86_64-linux;
+        check-all = self.check-all.x86_64-linux;
       };
-
-    });
+    };
 }
