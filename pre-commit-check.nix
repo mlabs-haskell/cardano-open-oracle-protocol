@@ -12,7 +12,7 @@
     shellcheck.enable = true;
     hlint.enable = true;
     #FIXME(https://github.com/mlabs-haskell/cardano-open-oracle-protocol/issues/11) hunspell.enable = true;
-    #FIXME(https://github.com/mlabs-haskell/cardano-open-oracle-protocol/issues/11) markdownlint.enable = true;
+    markdownlint.enable = true;
   };
 
   tools = { };
