@@ -1,7 +1,7 @@
-{ pkgs, haskell-nix, compiler-nix-name, http2-grpc-native, shellHook }:
+{ pkgs, haskell-nix, compiler-nix-name, http2-grpc-native, oracle-proto, shellHook }:
 haskell-nix.cabalProject' {
   src = ./.;
-  name = "cardano-oracle-proto";
+  name = "oracle-service";
   inherit compiler-nix-name;
   index-state = "2022-01-21T23:44:46Z";
   extraSources = [
@@ -15,22 +15,24 @@ haskell-nix.cabalProject' {
         "warp-grpc"
       ];
     }
+    {
+      src = oracle-proto;
+      subdirs = [ "." ];
+    }
   ];
   modules = [
     (_: {
       packages = {
         allComponent.doHoogle = true;
+        allComponent.doHaddock = true;
 
+        # FIXME: This is annoying
         # Add proto compilation execs
         proto-lens-protobuf-types.components.library.build-tools = [
           pkgs.protobuf
           pkgs.haskellPackages.proto-lens-protoc
         ];
 
-        cardano-oracle-proto.components.library.build-tools = [
-          pkgs.protobuf
-          pkgs.haskellPackages.proto-lens-protoc
-        ];
       };
     })
   ];
@@ -42,12 +44,6 @@ haskell-nix.cabalProject' {
 
     # We use the ones from vanilla Nixpkgs, since they are cached reliably.
     nativeBuildInputs = with pkgs; [
-      # Building code
-      protobuf
-      protoc-gen-grpc-web
-      haskellPackages.proto-lens-protoc
-      nodePackages.npm
-      nodejs
       # Code quality
       ## Haskell/Cabal
       haskellPackages.fourmolu
@@ -63,6 +59,7 @@ haskell-nix.cabalProject' {
       #ps.http2-grpc-proto3-wire
       ps.http2-grpc-types
       ps.warp-grpc
+      ps.oracle-proto
     ];
 
     tools = {
@@ -75,7 +72,7 @@ haskell-nix.cabalProject' {
       export LC_CTYPE=C.UTF-8
       export LC_ALL=C.UTF-8
       export LANG=C.UTF-8
-      cd proto
+      cd oracle-service
       ${shellHook}
     '';
   };
