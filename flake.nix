@@ -73,13 +73,10 @@
         };
         oraclePureFlake = oraclePureProj.flake { };
 
-        protoHsProj = import ./proto/haskell/build.nix {
-          inherit pkgs http2-grpc-native;
-          inherit (pkgsWithOverlay) haskell-nix;
+        protoDevShell = import ./proto/build.nix {
+          inherit pkgs;
           inherit (pre-commit-check) shellHook;
-          compiler-nix-name = "ghc8107";
         };
-        protoHsFlake = protoHsProj.flake { };
 
         oraclePlutusProj = import ./oracle-plutus/build.nix {
           inherit pkgs plutarch;
@@ -89,23 +86,42 @@
           compiler-nix-name = "ghc921";
         };
         oraclePlutusFlake = oraclePlutusProj.flake { };
+
+        oracleHsProto = import ./nix/protobuf-hs.nix {
+          inherit pkgs;
+          src = ./proto;
+          proto = "oracle.proto";
+          cabalPackageName = "oracle-proto";
+        };
+
+        oracleServiceProj = import ./oracle-service/build.nix {
+          inherit pkgs http2-grpc-native;
+          oracle-proto = oracleHsProto;
+          inherit (pkgsWithOverlay) haskell-nix;
+          inherit (pre-commit-check) shellHook;
+          compiler-nix-name = "ghc8107";
+        };
+        oracleServiceFlake = oracleServiceProj.flake { };
       in
       rec {
+        # Useful for nix repl
+        inherit pkgs pkgsWithOverlay;
 
         # Standard flake attributes
-        packages = oraclePureFlake.packages // protoHsFlake.packages // oraclePlutusFlake.packages;
+        packages = oraclePureFlake.packages // oraclePlutusFlake.packages // oracleServiceFlake.packages;
 
         devShells = rec {
-          proto = protoHsFlake.devShell;
+          proto = protoDevShell;
           oracle-pure = oraclePureFlake.devShell;
           pre-commit = pre-commit-devShell;
           oracle-plutus = oraclePlutusFlake.devShell;
+          oracle-service = oracleServiceFlake.devShell;
           default = proto;
         };
 
         checks = oraclePureFlake.checks //
-          protoHsFlake.checks //
           oraclePlutusFlake.checks //
+          oracleServiceFlake.checks //
           { inherit pre-commit-check; } // devShells // packages;
       });
 }

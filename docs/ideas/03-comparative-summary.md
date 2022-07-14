@@ -1,9 +1,4 @@
----
-tag: "docs-proposal-03-comparative-summary"
----
-
 # Comparative Summary
-
 
 ## Summary of pros and cons of the different proposals
 
