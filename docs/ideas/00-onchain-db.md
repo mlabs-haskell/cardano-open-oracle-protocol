@@ -1,19 +1,5 @@
 # Onchain Database
 
-<!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
-## Table of Contents
-
-- [Onchain Database](#onchain-database)
-  - [Description](#description)
-    - [Graph](#graph)
-    - [Product Nodes](#product-nodes)
-      - [Graph](#graph-1)
-    - [Interactions/ Shape of an onchain datum](#interactions-shape-of-an-onchain-datum)
-  - [An onchain data registry](#an-onchain-data-registry)
-    - [Draft of a possible Onchain representation of the datum](#draft-of-a-possible-onchain-representation-of-the-datum)
-
-<!-- markdown-toc end -->
-
 ## Description
 
 1. Data structured similarly to `Data.Row`, see

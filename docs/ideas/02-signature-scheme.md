@@ -1,13 +1,5 @@
 # Signature Scheme
 
-<!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
-## Table of Contents
-
-- [Signature Scheme](#signature-scheme)
-  - [Using a signature scheme](#using-a-signature-scheme)
-
-<!-- markdown-toc end -->
-
 ## Using a signature scheme
 
 This is the simplest and probably cheapest solution:

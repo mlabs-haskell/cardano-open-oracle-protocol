@@ -1,11 +1,5 @@
 # Cardano open oracle protocol
 
-## Table of Contents
-
-- [Cardano open oracle protocol](#cardano-open-oracle-protocol)
-  - [Introduction](#introduction)
-  - [Documentation](#documentation)
-
 ## Introduction
 
 The Cardano open oracle protocol (COOP) is a set of guidelines complemented by
