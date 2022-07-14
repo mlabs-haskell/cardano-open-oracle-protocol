@@ -1,0 +1,37 @@
+cabal-version:      3.0
+name:               cardano-oracle-proto
+version:            0.1.0.0
+maintainer:         info@mlabs.city
+author:             mlabs-haskell
+synopsis:           A Cabal project for Cardano Oracle protobufs
+build-type:         Custom
+extra-source-files: ../*.proto
+
+custom-setup
+  setup-depends:
+    , base
+    , Cabal
+    , proto-lens-protobuf-types
+    , proto-lens-setup
+
+library
+  exposed-modules:
+    Proto.Oracle
+    Proto.Oracle_Fields
+
+  autogen-modules:
+    Proto.Oracle
+    Proto.Oracle_Fields
+
+  default-language: Haskell2010
+  build-depends:
+    , base
+    , http2-grpc-proto-lens
+    , http2-grpc-types
+    , microlens
+    , proto-lens
+    , proto-lens-protobuf-types
+    , proto-lens-runtime
+    , warp
+    , warp-grpc
+    , warp-tls

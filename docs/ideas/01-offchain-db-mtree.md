@@ -1,19 +1,5 @@
 # OffChain Database - Merkle Tree
 
-<!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
-**Table of Contents**
-
-- [OffChain Database - Merkle Tree](#offchain-database---merkle-tree)
-  - [Using a commitment scheme](#using-a-commitment-scheme)
-    - [The proposed commitment scheme using a Merkle Tree (but not limited to it)](#the-proposed-commitment-scheme-using-a-merkle-tree-but-not-limited-to-it)
-    - [Concurrency](#concurrency)
-    - [Optimizations](#optimizations)
-    - [Identification](#identification)
-    - [Authenticity](#authenticity)
-  - [Open questions](#open-questions)
-
-<!-- markdown-toc end -->
-
 ## Using a commitment scheme
 
 ### The proposed commitment scheme using a Merkle Tree (but not limited to it)

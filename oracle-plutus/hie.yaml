@@ -1,0 +1,6 @@
+cradle:
+  cabal:
+    - path: "./src"
+      component: "lib:oracle-plutus"
+    - path: "./app"
+      component: "exe:oracle-plutus-cli"

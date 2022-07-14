@@ -1,100 +1,111 @@
 {
   description = "cardano-open-oracle-protocol";
+  nixConfig.bash-prompt =
+    "\\[\\e[0m\\][\\[\\e[0;2m\\]nix-develop \\[\\e[0;1m\\]cardano-open-oracle-protocol \\[\\e[0;93m\\]\\w\\[\\e[0m\\]]\\[\\e[0m\\]$ \\[\\e[0m\\]";
 
   inputs = {
-    haskell-nix.url = "github:input-output-hk/haskell.nix";
-    nixpkgs.follows = "haskell-nix/nixpkgs-unstable";
-    pre-commit-hooks = {
-      url = "github:cachix/pre-commit-hooks.nix";
-      inputs.flake-utils.follows = "flake-utils";
-    };
+    # Plutip maintains a compatible Plutus/Cardano derivation set
+    plutip.url = "github:mlabs-haskell/plutip";
+
+    nixpkgs.follows = "plutip/nixpkgs";
+    haskell-nix.follows = "plutip/haskell-nix";
+
     flake-utils = {
       url = "github:numtide/flake-utils";
       inputs.nixpkgs.follows = "haskell-nix/nixpkgs-unstable";
     };
+
+    pre-commit-hooks.url = "github:cachix/pre-commit-hooks.nix";
+
+    http2-grpc-native = {
+      url = "github:bladyjoker/http2-grpc-haskell";
+      flake = false;
+    };
+
+    plutarch.url = "github:Plutonomicon/plutarch-plutus";
+    plutarch.inputs.haskell-nix.follows = "haskell-nix";
+    plutarch.inputs.nixpkgs.follows = "nixpkgs";
+
+    iohk-nix.follows = "plutip/iohk-nix";
   };
 
-  outputs = inputs @ {
-    self,
-    nixpkgs,
-    flake-utils,
-    haskell-nix,
-    ...
-  }:
-    flake-utils.lib.eachSystem ["x86_64-linux" "x86_64-darwin"] (system: let
-      extra-tools = [];
+  outputs =
+    { self
+    , nixpkgs
+    , flake-utils
+    , haskell-nix
+    , pre-commit-hooks
+    , http2-grpc-native
+    , plutarch
+    , iohk-nix
+    , ...
+    }:
+    flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" ]
+      (system:
+      let
+        inherit self;
 
-      pkgs = import nixpkgs {
-        inherit system;
-        inherit (haskell-nix) config;
-      };
-      pkgsWithOverlay = import nixpkgs {
-        inherit system overlays;
-        inherit (haskell-nix) config;
-      };
-      ghcVersion = "921";
-      compiler-nix-name = "ghc" + ghcVersion;
-
-      hls =
-        pkgs.haskell-language-server.override
-        {
-          supportedGhcVersions = [ghcVersion];
+        pkgs = import nixpkgs {
+          inherit system;
         };
-
-      pre-commit-check = inputs.pre-commit-hooks.lib.${system}.run {
-        src = ./.;
-        settings = {
-          ormolu.defaultExtensions = [
-            "TypeApplications"
-            "QualifiedDo"
+        pkgsWithOverlay = import nixpkgs {
+          inherit system;
+          inherit (haskell-nix) config;
+          overlays = [
+            haskell-nix.overlay
+            (import "${iohk-nix}/overlays/crypto")
           ];
         };
-        hooks = {
-          alejandra.enable = true;
-          cabal-fmt.enable = true;
-          fourmolu.enable = true;
+
+        # cardanoInputs = plutip.inputs.bot-plutus-interface.inputs;
+        # cardanoExtraSources = plutip.inputs.bot-plutus-interface.extraSources;
+
+        pre-commit-check = pre-commit-hooks.lib.${system}.run (import ./pre-commit-check.nix);
+        pre-commit-devShell = pkgs.mkShell {
+          inherit (pre-commit-check) shellHook;
         };
-      };
 
-      overlays = [
-        haskell-nix.overlay
-        (final: prev: {
-          cardano-open-oracle-protocol = final.haskell-nix.project' {
-            inherit compiler-nix-name;
-            src = ./pure-impl;
-            shell = {
-              buildInputs =
-                [
-                  pkgs.nixpkgs-fmt
-                  pkgs.haskellPackages.cabal-fmt
-                  pkgs.haskellPackages.fourmolu
-                  hls
-                ]
-                ++ extra-tools;
-              tools = {
-                cabal = {};
-                hlint = {};
-              };
-              crossPlatform = [];
-              inherit (pre-commit-check) shellHook;
-            };
-          };
-        })
-      ];
+        oraclePureProj = import ./oracle-pure/build.nix {
+          inherit pkgs;
+          inherit (pkgsWithOverlay) haskell-nix;
+          inherit (pre-commit-check) shellHook;
+          compiler-nix-name = "ghc8107";
+        };
+        oraclePureFlake = oraclePureProj.flake { };
 
-      flake = pkgsWithOverlay.cardano-open-oracle-protocol.flake {crossPlatforms = p: [];};
+        protoHsProj = import ./proto/haskell/build.nix {
+          inherit pkgs http2-grpc-native;
+          inherit (pkgsWithOverlay) haskell-nix;
+          inherit (pre-commit-check) shellHook;
+          compiler-nix-name = "ghc8107";
+        };
+        protoHsFlake = protoHsProj.flake { };
 
-      package = flake.packages."cardano-open-oracle-protocol:exe:cardano-open-oracle-protocol";
+        oraclePlutusProj = import ./oracle-plutus/build.nix {
+          inherit pkgs plutarch;
+          plutarchHsModule = plutarch.haskellModule system;
+          inherit (pkgsWithOverlay) haskell-nix;
+          inherit (pre-commit-check) shellHook;
+          compiler-nix-name = "ghc921";
+        };
+        oraclePlutusFlake = oraclePlutusProj.flake { };
+      in
+      rec {
 
-      # the nix code formatter for nix fmt
-      formatter = pkgs.alejandra;
+        # Standard flake attributes
+        packages = oraclePureFlake.packages // protoHsFlake.packages // oraclePlutusFlake.packages;
 
-      checks = {inherit pre-commit-check;};
-    in
-      flake
-      // {
-        defaultPackage = package;
-        inherit formatter;
-        inherit checks;
+        devShells = rec {
+          proto = protoHsFlake.devShell;
+          oracle-pure = oraclePureFlake.devShell;
+          pre-commit = pre-commit-devShell;
+          oracle-plutus = oraclePlutusFlake.devShell;
+          default = proto;
+        };
+
+        checks = oraclePureFlake.checks //
+          protoHsFlake.checks //
+          oraclePlutusFlake.checks //
+          { inherit pre-commit-check; } // devShells // packages;
       });
 }

@@ -1,6 +1,5 @@
 # Comparative Summary
 
-
 ## Summary of pros and cons of the different proposals
 
 1. *Storing data on-chain*: imposes higher cost for the oracle maintainer, will

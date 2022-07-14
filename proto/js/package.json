@@ -1,0 +1,16 @@
+{
+  "name": "orcfax-proto-web-commonjs",
+  "dependencies": {
+    "google-protobuf": "^3.6.1",
+    "grpc-web": "^1.2.0"
+  },
+  "devDependencies": {
+    "@grpc/grpc-js": "^1.6.7",
+    "@grpc/proto-loader": "^0.3.0",
+    "google-protobuf": "^3.6.1",
+    "grpc-web": "^1.2.0",
+    "webpack": "^5.73.0",
+    "webpack-cli": "^4.10.0",
+    "webpack-dev-server": "^4.9.3"
+  }
+}

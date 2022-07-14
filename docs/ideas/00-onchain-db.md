@@ -1,19 +1,5 @@
 # Onchain Database
 
-<!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
-**Table of Contents**
-
-- [Onchain Database](#onchain-database)
-  - [Description](#description)
-    - [Graph](#graph)
-    - [Product Nodes](#product-nodes)
-      - [Graph](#graph-1)
-    - [Interactions/ Shape of an onchain datum](#interactions-shape-of-an-onchain-datum)
-  - [An onchain data registry](#an-onchain-data-registry)
-      - [Draft of a possible Onchain representation of the datum](#draft-of-a-possible-onchain-representation-of-the-datum)
-
-<!-- markdown-toc end -->
-
 ## Description
 
 1. Data structured similarly to `Data.Row`, see
@@ -27,7 +13,7 @@
 
 ### Graph
 
-```
+```text
     ┌───────────────┐  ┌────────────────┐ ┌───────────────┐
     │ ID: A         │  │ ID: B          │ │ ID: (C,D)     │
     │ Datum: A      │  │ Datum: B       │ │ Datum: [(C,D)]│
@@ -58,9 +44,8 @@
 - can also be used by the actual authority to collapse datums that are similar
   into one maintaining reference to old nodes
 
-#### Graph
-
 ```text
+
 ┌────────┬┬────────┬┬────────┐
 │ID: idA ││ID: idB ││ID: idC │
 │Datum: A││Datum: B││Datum: C│
@@ -82,47 +67,45 @@
      └────────────────────────┘
 ```
 
-*Note: making sure that the function we use to combine datums computes a datum that can be trusted
-is non-trivial in the general case*
+*Note: making sure that the function we use to combine datums computes a datum
+that can be trusted is non-trivial in the general case*
 
 ### Interactions/ Shape of an onchain datum
 
 1. Expiration and TTL
 
-- validity interval: the interval in which the publisher deems a datum to be valid in
-- time to live: must be at least upperbound of validity interval; corresponds to the time
-    from when on the publisher will be garbage collecting the datum; useful for
-    gaining back funds.
+    1. validity interval: the interval in which the publisher deems a datum to be
+  valid in
+    2. time to live: must be at least upperbound of validity interval;
+    corresponds to the time from when on the publisher will be garbage
+    collecting the datum; useful for gaining back funds.
 
 2. Commitment Scheme
-   1. This can be the scheme proposed [beneath](#using-a-commitment-scheme) or
+
+    1. This can be the scheme proposed [beneath](#using-a-commitment-scheme) or
        basically any other commitment scheme, the designs are not mutually
        exclusive
-
 3. Naming scheme in the data registry; the datum-`URI`
-   1. two main requirements for the URI: representative (searchable), unique
-      <currency_symbol_per_provider>/<categorization>/<uid>
 
-   2. **currency_symbol_per_provider**: MintingPolicy for authority and specific
+    1. two main requirements for the URI: representative (searchable), unique
+      `<currency_symbol_per_provider>/<categorization>/<uid>`
+    2. `currency_symbol_per_provider`: MintingPolicy for authority and specific
        information stream (or MintingPolicy provided by authority that allows
        for combination of datums without losing trust which is bound to rules
        defined by authority)
+    3. example: "`<OrcFax-specify cursym>/nasdaq/goog/price/<uid identifying the
+      query done by the oracle>`" (this corresponds to the `URI`-field in `UTXOData`)
 
-   3. example:
-      "`<OrcFax-specify cursym>/nasdaq/goog/price/<uid identifying the query done by the oracle>`"
-
-   - this corresponds to the `URI`-field in `UTXOData`
-
-n. TODO: fill in the missing fields of the sample datatype and everything that might be in it
-
+> TODO: fill in the missing fields of the sample datatype and everything that
+> might be in it
 
 ## An onchain data registry
 
-#### Draft of a possible Onchain representation of the datum
+### Draft of a possible Onchain representation of the datum
 
 ```haskell
-data Arity = Primitive 
-           | Multiple
+
+data Arity = Primitive | Multiple
 
 data UTXOData (arity :: Arity) (isSequential :: Bool) = MkUTXOData
   -- | specifies whether you have a primitive datum or a composition
@@ -181,5 +164,6 @@ data SBool b where
   SFalse :: SBool 'False
 ```
 
-*To avoid unnecessary onchain data the `UTXOData` can be specialized to not contain a
-predecessor field (depending on the use-case a datum might not depend on a previous datum)*
+*To avoid unnecessary onchain data the `UTXOData` can be specialized to not
+contain a predecessor field (depending on the use-case a datum might not depend
+on a previous datum)*
