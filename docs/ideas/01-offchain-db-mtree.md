@@ -1,7 +1,7 @@
 # OffChain Database - Merkle Tree
 
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
-**Table of Contents**
+## Table of Contents
 
 - [OffChain Database - Merkle Tree](#offchain-database---merkle-tree)
   - [Using a commitment scheme](#using-a-commitment-scheme)
