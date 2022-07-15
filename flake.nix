@@ -111,12 +111,12 @@
         packages = oraclePureFlake.packages // oraclePlutusFlake.packages // oracleServiceFlake.packages;
 
         devShells = rec {
-          proto = protoDevShell;
-          oracle-pure = oraclePureFlake.devShell;
-          pre-commit = pre-commit-devShell;
-          oracle-plutus = oraclePlutusFlake.devShell;
-          oracle-service = oracleServiceFlake.devShell;
-          default = proto;
+          dev-proto = protoDevShell;
+          dev-pure = oraclePureFlake.devShell;
+          dev-pre-commit = pre-commit-devShell;
+          dev-plutus = oraclePlutusFlake.devShell;
+          dev-service = oracleServiceFlake.devShell;
+          default = dev-proto;
         };
 
         checks = oraclePureFlake.checks //
