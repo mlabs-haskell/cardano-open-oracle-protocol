@@ -22,7 +22,7 @@
       flake = false;
     };
 
-    plutarch.url = "github:Plutonomicon/plutarch-plutus";
+    plutarch.url = "github:Plutonomicon/plutarch-plutus/staging";
     plutarch.inputs.haskell-nix.follows = "haskell-nix";
     plutarch.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -80,7 +80,6 @@
 
         oraclePlutusProj = import ./oracle-plutus/build.nix {
           inherit pkgs plutarch;
-          plutarchHsModule = plutarch.haskellModule system;
           inherit (pkgsWithOverlay) haskell-nix;
           inherit (pre-commit-check) shellHook;
           compiler-nix-name = "ghc921";

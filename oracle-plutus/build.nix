@@ -1,18 +1,16 @@
-{ pkgs, haskell-nix, compiler-nix-name, plutarch, plutarchHsModule, shellHook }:
-haskell-nix.cabalProject' {
+{ pkgs, haskell-nix, compiler-nix-name, plutarch, shellHook }:
+haskell-nix.cabalProject' (plutarch.applyPlutarchDep pkgs {
   src = ./.;
   name = "oracle-plutus";
   inherit compiler-nix-name;
-  inherit (plutarch) cabalProjectLocal;
   #index-state = "2022-01-21T23:44:46Z";
-  extraSources = plutarch.extraSources ++ [
+  extraSources = [
     {
       src = plutarch;
-      subdirs = [ "." ];
+      subdirs = [ "." "plutarch-extra" "plutarch-test" ];
     }
   ];
   modules = [
-    plutarchHsModule
     (_: {
       packages = {
         # Enable strict builds
@@ -38,10 +36,10 @@ haskell-nix.cabalProject' {
 
     additional = ps: [
       ps.plutarch
+      ps.plutus-ledger-api
     ];
 
     tools = {
-      inherit (plutarch.tools) haskell-language-server;
       cabal = { };
     };
     shellHook = ''
@@ -53,5 +51,4 @@ haskell-nix.cabalProject' {
     '';
 
   };
-
-}
+})

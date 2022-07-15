@@ -12,7 +12,6 @@ extra-source-files: CHANGELOG.md
 
 flag dev
   description: Enable non-strict compilation for development
-  default:     True
   manual:      True
 
 library
@@ -83,13 +82,14 @@ library
     -Wno-name-shadowing -Wunused-foralls -fprint-explicit-foralls
     -fprint-explicit-kinds -fwarn-missing-import-lists
 
-  if !flag(dev)
-    ghc-options: -Werror
-
   build-depends:
     , base
     , plutarch
+    , plutarch-extra
     , plutus-ledger-api
+
+  if !flag(dev)
+    ghc-options: -Werror
 
 executable oracle-plutus-cli
   main-is:          Main.hs
