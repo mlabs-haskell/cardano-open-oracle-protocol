@@ -10,6 +10,11 @@ description:
 
 extra-source-files: CHANGELOG.md
 
+flag dev
+  description: Enable non-strict compilation for development
+  default:     True
+  manual:      True
+
 library
   exposed-modules:    Cardano.Oracle.Plutus
   hs-source-dirs:     src
@@ -76,7 +81,10 @@ library
     -Wno-partial-type-signatures -Wmissing-export-lists
     -Wincomplete-record-updates -Wmissing-deriving-strategies
     -Wno-name-shadowing -Wunused-foralls -fprint-explicit-foralls
-    -fprint-explicit-kinds -fwarn-missing-import-lists -Werror
+    -fprint-explicit-kinds -fwarn-missing-import-lists
+
+  if !flag(dev)
+    ghc-options: -Werror
 
   build-depends:
     , base

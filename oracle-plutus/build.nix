@@ -11,7 +11,16 @@ haskell-nix.cabalProject' {
       subdirs = [ "." ];
     }
   ];
-  modules = [ plutarchHsModule ];
+  modules = [
+    plutarchHsModule
+    (_: {
+      packages = {
+        # Enable strict builds
+        oracle-plutus.configureFlags = [ "-f-dev" ];
+      };
+    }
+    )
+  ];
   shell = {
     withHoogle = true;
 
