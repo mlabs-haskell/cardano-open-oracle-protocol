@@ -1,28 +1,30 @@
 { pkgs, haskell-nix, compiler-nix-name, plutarch, shellHook }:
-haskell-nix.cabalProject' (plutarch.applyPlutarchDep pkgs {
+let
+  hn-extra-hackage = plutarch.inputs.haskell-nix-extra-hackage;
+  myHackage = hn-extra-hackage.mkHackagesFor pkgs.system compiler-nix-name [
+    "${plutarch}"
+    "${plutarch}/plutarch-extra"
+    "${plutarch}/plutarch-test"
+    "${plutarch.inputs.plutus}/plutus-ledger-api"
+  ];
+in
+haskell-nix.cabalProject' (plutarch.applyPlutarchDep pkgs rec {
   src = ./.;
   name = "oracle-plutus";
   inherit compiler-nix-name;
-  #index-state = "2022-01-21T23:44:46Z";
-  extraSources = [
-    {
-      src = plutarch;
-      subdirs = [ "." "plutarch-extra" "plutarch-test" ];
-    }
-  ];
-  modules = [
-    (_: {
-      packages = {
-        # Enable strict builds
-        oracle-plutus.configureFlags = [ "-f-dev" ];
-      };
-    }
-    )
-  ];
+  inherit (myHackage) extra-hackages extra-hackage-tarballs;
+  modules = myHackage.modules ++ [{
+    packages = {
+      # Enable strict builds
+      oracle-plutus.configureFlags = [ "-f-dev" ];
+    };
+  }];
   shell = {
-    withHoogle = true;
+    # FIXME: withHoogle = true doesn't work
+    withHoogle = false;
 
     exactDeps = true;
+
     nativeBuildInputs = with pkgs; [
       # Code quality
       ## Haskell/Cabal
@@ -30,12 +32,13 @@ haskell-nix.cabalProject' (plutarch.applyPlutarchDep pkgs {
       haskellPackages.fourmolu
       haskellPackages.cabal-fmt
       hlint
-      ## Nix
-      nixpkgs-fmt
+      (plutarch.hlsFor compiler-nix-name pkgs.system)
     ];
 
     additional = ps: [
       ps.plutarch
+      ps.plutarch-extra
+      ps.plutarch-test
       ps.plutus-ledger-api
     ];
 

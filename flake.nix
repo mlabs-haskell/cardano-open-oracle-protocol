@@ -23,8 +23,6 @@
     };
 
     plutarch.url = "github:Plutonomicon/plutarch-plutus/staging";
-    plutarch.inputs.haskell-nix.follows = "haskell-nix";
-    plutarch.inputs.nixpkgs.follows = "nixpkgs";
 
     iohk-nix.follows = "plutip/iohk-nix";
   };
@@ -78,11 +76,21 @@
           inherit (pre-commit-check) shellHook;
         };
 
+        pkgsForPlutarch = import plutarch.inputs.nixpkgs {
+          inherit system;
+          inherit (plutarch.inputs.haskell-nix) config;
+          overlays = [
+            plutarch.inputs.haskell-nix.overlay
+            (import "${plutarch.inputs.iohk-nix}/overlays/crypto")
+          ];
+        };
+
         oraclePlutusProj = import ./oracle-plutus/build.nix {
-          inherit pkgs plutarch;
-          inherit (pkgsWithOverlay) haskell-nix;
+          inherit plutarch;
+          pkgs = pkgsForPlutarch;
+          inherit (pkgsForPlutarch) haskell-nix;
           inherit (pre-commit-check) shellHook;
-          compiler-nix-name = "ghc921";
+          compiler-nix-name = "ghc923";
         };
         oraclePlutusFlake = oraclePlutusProj.flake { };
 
@@ -104,7 +112,7 @@
       in
       rec {
         # Useful for nix repl
-        inherit pkgs pkgsWithOverlay;
+        inherit pkgs pkgsWithOverlay pkgsForPlutarch;
 
         # Standard flake attributes
         packages = oraclePureFlake.packages // oraclePlutusFlake.packages // oracleServiceFlake.packages;

@@ -1,7 +1,7 @@
-module Cardano.Oracle.Plutus (exampleFunction, exampleValidator) where
+module Cardano.Oracle.Plutus (exampleFunction, exampleValidator, exampleMintingPolicy) where
 
-import Plutarch (popaque)
-import Plutarch.Api.V1 (mkValidator)
+import Plutarch (Config, popaque)
+import Plutarch.Api.V1 (mkMintingPolicy, mkValidator)
 import Plutarch.Prelude (
   PInteger,
   Term,
@@ -12,7 +12,7 @@ import Plutarch.Prelude (
  )
 import Plutarch.TermCont (TermCont, tcont, unTermCont)
 import Plutarch.Trace (ptrace)
-import Plutus.V1.Ledger.Scripts (Validator)
+import PlutusLedgerApi.V1.Scripts (MintingPolicy, Validator)
 
 pletC :: Term s a -> TermCont s (Term s a)
 pletC = tcont . plet
@@ -23,6 +23,9 @@ exampleFunction = plam $ \x -> ptrace "exampleFunctions" $
     x' <- pletC $ x + 1 + 2 + 3
     return $ x' + x'
 
-exampleValidator :: Validator
-exampleValidator = mkValidator $
-  plam $ \_ _ _ -> popaque $ pconstant ()
+exampleValidator :: Config -> Validator
+exampleValidator cfg = mkValidator cfg $ plam $ \_ _ _ -> popaque $ pconstant ()
+
+exampleMintingPolicy :: Config -> MintingPolicy
+exampleMintingPolicy cfg = mkMintingPolicy cfg $
+  plam $ \_ _ -> popaque $ pconstant ()
