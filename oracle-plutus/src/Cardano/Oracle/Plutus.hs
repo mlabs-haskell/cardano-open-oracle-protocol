@@ -28,7 +28,7 @@ import Plutarch.Bool (PBool (PTrue))
 import Plutarch.DataRepr (
   PlutusTypeData,
  )
-import Plutarch.Extra.TermCont (pmatchC, ptraceC)
+import Plutarch.Extra.TermCont (pletC, pmatchC, ptraceC)
 import Plutarch.Prelude (
   PAsData,
   PBool (PFalse),
@@ -50,7 +50,6 @@ import Plutarch.Prelude (
   pfromData,
   phoistAcyclic,
   plam,
-  plet,
   pmatch,
   ptraceError,
   ptryFrom,
@@ -58,14 +57,11 @@ import Plutarch.Prelude (
   (#$),
   type (:-->),
  )
-import Plutarch.TermCont (TermCont, tcont, unTermCont)
+import Plutarch.TermCont (tcont, unTermCont)
 import PlutusLedgerApi.V1.Crypto (PubKeyHash)
 import PlutusLedgerApi.V1.Scripts (MintingPolicy, Validator)
-import Prelude (Applicative (pure), String, fst, ($), (.), (<$>))
+import Prelude (Applicative (pure), String, fst, ($), (<$>))
 import Prelude qualified as Hask
-
-pletC :: Term s a -> TermCont s (Term s a)
-pletC = tcont . plet
 
 type ResourceDescription = String
 type Resource = String
