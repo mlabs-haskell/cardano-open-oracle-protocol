@@ -4,7 +4,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
-module Cardano.Oracle.Plutus (ptxOutValue, ptxSignedBy, resourceMintingPolicy, resourceUtxoValidator) where
+module Cardano.Oracle.Plutus (ptxOutValue, ptxSignedBy, resourceMintingPolicy, resourceUtxoValidator, mkOneShotMintingPolicy) where
 
 import GHC.Generics qualified as GHC
 import Generics.SOP (Generic)
@@ -17,21 +17,23 @@ import Plutarch.Api.V1 (
   PPubKeyHash (PPubKeyHash),
   PScriptContext,
   PScriptPurpose (PMinting),
+  PTxInInfo,
   PTxInfo,
   PTxOut,
+  PTxOutRef,
   PValue,
   mkMintingPolicy,
   mkValidator,
  )
-import Plutarch.Api.V1.Value (PTokenName (PTokenName), pnormalize, pvalueOf)
+import Plutarch.Api.V1.Value (AmountGuarantees, KeyGuarantees, PTokenName (PTokenName), pnormalize, pvalueOf)
 import Plutarch.Api.V1.Value qualified as PValue
 import Plutarch.Bool (PBool (PTrue))
 import Plutarch.DataRepr (
   PlutusTypeData,
  )
 import Plutarch.Extra.TermCont (pletC, pmatchC, ptraceC)
-import Plutarch.List (PIsListLike, PListLike (pelimList))
-import Plutarch.Prelude (PAsData, PBool (PFalse), PBuiltinList, PData, PDataRecord, PEq ((#==)), PIsData, PLabeledType ((:=)), PMaybe (PJust, PNothing), PString, PTryFrom, PUnit (PUnit), PlutusType, Term, pcon, pconstant, pelem, pfield, pfind, pfix, pfromData, phoistAcyclic, pif, plam, plet, pmatch, ptrace, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
+import Plutarch.List (PIsListLike, PListLike (pelimList), pany)
+import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PDataRecord, PEq ((#==)), PIsData, PLabeledType ((:=)), PMaybe (PJust, PNothing), PString, PTryFrom, PUnit (PUnit), PlutusType, S, Term, pcon, pconstant, pdata, pelem, pfield, pfind, pfix, pfromData, phoistAcyclic, pif, plam, plet, pmatch, ptrace, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
 import Plutarch.TermCont (tcont, unTermCont)
 import PlutusLedgerApi.V1.Crypto (PubKeyHash)
 import PlutusLedgerApi.V1.Scripts (MintingPolicy, Validator)
@@ -228,3 +230,56 @@ pfindMap = phoistAcyclic $
       )
       (pcon PNothing)
       xs
+
+{-
+    Minting policy for OneShot tokens.
+    Ensures a given `TxOutRef` is consumed to enforce uniqueness of the token.
+    Only a single token can be minted at a time.
+-}
+mkOneShotMintingPolicy ::
+  ClosedTerm
+    ( PTokenName
+        :--> PTxOutRef
+        :--> POpaque
+        :--> PScriptContext
+        :--> POpaque
+    )
+mkOneShotMintingPolicy = phoistAcyclic $
+  plam $ \tn txOutRef _ ctx -> unTermCont do
+    txInfo <- pletC $ pfield @"txInfo" # ctx
+    inputs <- pletC $ pfromData $ pfield @"inputs" # pfromData txInfo
+    mint <- pletC $ pfromData $ pfield @"mint" # txInfo
+
+    cs <- pletC $ pownCurrencySymbol # ctx
+
+    _ <-
+      pure $
+        pif
+          (pconsumesRef # txOutRef # inputs)
+          (ptraceError "mkOneShotMintingPolicy: Doesn't consume utxo")
+          punit
+
+    _ <-
+      pure $
+        pif
+          (phasSingleToken # cs # tn # mint)
+          (ptraceError "mkOneShotMintingPolicy: Incorrect minted value")
+          punit
+
+    pure $ popaque $ pconstant ()
+
+-- | Check if utxo is consumed
+pconsumesRef :: Term s (PTxOutRef :--> PBuiltinList PTxInInfo :--> PBool)
+pconsumesRef = phoistAcyclic $
+  plam $ \txOutRef ->
+    pany #$ plam $ \input -> unTermCont do
+      txOutRef' <- pletC $ pfield @"outRef" # input
+      pure $ pdata txOutRef #== pdata txOutRef'
+
+-- | Check if a value has exactly one of the given token
+phasSingleToken ::
+  forall {s :: S} {w1 :: KeyGuarantees} {w2 :: AmountGuarantees}.
+  Term s (PCurrencySymbol :--> PTokenName :--> PValue w1 w2 :--> PBool)
+phasSingleToken = phoistAcyclic $
+  plam $ \cs tn v ->
+    1 #== pvalueOf # v # cs # tn
