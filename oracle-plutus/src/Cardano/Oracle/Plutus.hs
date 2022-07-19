@@ -4,12 +4,21 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
-module Cardano.Oracle.Plutus (ptxOutValue, ptxSignedBy, resourceMintingPolicy, resourceValidator, mkOneShotMintingPolicy) where
+module Cardano.Oracle.Plutus (
+  ptxOutValue,
+  ptxSignedBy,
+  resourceMintingPolicy,
+  resourceValidator,
+  mkOneShotMintingPolicy,
+  ptxInfoMint,
+  ResourceMintingParams (..),
+) where
 
 import GHC.Generics qualified as GHC
 import Generics.SOP (Generic)
 import Plutarch (Config, DerivePlutusType (DPTStrat), POpaque, TermCont, popaque, pto)
 import Plutarch.Api.V1 (
+  PAddress,
   PCurrencySymbol,
   PDatum,
   PDatumHash,
@@ -36,6 +45,7 @@ import Plutarch.Extra.TermCont (pletC, pmatchC, ptraceC)
 import Plutarch.List (PIsListLike, PListLike (pelimList), pany)
 import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PDataRecord, PEq ((#==)), PIsData, PLabeledType ((:=)), PMaybe (PJust, PNothing), PString, PTryFrom, PUnit (PUnit), PlutusType, S, Term, pcon, pconstant, pdata, pelem, pfield, pfind, pfix, pfromData, phoistAcyclic, pif, plam, plet, pmap, pmatch, ptrace, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
 import Plutarch.TermCont (tcont, unTermCont)
+import PlutusLedgerApi.V1 (Address, CurrencySymbol)
 import PlutusLedgerApi.V1.Crypto (PubKeyHash)
 import PlutusLedgerApi.V1.Scripts (MintingPolicy, Validator)
 import Prelude (Applicative (pure), String, fst, ($), (<$>))
@@ -74,17 +84,21 @@ instance PTryFrom PData (PAsData POpaque)
 instance PTryFrom PData (PAsData PString)
 instance PTryFrom PData (PAsData PPubKeyHash)
 
+data ResourceMintingParams = ResourceMintingParams
+  { rmp'instanceCs :: CurrencySymbol -- provided by the one shot mp,
+  , rmp'resourceValidatorAddress :: Address
+  }
+
 -- TODO: Parametrize by the one-shot token and resourceMintingPolicy
 resourceValidator :: Config -> Validator
 resourceValidator cfg = mkValidator cfg $ plam $ \_ _ _ -> popaque $ pconstant ()
 
--- TODO: Parametrize by the one-shot token and resourceValidator
-
 -- | Minting policy that validates creation of new resources.
-resourceMintingPolicy :: Config -> MintingPolicy
-resourceMintingPolicy cfg = mkMintingPolicy cfg $
+resourceMintingPolicy :: Config -> ResourceMintingParams -> MintingPolicy
+resourceMintingPolicy cfg params = mkMintingPolicy cfg $
   plam $ \_ ctx -> unTermCont do
-    _ <- pletC $ parseOutputs # ctx
+    _ <- pletC $ parseOutputs # pconstant (rmp'resourceValidatorAddress params) # ctx
+    _ <- pletC $ pconstant (rmp'instanceCs params) -- TODO: Ask if this gets purged during compilation!
     pure $ popaque $ pconstant ()
 
 {- | Parse and validate transaction outputs that hold resources.
@@ -99,25 +113,24 @@ resourceMintingPolicy cfg = mkMintingPolicy cfg $
  We don't enforce rewards at the minting policy, this is left open for the publisher to include and the submitter to accept.
  TODO: Switch to using Plutus V2
 -}
-parseOutputs :: Term s (PScriptContext :--> PBuiltinList PBool)
+parseOutputs :: Term s (PAddress :--> PScriptContext :--> PBuiltinList PBool)
 parseOutputs = phoistAcyclic $
-  plam $ \ctx -> unTermCont $ do
+  plam $ \resValAddr ctx -> unTermCont $ do
     ptraceC "parseOutputs"
     ownCs <- pletC $ pownCurrencySymbol # ctx
     txInfo <- pletC $ pscriptContextTxInfo # ctx
     findDatum' <- pletC $ pfindDatum # txInfo
     sigs <- pletC $ ptxInfoSignatories # txInfo
     txOuts <- pletC $ ptxInfoOutputs # txInfo
-    parseOutputWithResource' <- pletC $ parseOutputWithResource # ownCs # sigs # findDatum'
+    parseOutputWithResource' <- pletC $ parseOutputWithResource # resValAddr # ownCs # sigs # findDatum'
     pure $ pmap # parseOutputWithResource' # txOuts
 
--- TODO: Add check that the output is sent to the resourceValidator
-parseOutputWithResource :: Term s (PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybe PDatum) :--> PTxOut :--> PBool)
+parseOutputWithResource :: Term s (PAddress :--> PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybe PDatum) :--> PTxOut :--> PBool)
 parseOutputWithResource = phoistAcyclic $
-  plam $ \ownCs sigs findDatum txOut -> unTermCont do
+  plam $ \resValAddr ownCs sigs findDatum txOut -> unTermCont do
     ptraceC "parseOutputWithResource"
     outVal <- pletC $ pnormalize #$ pfield @"value" # txOut
-    _outAddr <- pletC $ pfield @"address" # txOut
+    outAddr <- pletC $ pfield @"address" # txOut
     hasOwnCs <- pletC $ phasCurrency # ownCs # outVal
     pure $ pmatch hasOwnCs \case
       PFalse -> unTermCont do
@@ -154,9 +167,14 @@ parseOutputWithResource = phoistAcyclic $
                       "parseOutputWithResource: publisher didn't sign the transaction"
                       "parseOutputWithResource: publisher signed the transaction"
                       publisherIsSignatory
+                    sentToResourceValidator <- pletC $ outAddr #== resValAddr
+                    ptraceBoolC
+                      "parseOutputWithResource: output not sent to resourceValidator"
+                      "parseOutputWithResource: output sent to resourceValidator"
+                      sentToResourceValidator
                     pure $
                       pif
-                        (hasSinglePublisherToken #&& publisherIsSignatory)
+                        (hasSinglePublisherToken #&& publisherIsSignatory #&& sentToResourceValidator)
                         (ptraceError "parseOutputWithResource: failed")
                         (pcon PTrue)
 
