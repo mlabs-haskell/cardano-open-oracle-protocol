@@ -4,7 +4,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
-module Cardano.Oracle.Plutus (ptxOutValue, ptxSignedBy, resourceMintingPolicy, resourceUtxoValidator, mkOneShotMintingPolicy) where
+module Cardano.Oracle.Plutus (ptxOutValue, ptxSignedBy, resourceMintingPolicy, resourceValidator, mkOneShotMintingPolicy) where
 
 import GHC.Generics qualified as GHC
 import Generics.SOP (Generic)
@@ -25,6 +25,7 @@ import Plutarch.Api.V1 (
   mkMintingPolicy,
   mkValidator,
  )
+import Plutarch.Api.V1.AssocMap (plookup)
 import Plutarch.Api.V1.Value (AmountGuarantees, KeyGuarantees, PTokenName (PTokenName), pnormalize, pvalueOf)
 import Plutarch.Api.V1.Value qualified as PValue
 import Plutarch.Bool (PBool (PTrue))
@@ -33,7 +34,7 @@ import Plutarch.DataRepr (
  )
 import Plutarch.Extra.TermCont (pletC, pmatchC, ptraceC)
 import Plutarch.List (PIsListLike, PListLike (pelimList), pany)
-import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PDataRecord, PEq ((#==)), PIsData, PLabeledType ((:=)), PMaybe (PJust, PNothing), PString, PTryFrom, PUnit (PUnit), PlutusType, S, Term, pcon, pconstant, pdata, pelem, pfield, pfind, pfix, pfromData, phoistAcyclic, pif, plam, plet, pmatch, ptrace, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PDataRecord, PEq ((#==)), PIsData, PLabeledType ((:=)), PMaybe (PJust, PNothing), PString, PTryFrom, PUnit (PUnit), PlutusType, S, Term, pcon, pconstant, pdata, pelem, pfield, pfind, pfix, pfromData, phoistAcyclic, pif, plam, plet, pmap, pmatch, ptrace, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
 import Plutarch.TermCont (tcont, unTermCont)
 import PlutusLedgerApi.V1.Crypto (PubKeyHash)
 import PlutusLedgerApi.V1.Scripts (MintingPolicy, Validator)
@@ -73,76 +74,102 @@ instance PTryFrom PData (PAsData POpaque)
 instance PTryFrom PData (PAsData PString)
 instance PTryFrom PData (PAsData PPubKeyHash)
 
-resourceUtxoValidator :: Config -> Validator
-resourceUtxoValidator cfg = mkValidator cfg $ plam $ \_ _ _ -> popaque $ pconstant ()
+-- TODO: Parametrize by the one-shot token and resourceMintingPolicy
+resourceValidator :: Config -> Validator
+resourceValidator cfg = mkValidator cfg $ plam $ \_ _ _ -> popaque $ pconstant ()
 
+-- TODO: Parametrize by the one-shot token and resourceValidator
+
+-- | Minting policy that validates creation of new resources.
 resourceMintingPolicy :: Config -> MintingPolicy
 resourceMintingPolicy cfg = mkMintingPolicy cfg $
   plam $ \_ ctx -> unTermCont do
-    info <- pletC $ pscriptContextTxInfo # ctx
-    _ownCs <- pletC $ pownCurrencySymbol # ctx
-    _minted <- pletC $ ptxInfoMint # info
-    -- resourceAssetMinted <- pletC $ pvalueOf # minted # ownCs # (PValue.PTokenName # "asd")
-    _ <- pletC $ findOutputWithResource # ctx
+    _ <- pletC $ parseOutputs # ctx
     pure $ popaque $ pconstant ()
 
-findOutputWithResource :: Term s (PScriptContext :--> PMaybe PResourceDatum)
-findOutputWithResource = phoistAcyclic $
+{- | Parse and validate transaction outputs that hold resources.
+ We rely on the level 1 ledger rule to verify that what was minted, was sent out.
+ So for each of the resource output we check:
+  - does it hold own currency symbol?
+    - no -> skip processing of the current output (we don't err and so enable richer transactions)
+    - yes
+      - TODO: does it send the output to resourceValidator? yes -> continue; no -> err
+      - is the transaction signed by the publisher specified in the ResourceDatum? yes -> continue; no -> err
+      - is there a single token of own currency symbol and publisher as the token name? yes -> continue; no -> err
+ We don't enforce rewards at the minting policy, this is left open for the publisher to include and the submitter to accept.
+ TODO: Switch to using Plutus V2
+-}
+parseOutputs :: Term s (PScriptContext :--> PBuiltinList PBool)
+parseOutputs = phoistAcyclic $
   plam $ \ctx -> unTermCont $ do
-    ptraceC "findOutputWithResource"
+    ptraceC "parseOutputs"
     ownCs <- pletC $ pownCurrencySymbol # ctx
     txInfo <- pletC $ pscriptContextTxInfo # ctx
     findDatum' <- pletC $ pfindDatum # txInfo
     sigs <- pletC $ ptxInfoSignatories # txInfo
     txOuts <- pletC $ ptxInfoOutputs # txInfo
-    pure $
-      pfindMap
-        # plam
-          (\out -> parseOutputWithResource # ownCs # sigs # findDatum' # out)
-        #$ txOuts
+    parseOutputWithResource' <- pletC $ parseOutputWithResource # ownCs # sigs # findDatum'
+    pure $ pmap # parseOutputWithResource' # txOuts
 
-parseOutputWithResource :: Term s (PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybe PDatum) :--> PTxOut :--> PMaybe PResourceDatum)
+-- TODO: Add check that the output is sent to the resourceValidator
+parseOutputWithResource :: Term s (PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybe PDatum) :--> PTxOut :--> PBool)
 parseOutputWithResource = phoistAcyclic $
   plam $ \ownCs sigs findDatum txOut -> unTermCont do
     ptraceC "parseOutputWithResource"
     outVal <- pletC $ pnormalize #$ pfield @"value" # txOut
     _outAddr <- pletC $ pfield @"address" # txOut
-    mayOutDatumHash <- pletC $ pfield @"datumHash" # txOut
-    pure $ pmatch mayOutDatumHash \case
-      PDNothing _ -> unTermCont $ do
-        ptraceC "parseOutputWithResource: no datum present in the output"
-        pure $ pcon PNothing
-      PDJust outDatumHash -> unTermCont $ do
-        odh <- pletC $ pfield @"_0" # outDatumHash
-        mayDatum <- pletC $ findDatum # odh
-        pure $ pmatch mayDatum \case
-          PNothing -> unTermCont $ do
-            ptraceC "parseOutputWithResource: no datum with a given hash present in the transaction datums"
-            pure $ pcon PNothing
-          PJust datum -> unTermCont $ do
-            mayResDat <- pletC $ pcon $ PJust $ pfromData (ptryFromData (pto datum))
-            pure $ pmatch mayResDat \case
-              PNothing -> unTermCont $ do
-                ptraceC "parseOutputWithResource: could not coerce datum to ResourceDatum"
-                pure $ pcon PNothing
-              PJust resDat -> unTermCont do
-                PResourceDatum rd <- pmatchC resDat
-                publishedBy <- pletC $ pfield @"publishedBy" # rd
-                PPubKeyHash publishedByBytes <- pmatchC publishedBy
-                publishedByTokenName <- pletC $ pcon $ PTokenName publishedByBytes
-                quantity <- pletC $ pvalueOf # outVal # ownCs # publishedByTokenName
-                expectedQuantity <- pletC $ quantity #== 1
-                ptraceBoolC
-                  "parseOutputWithResource: invalid resource minting asset"
-                  "parseOutputWithResource: valid resource minting asset"
-                  expectedQuantity
+    hasOwnCs <- pletC $ phasCurrency # ownCs # outVal
+    pure $ pmatch hasOwnCs \case
+      PFalse -> unTermCont do
+        ptraceC "parseOutputWithResource: own token not in the output, skipping"
+        pure $ pcon PTrue
+      PTrue -> unTermCont do
+        ptraceC "parseOutputWithResource: found own token in the output, continuing"
+        mayOutDatumHash <- pletC $ pfield @"datumHash" # txOut
+        pure $ pmatch mayOutDatumHash \case
+          PDNothing _ -> ptraceError "parseOutputWithResource: no datum present in the output"
+          PDJust outDatumHash -> unTermCont $ do
+            odh <- pletC $ pfield @"_0" # outDatumHash
+            mayDatum <- pletC $ findDatum # odh
+            pure $ pmatch mayDatum \case
+              PNothing -> ptraceError "parseOutputWithResource: no datum with a given hash present in the transaction datums"
+              PJust datum -> unTermCont $ do
+                mayResDat <- pletC $ pcon $ PJust $ pfromData (ptryFromData (pto datum))
+                pure $ pmatch mayResDat \case
+                  PNothing -> ptraceError "parseOutputWithResource: could not coerce datum to ResourceDatum"
+                  PJust resDat -> unTermCont do
+                    PResourceDatum rd <- pmatchC resDat
+                    publishedBy <- pletC $ pfield @"publishedBy" # rd
+                    PPubKeyHash publishedByBytes <- pmatchC publishedBy
+                    publishedByTokenName <- pletC $ pcon $ PTokenName publishedByBytes
+                    quantity <- pletC $ pvalueOf # outVal # ownCs # publishedByTokenName
+                    hasSinglePublisherToken <- pletC $ quantity #== 1
+                    ptraceBoolC
+                      "parseOutputWithResource: invalid resource minting asset"
+                      "parseOutputWithResource: valid resource minting asset"
+                      hasSinglePublisherToken
 
-                publisherIsSignatory <- pletC $ pelem # (pfield @"publishedBy" # rd) # sigs
-                ptraceBoolC
-                  "parseOutputWithResource: publisher didn't sign the transaction"
-                  "parseOutputWithResource: publisher signed the transaction"
-                  publisherIsSignatory
-                pure $ pif (expectedQuantity #&& publisherIsSignatory) (pcon PNothing) (pcon $ PJust resDat)
+                    publisherIsSignatory <- pletC $ pelem # (pfield @"publishedBy" # rd) # sigs
+                    ptraceBoolC
+                      "parseOutputWithResource: publisher didn't sign the transaction"
+                      "parseOutputWithResource: publisher signed the transaction"
+                      publisherIsSignatory
+                    pure $
+                      pif
+                        (hasSinglePublisherToken #&& publisherIsSignatory)
+                        (ptraceError "parseOutputWithResource: failed")
+                        (pcon PTrue)
+
+-- | Check if a 'PValue' contains the given currency symbol.
+phasCurrency :: Term s (PCurrencySymbol :--> PValue 'PValue.Sorted 'PValue.NonZero :--> PBool)
+phasCurrency = phoistAcyclic $
+  plam $ \cs val ->
+    pmatch
+      (plookup # cs # pto val)
+      ( \case
+          PNothing -> pcon PFalse
+          _ -> pcon PTrue
+      )
 
 ptraceBoolC :: Term s PString -> Term s PString -> Term s PBool -> TermCont s (Term s PUnit)
 ptraceBoolC msgFalse msgTrue b =
@@ -163,7 +190,7 @@ pscriptContextTxInfo = phoistAcyclic $ plam $ \ctx -> pfield @"txInfo" # ctx
 
 pownCurrencySymbol :: Term s (PScriptContext :--> PCurrencySymbol)
 pownCurrencySymbol = phoistAcyclic $
-  plam $ \ctx -> unTermCont $ do
+  plam $ \ctx -> unTermCont do
     ptraceC "pownCurrencySymbol"
     purpose <- pmatchC $ pfield @"purpose" # ctx
     pure $ case purpose of
@@ -172,7 +199,7 @@ pownCurrencySymbol = phoistAcyclic $
 
 ptxInfoMint :: Term s (PTxInfo :--> PValue 'PValue.Sorted 'PValue.NonZero)
 ptxInfoMint = phoistAcyclic $
-  plam $ \txInfo -> unTermCont $ do
+  plam $ \txInfo -> unTermCont do
     ptraceC "ptxInfoMint"
     pure $ pnormalize #$ pfield @"mint" # txInfo
 
@@ -188,7 +215,7 @@ ptxOutValue = plam $ \out -> PValue.pnormalize #$ pfield @"value" # out
 -- | Check if a transaction was signed by the given public key.
 ptxSignedBy :: Term s (PTxInfo :--> PPubKeyHash :--> PBool)
 ptxSignedBy = phoistAcyclic $
-  plam $ \txInfo pkh -> unTermCont $ do
+  plam $ \txInfo pkh -> unTermCont do
     ptraceC "txSignedBy"
     sigs <- pletC $ pfield @"signatories" # txInfo
     maySig <- pletC $ pfind # plam (\sig -> pfromData sig #== pkh) #$ sigs
@@ -199,7 +226,7 @@ ptxSignedBy = phoistAcyclic $
 -- | Find the data corresponding to a data hash, if there is one
 pfindDatum :: Term s (PTxInfo :--> PDatumHash :--> PMaybe PDatum)
 pfindDatum = phoistAcyclic $
-  plam $ \txInfo dh -> unTermCont $ do
+  plam $ \txInfo dh -> unTermCont do
     ptraceC "findDatum"
     ds <- pletC $ pfield @"datums" # txInfo
     pure $
@@ -249,7 +276,6 @@ mkOneShotMintingPolicy = phoistAcyclic $
     txInfo <- pletC $ pfield @"txInfo" # ctx
     inputs <- pletC $ pfromData $ pfield @"inputs" # pfromData txInfo
     mint <- pletC $ pfromData $ pfield @"mint" # txInfo
-
     cs <- pletC $ pownCurrencySymbol # ctx
 
     _ <-
