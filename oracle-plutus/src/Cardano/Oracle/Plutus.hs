@@ -4,11 +4,11 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
-module Cardano.Oracle.Plutus (exampleValidator, ptxOutValue, ptxSignedBy, resourceMintingPolicy) where
+module Cardano.Oracle.Plutus (ptxOutValue, ptxSignedBy, resourceMintingPolicy, resourceUtxoValidator) where
 
 import GHC.Generics qualified as GHC
 import Generics.SOP (Generic)
-import Plutarch (Config, DerivePlutusType (DPTStrat), POpaque, popaque, pto)
+import Plutarch (Config, DerivePlutusType (DPTStrat), POpaque, TermCont, popaque, pto)
 import Plutarch.Api.V1 (
   PCurrencySymbol,
   PDatum,
@@ -17,8 +17,8 @@ import Plutarch.Api.V1 (
   PPubKeyHash (PPubKeyHash),
   PScriptContext,
   PScriptPurpose (PMinting),
-  PTxInfo (PTxInfo),
-  PTxOut (PTxOut),
+  PTxInfo,
+  PTxOut,
   PValue,
   mkMintingPolicy,
   mkValidator,
@@ -71,8 +71,8 @@ instance PTryFrom PData (PAsData POpaque)
 instance PTryFrom PData (PAsData PString)
 instance PTryFrom PData (PAsData PPubKeyHash)
 
-exampleValidator :: Config -> Validator
-exampleValidator cfg = mkValidator cfg $ plam $ \_ _ _ -> popaque $ pconstant ()
+resourceUtxoValidator :: Config -> Validator
+resourceUtxoValidator cfg = mkValidator cfg $ plam $ \_ _ _ -> popaque $ pconstant ()
 
 resourceMintingPolicy :: Config -> MintingPolicy
 resourceMintingPolicy cfg = mkMintingPolicy cfg $
@@ -103,10 +103,9 @@ parseOutputWithResource :: Term s (PCurrencySymbol :--> PBuiltinList (PAsData PP
 parseOutputWithResource = phoistAcyclic $
   plam $ \ownCs sigs findDatum txOut -> unTermCont do
     ptraceC "parseOutputWithResource"
-    PTxOut to <- pmatchC txOut
-    outVal <- pletC $ pnormalize #$ pfield @"value" # to
-    _outAddr <- pletC $ pfield @"address" # to
-    mayOutDatumHash <- pletC $ pfield @"datumHash" # to
+    outVal <- pletC $ pnormalize #$ pfield @"value" # txOut
+    _outAddr <- pletC $ pfield @"address" # txOut
+    mayOutDatumHash <- pletC $ pfield @"datumHash" # txOut
     pure $ pmatch mayOutDatumHash \case
       PDNothing _ -> unTermCont $ do
         ptraceC "parseOutputWithResource: no datum present in the output"
@@ -131,20 +130,25 @@ parseOutputWithResource = phoistAcyclic $
                 publishedByTokenName <- pletC $ pcon $ PTokenName publishedByBytes
                 quantity <- pletC $ pvalueOf # outVal # ownCs # publishedByTokenName
                 expectedQuantity <- pletC $ quantity #== 1
-                _ <-
-                  pure $
-                    pif
-                      expectedQuantity
-                      (ptrace "parseOutputWithResource: invalid resource minting asset" punit)
-                      (ptrace "parseOutputWithResource: valid resource minting asset" punit)
+                ptraceBoolC
+                  "parseOutputWithResource: invalid resource minting asset"
+                  "parseOutputWithResource: valid resource minting asset"
+                  expectedQuantity
+
                 publisherIsSignatory <- pletC $ pelem # (pfield @"publishedBy" # rd) # sigs
-                _ <-
-                  pure $
-                    pif
-                      publisherIsSignatory
-                      (ptrace "parseOutputWithResource: publisher didn't sign the transaction" punit)
-                      (ptrace "parseOutputWithResource: publisher signed the transaction" punit)
+                ptraceBoolC
+                  "parseOutputWithResource: publisher didn't sign the transaction"
+                  "parseOutputWithResource: publisher signed the transaction"
+                  publisherIsSignatory
                 pure $ pif (expectedQuantity #&& publisherIsSignatory) (pcon PNothing) (pcon $ PJust resDat)
+
+ptraceBoolC :: Term s PString -> Term s PString -> Term s PBool -> TermCont s (Term s PUnit)
+ptraceBoolC msgFalse msgTrue b =
+  pure $
+    pif
+      b
+      (ptrace msgFalse punit)
+      (ptrace msgTrue punit)
 
 punit :: Term s PUnit
 punit = pcon PUnit
@@ -168,8 +172,7 @@ ptxInfoMint :: Term s (PTxInfo :--> PValue 'PValue.Sorted 'PValue.NonZero)
 ptxInfoMint = phoistAcyclic $
   plam $ \txInfo -> unTermCont $ do
     ptraceC "ptxInfoMint"
-    PTxInfo ti <- pmatchC txInfo
-    pure $ pnormalize #$ pfield @"mint" # ti
+    pure $ pnormalize #$ pfield @"mint" # txInfo
 
 ptxInfoOutputs :: Term s (PTxInfo :--> PBuiltinList PTxOut)
 ptxInfoOutputs = plam $ \info -> pfield @"outputs" # info
@@ -185,8 +188,7 @@ ptxSignedBy :: Term s (PTxInfo :--> PPubKeyHash :--> PBool)
 ptxSignedBy = phoistAcyclic $
   plam $ \txInfo pkh -> unTermCont $ do
     ptraceC "txSignedBy"
-    PTxInfo ti <- pmatchC txInfo
-    sigs <- pletC $ pfield @"signatories" # ti
+    sigs <- pletC $ pfield @"signatories" # txInfo
     maySig <- pletC $ pfind # plam (\sig -> pfromData sig #== pkh) #$ sigs
     pure $ pmatch maySig \case
       PNothing -> pcon PFalse
@@ -197,8 +199,7 @@ pfindDatum :: Term s (PTxInfo :--> PDatumHash :--> PMaybe PDatum)
 pfindDatum = phoistAcyclic $
   plam $ \txInfo dh -> unTermCont $ do
     ptraceC "findDatum"
-    PTxInfo ti <- pmatchC txInfo
-    ds <- pletC $ pfield @"datums" # ti
+    ds <- pletC $ pfield @"datums" # txInfo
     pure $
       pfindMap
         # plam
