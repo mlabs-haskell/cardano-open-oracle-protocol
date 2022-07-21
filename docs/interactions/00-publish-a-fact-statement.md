@@ -2,23 +2,22 @@
 
 ```mermaid
 sequenceDiagram
-  actor Cardano (Blockfrost)
-  actor Cardano wallet (Nami)
-  actor User
-  actor Oracle service
+  actor cardano as Cardano (Blockfrost)
+  actor wallet as Cardano wallet (Nami)
+  actor user as User
+  actor oracle as Oracle service
     
-  User ->>+ Oracle service: getCatalog()
-  Oracle service -->>- User: [{urn: "/prices/goog", type: rational}, {urn: "/prices/amzn", type: rational}]
+  user ->>+ oracle: getCatalog()
+  oracle -->>- user: [{urn: "/prices/goog", type: rational}, {urn: "/prices/amzn", type: rational}]
     
-  User ->>+ Oracle service: createResourceTransaction(at=1658412764, urn="/prices/goog")
-  Oracle service -->>- User: trxSignedByOracle: "CBOR encoded transaction signed by the Oracle"
+  user ->>+ oracle: createResourceTransaction(at=1658412764, urn="/prices/goog")
+  oracle -->>- user: trxSignedByOracle: "CBOR encoded transaction signed by the Oracle"
   
-  User ->>+ Cardano wallet (Nami): signTransaction(trxSignedByOracle)
-  Cardano wallet (Nami) -->>- User: trxSignedByOracleAndUser
+  user ->>+ wallet: signTransaction(trxSignedByOracle)
+  wallet -->>- user: trxSignedByOracleAndUser
 
-  User ->>+ Cardano wallet (Nami): submitTransaction(trxSignedByOracleAndUser)
-  Cardano wallet (Nami) ->>+ Cardano (Blockfrost): submitTransaction(trxSignedByOracleAndUser)
-  Cardano (Blockfrost) -->>- Cardano wallet (Nami): trxId
-  Cardano wallet (Nami) -->>- User: trxId
-
+  user ->>+ wallet: submitTransaction(trxSignedByOracleAndUser)
+  wallet ->>+ cardano: submitTransaction(trxSignedByOracleAndUser)
+  cardano -->>- wallet: trxId
+  wallet -->>- user: trxId
 ```
