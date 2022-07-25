@@ -67,6 +67,7 @@ library
     ScopedTypeVariables
     StandaloneDeriving
     StandaloneKindSignatures
+    TemplateHaskell
     TraditionalRecordSyntax
     TupleSections
     TypeApplications
@@ -89,6 +90,7 @@ library
     , plutarch
     , plutarch-extra
     , plutus-ledger-api
+    , plutus-tx
 
   if !flag(dev)
     ghc-options: -Werror

@@ -17,7 +17,7 @@ import Generics.SOP (Generic)
 import Plutarch (Config, DerivePlutusType (DPTStrat), POpaque, TermCont, popaque, pto)
 import Plutarch.Api.V1 (
   PAddress,
-  PCurrencySymbol,
+  PCurrencySymbol (PCurrencySymbol),
   PDatum,
   PDatumHash,
   PMaybeData (PDJust, PDNothing),
@@ -35,14 +35,16 @@ import Plutarch.Api.V1 (
 import Plutarch.Api.V1.AssocMap (plookup)
 import Plutarch.Api.V1.Value (AmountGuarantees, KeyGuarantees, PTokenName (PTokenName), pnormalize, pvalueOf)
 import Plutarch.Api.V1.Value qualified as PValue
-import Plutarch.Bool (PBool (PTrue))
+import Plutarch.Bool (PBool (PTrue), (#||))
 import Plutarch.ByteString (PByteString, plengthBS)
 import Plutarch.DataRepr (
+  DerivePConstantViaData (DerivePConstantViaData),
   PDataFields,
   PlutusTypeData,
   pdcons,
  )
 import Plutarch.Extra.TermCont (pletC, pletFieldsC, pmatchC, ptraceC)
+import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
 import Plutarch.List (PIsListLike, PListLike (pelimList), pany)
 import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PDataRecord, PEq ((#==)), PIsData, PLabeledType ((:=)), PMaybe (PNothing), PTryFrom, PUnit, PlutusType, S, Term, getField, pcon, pconstant, pdata, pdnil, pelem, pfield, pfix, pfromData, phoistAcyclic, pif, plam, plet, pmap, pmatch, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
 import Plutarch.TermCont (TermCont (runTermCont), tcont, unTermCont)
@@ -51,6 +53,7 @@ import Plutarch.Unsafe (punsafeCoerce)
 import PlutusLedgerApi.V1 (Address, CurrencySymbol, LedgerBytes)
 import PlutusLedgerApi.V1.Crypto (PubKeyHash)
 import PlutusLedgerApi.V1.Scripts (MintingPolicy, Validator)
+import PlutusTx qualified
 import Prelude (Applicative (pure), Eq, Show, fst, snd, ($), (.), (<$>))
 
 type ResourceDescription = LedgerBytes
@@ -96,6 +99,35 @@ data ResourceMintingParams = ResourceMintingParams
   { rmp'instanceCs :: CurrencySymbol -- provided by the one shot mp,
   , rmp'resourceValidatorAddress :: Address
   }
+  deriving stock (Show, GHC.Generic, Eq)
+
+PlutusTx.unstableMakeIsData ''ResourceMintingParams
+
+data PResourceMintingParams s
+  = PResourceMintingParams
+      ( Term
+          s
+          ( PDataRecord
+              '[ "rmp'instanceCs" ':= PCurrencySymbol
+               , "rmp'resourceValidatorAddress" ':= PAddress
+               ]
+          )
+      )
+  deriving stock (GHC.Generic)
+  deriving anyclass (Generic, PlutusType, PIsData, PEq, PDataFields)
+
+instance DerivePlutusType PResourceMintingParams where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PResourceMintingParams where type PLifted PResourceMintingParams = ResourceMintingParams
+deriving via (DerivePConstantViaData ResourceMintingParams PResourceMintingParams) instance (PConstantDecl ResourceMintingParams)
+
+instance PTryFrom PData (PAsData PCurrencySymbol) where
+  type PTryFromExcess PData (PAsData PCurrencySymbol) = Flip Term PCurrencySymbol
+  ptryFrom' opq = runTermCont $ do
+    unwrapped <- tcont . plet $ ptryFrom @(PAsData PByteString) opq snd
+    len <- tcont . plet $ plengthBS # unwrapped
+    tcont $ \f ->
+      pif (len #== 0 #|| len #== 28) (f ()) (ptraceError "a CurrencySymbol must be 28 bytes long or empty")
+    pure (punsafeCoerce opq, pcon . PCurrencySymbol $ unwrapped)
 
 -- TODO: Parametrize by the one-shot token and resourceMintingPolicy
 resourceValidator :: Config -> Validator
@@ -105,8 +137,7 @@ resourceValidator cfg = mkValidator cfg $ plam $ \_ _ _ -> popaque $ pconstant (
 resourceMintingPolicy :: Config -> ResourceMintingParams -> MintingPolicy
 resourceMintingPolicy cfg params = mkMintingPolicy cfg $
   plam $ \_ ctx -> unTermCont do
-    _ <- pletC $ parseOutputs # pconstant (rmp'resourceValidatorAddress params) # ctx
-    _ <- pletC $ pconstant (rmp'instanceCs params) -- TODO: Use instanceCs as a token name for cycle-deps suff
+    _ <- pletC $ parseOutputs # pconstant params # ctx
     pure $ popaque $ pconstant ()
 
 {- | Parse and validate transaction outputs that hold resources.
@@ -121,9 +152,9 @@ resourceMintingPolicy cfg params = mkMintingPolicy cfg $
  We don't enforce rewards at the minting policy, this is left open for the publisher to include and the submitter to accept.
  TODO: Switch to using Plutus V2
 -}
-parseOutputs :: Term s (PAddress :--> PScriptContext :--> PBuiltinList PBool)
+parseOutputs :: Term s (PResourceMintingParams :--> PScriptContext :--> PBuiltinList PBool)
 parseOutputs = phoistAcyclic $
-  plam $ \resValAddr ctx -> unTermCont $ do
+  plam $ \params ctx -> unTermCont $ do
     ptraceC "parseOutputs"
     ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
     txInfo <- pletFieldsC @'["datums", "signatories", "outputs"] (getField @"txInfo" ctx')
@@ -131,12 +162,12 @@ parseOutputs = phoistAcyclic $
     findDatum' <- pletC $ pfindDatum # getField @"datums" txInfo
     sigs <- pletC $ getField @"signatories" txInfo
     txOuts <- pletC $ getField @"outputs" txInfo
-    parseOutput' <- pletC $ parseOutput # resValAddr # ownCs # sigs # findDatum'
+    parseOutput' <- pletC $ parseOutput # params # ownCs # sigs # findDatum'
     pure $ pmap # parseOutput' # txOuts
 
-parseOutput :: Term s (PAddress :--> PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybeData PDatum) :--> PTxOut :--> PBool)
+parseOutput :: Term s (PResourceMintingParams :--> PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybeData PDatum) :--> PTxOut :--> PBool)
 parseOutput = phoistAcyclic $
-  plam $ \resValAddr ownCs sigs findDatum txOut -> unTermCont do
+  plam $ \params ownCs sigs findDatum txOut -> unTermCont do
     ptraceC "parseOutput"
     txOut' <- pletFieldsC @'["value"] txOut
     outVal <- pletC $ pnormalize #$ getField @"value" txOut'
@@ -149,13 +180,13 @@ parseOutput = phoistAcyclic $
       )
       ( do
           ptraceC "parseOutput: found own token in the output, continuing"
-          pure $ parseOutputWithResource # resValAddr # ownCs # sigs # findDatum # txOut
+          pure $ parseOutputWithResource # params # ownCs # sigs # findDatum # txOut
       )
       hasOwnCs
 
-parseOutputWithResource :: Term s (PAddress :--> PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybeData PDatum) :--> PTxOut :--> PBool)
+parseOutputWithResource :: Term s (PResourceMintingParams :--> PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybeData PDatum) :--> PTxOut :--> PBool)
 parseOutputWithResource = phoistAcyclic $
-  plam $ \resValAddr ownCs sigs findDatum txOut -> unTermCont do
+  plam $ \params ownCs sigs findDatum txOut -> unTermCont do
     ptraceC "parseOutputWithResource"
     txOut' <- pletFieldsC @'["value", "address", "datumHash"] txOut
     outVal <- pletC $ pnormalize #$ getField @"value" txOut'
@@ -203,7 +234,7 @@ parseOutputWithResource = phoistAcyclic $
             ptraceC "parseOutputWithResource: output sent to resourceValidator"
             pure $ pcon PTrue
         )
-        (outAddr #== resValAddr)
+        (outAddr #== pfield @"rmp'resourceValidatorAddress" # params)
 
     pboolC
       (fail "parseOutputWithResource: failed")
