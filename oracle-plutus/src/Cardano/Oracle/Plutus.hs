@@ -322,7 +322,7 @@ pconsumesRef = phoistAcyclic $
 
 -- | Check if a value has exactly one of the given token
 phasSingleToken ::
-  forall {s :: S} {w1 :: KeyGuarantees} {w2 :: AmountGuarantees}.
+  forall (w1 :: KeyGuarantees) (w2 :: AmountGuarantees) (s :: S).
   Term s (PCurrencySymbol :--> PTokenName :--> PValue w1 w2 :--> PBool)
 phasSingleToken = phoistAcyclic $
   plam $ \cs tn v ->
