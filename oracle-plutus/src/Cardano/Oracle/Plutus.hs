@@ -44,7 +44,7 @@ import Plutarch.DataRepr (
  )
 import Plutarch.Extra.TermCont (pletC, pletFieldsC, pmatchC, ptraceC)
 import Plutarch.List (PIsListLike, PListLike (pelimList), pany)
-import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PDataRecord, PEq ((#==)), PIsData, PLabeledType ((:=)), PMaybe (PNothing), PTryFrom, PUnit (PUnit), PlutusType, S, Term, getField, pcon, pconstant, pdata, pdnil, pelem, pfield, pfix, pfromData, phoistAcyclic, pif, plam, plet, pmap, pmatch, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PDataRecord, PEq ((#==)), PIsData, PLabeledType ((:=)), PMaybe (PNothing), PTryFrom, PUnit, PlutusType, S, Term, getField, pcon, pconstant, pdata, pdnil, pelem, pfield, pfix, pfromData, phoistAcyclic, pif, plam, plet, pmap, pmatch, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
 import Plutarch.TermCont (TermCont (runTermCont), tcont, unTermCont)
 import Plutarch.TryFrom (PTryFrom (PTryFromExcess, ptryFrom'))
 import Plutarch.Unsafe (punsafeCoerce)
@@ -106,7 +106,7 @@ resourceMintingPolicy :: Config -> ResourceMintingParams -> MintingPolicy
 resourceMintingPolicy cfg params = mkMintingPolicy cfg $
   plam $ \_ ctx -> unTermCont do
     _ <- pletC $ parseOutputs # pconstant (rmp'resourceValidatorAddress params) # ctx
-    _ <- pletC $ pconstant (rmp'instanceCs params) -- TODO: Ask if this gets purged during compilation!
+    _ <- pletC $ pconstant (rmp'instanceCs params) -- TODO: Use instanceCs as a token name for cycle-deps suff
     pure $ popaque $ pconstant ()
 
 {- | Parse and validate transaction outputs that hold resources.
@@ -230,7 +230,7 @@ pmaybeDataC l r m = tcont $ \k -> pmatch m \case
   PDJust x -> runTermCont (r (pfield @"_0" # x)) k
 
 punit :: Term s PUnit
-punit = pcon PUnit
+punit = pconstant ()
 
 ptryFromData :: forall a s. PTryFrom PData (PAsData a) => Term s PData -> Term s (PAsData a)
 ptryFromData x = unTermCont $ fst <$> tcont (ptryFrom @(PAsData a) x)
@@ -306,10 +306,8 @@ mkOneShotMintingPolicy = phoistAcyclic $
 
     pboolC
       (fail "mkOneShotMintingPolicy: Incorrect minted value")
-      (pure punit)
+      (pure $ popaque punit)
       (phasSingleToken # cs # tn # mint)
-
-    pure $ popaque $ pconstant ()
 
 -- | Check if utxo is consumed
 pconsumesRef :: Term s (PAsData PTxOutRef :--> PBuiltinList PTxInInfo :--> PBool)
