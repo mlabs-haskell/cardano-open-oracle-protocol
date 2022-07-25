@@ -131,8 +131,27 @@ parseOutputs = phoistAcyclic $
     txInfo' <- pletFieldsC @'["signatories", "outputs"] txInfo
     sigs <- pletC $ getField @"signatories" txInfo'
     txOuts <- pletC $ getField @"outputs" txInfo'
-    parseOutputWithResource' <- pletC $ parseOutputWithResource # resValAddr # ownCs # sigs # findDatum'
-    pure $ pmap # parseOutputWithResource' # txOuts
+    parseOutput' <- pletC $ parseOutput # resValAddr # ownCs # sigs # findDatum'
+    pure $ pmap # parseOutput' # txOuts
+
+parseOutput :: Term s (PAddress :--> PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybeData PDatum) :--> PTxOut :--> PBool)
+parseOutput = phoistAcyclic $
+  plam $ \resValAddr ownCs sigs findDatum txOut -> unTermCont do
+    ptraceC "parseOutput"
+    txOut' <- pletFieldsC @'["value"] txOut
+    outVal <- pletC $ pnormalize #$ getField @"value" txOut'
+
+    hasOwnCs <- pletC $ phasCurrency # ownCs # outVal
+    pboolC
+      ( do
+          ptraceC "parseOutput: own token not in the output, skipping"
+          pure $ pcon PTrue
+      )
+      ( do
+          ptraceC "parseOutput: found own token in the output, continuing"
+          pure $ parseOutputWithResource # resValAddr # ownCs # sigs # findDatum # txOut
+      )
+      hasOwnCs
 
 parseOutputWithResource :: Term s (PAddress :--> PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybeData PDatum) :--> PTxOut :--> PBool)
 parseOutputWithResource = phoistAcyclic $
@@ -142,64 +161,54 @@ parseOutputWithResource = phoistAcyclic $
     outVal <- pletC $ pnormalize #$ getField @"value" txOut'
     outAddr <- pletC $ getField @"address" txOut'
 
-    hasOwnCs <- pletC $ phasCurrency # ownCs # outVal
+    outDatumHash <-
+      pmaybeDataC
+        (fail "parseOutputWithResource: no datum present in the output")
+        pure
+        (getField @"datumHash" txOut')
+    datum <-
+      pmaybeDataC
+        (fail "parseOutputWithResource: no datum with a given hash present in the transaction datums")
+        pure
+        (findDatum # outDatumHash)
+
+    resDat <- pletC $ pfromData (ptryFromData @PResourceDatum (pto datum))
+    publishedBy <- pletC $ pfield @"publishedBy" # resDat
+    PPubKeyHash publishedByBytes <- pmatchC publishedBy
+    publishedByTokenName <- pletC $ pcon $ PTokenName publishedByBytes
+    quantity <- pletC $ pvalueOf # outVal # ownCs # publishedByTokenName
+
+    hasSinglePublisherToken <-
+      pboolC
+        (fail "parseOutputWithResource: invalid resource minting asset")
+        ( do
+            ptraceC "parseOutputWithResource: valid resource minting asset"
+            pure $ pcon PTrue
+        )
+        (quantity #== 1)
+
+    publisherIsSignatory <-
+      pboolC
+        (fail "parseOutputWithResource: publisher didn't sign the transaction")
+        ( do
+            ptraceC "parseOutputWithResource: publisher signed the transaction"
+            pure $ pcon PTrue
+        )
+        (pelem # pdata publishedBy # sigs)
+
+    sentToResourceValidator <-
+      pboolC
+        (fail "parseOutputWithResource: output not sent to resourceValidator")
+        ( do
+            ptraceC "parseOutputWithResource: output sent to resourceValidator"
+            pure $ pcon PTrue
+        )
+        (outAddr #== resValAddr)
+
     pboolC
-      ( do
-          ptraceC "parseOutputWithResource: own token not in the output, skipping"
-          pure $ pcon PTrue
-      )
-      ( do
-          ptraceC "parseOutputWithResource: found own token in the output, continuing"
-          outDatumHash <-
-            pmaybeDataC
-              (fail "parseOutputWithResource: no datum present in the output")
-              pure
-              (getField @"datumHash" txOut')
-          datum <-
-            pmaybeDataC
-              (fail "parseOutputWithResource: no datum with a given hash present in the transaction datums")
-              pure
-              (findDatum # outDatumHash)
-
-          resDat <- pletC $ pfromData (ptryFromData @PResourceDatum (pto datum))
-          publishedBy <- pletC $ pfield @"publishedBy" # resDat
-          PPubKeyHash publishedByBytes <- pmatchC publishedBy
-          publishedByTokenName <- pletC $ pcon $ PTokenName publishedByBytes
-          quantity <- pletC $ pvalueOf # outVal # ownCs # publishedByTokenName
-
-          hasSinglePublisherToken <-
-            pboolC
-              (fail "parseOutputWithResource: invalid resource minting asset")
-              ( do
-                  ptraceC "parseOutputWithResource: valid resource minting asset"
-                  pure $ pcon PTrue
-              )
-              (quantity #== 1)
-
-          publisherIsSignatory <-
-            pboolC
-              (fail "parseOutputWithResource: publisher didn't sign the transaction")
-              ( do
-                  ptraceC "parseOutputWithResource: publisher signed the transaction"
-                  pure $ pcon PTrue
-              )
-              (pelem # pdata publishedBy # sigs)
-
-          sentToResourceValidator <-
-            pboolC
-              (fail "parseOutputWithResource: output not sent to resourceValidator")
-              ( do
-                  ptraceC "parseOutputWithResource: output sent to resourceValidator"
-                  pure $ pcon PTrue
-              )
-              (outAddr #== resValAddr)
-
-          pboolC
-            (fail "parseOutputWithResource: failed")
-            (pure $ pcon PTrue)
-            (hasSinglePublisherToken #&& publisherIsSignatory #&& sentToResourceValidator)
-      )
-      hasOwnCs
+      (fail "parseOutputWithResource: failed")
+      (pure $ pcon PTrue)
+      (hasSinglePublisherToken #&& publisherIsSignatory #&& sentToResourceValidator)
 
 -- | Check if a 'PValue' contains the given currency symbol.
 phasCurrency :: Term s (PCurrencySymbol :--> PValue 'PValue.Sorted 'PValue.NonZero :--> PBool)
