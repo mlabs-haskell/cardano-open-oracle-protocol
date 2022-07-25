@@ -38,21 +38,24 @@ import Plutarch.Api.V1.AssocMap (plookup)
 import Plutarch.Api.V1.Value (AmountGuarantees, KeyGuarantees, PTokenName (PTokenName), pnormalize, pvalueOf)
 import Plutarch.Api.V1.Value qualified as PValue
 import Plutarch.Bool (PBool (PTrue))
+import Plutarch.ByteString (PByteString, plengthBS)
 import Plutarch.DataRepr (
+  PDataFields,
   PlutusTypeData,
  )
 import Plutarch.Extra.TermCont (pletC, pmatchC, ptraceC)
 import Plutarch.List (PIsListLike, PListLike (pelimList), pany)
 import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PDataRecord, PEq ((#==)), PIsData, PLabeledType ((:=)), PMaybe (PJust, PNothing), PString, PTryFrom, PUnit (PUnit), PlutusType, S, Term, pcon, pconstant, pdata, pelem, pfield, pfind, pfix, pfromData, phoistAcyclic, pif, plam, plet, pmap, pmatch, ptrace, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
-import Plutarch.TermCont (tcont, unTermCont)
-import PlutusLedgerApi.V1 (Address, CurrencySymbol)
+import Plutarch.TermCont (TermCont (runTermCont), tcont, unTermCont)
+import Plutarch.TryFrom (PTryFrom (PTryFromExcess, ptryFrom'))
+import Plutarch.Unsafe (punsafeCoerce)
+import PlutusLedgerApi.V1 (Address, CurrencySymbol, LedgerBytes)
 import PlutusLedgerApi.V1.Crypto (PubKeyHash)
 import PlutusLedgerApi.V1.Scripts (MintingPolicy, Validator)
-import Prelude (Applicative (pure), String, fst, ($), (<$>))
-import Prelude qualified as Hask
+import Prelude (Applicative (pure), Eq, Show, fst, snd, ($), (.), (<$>))
 
-type ResourceDescription = String
-type Resource = String
+type ResourceDescription = LedgerBytes
+type Resource = LedgerBytes
 
 data ResourceDatum = ResourceDatum
   { submittedBy :: PubKeyHash
@@ -60,7 +63,7 @@ data ResourceDatum = ResourceDatum
   , description :: ResourceDescription
   , resource :: Resource
   }
-  deriving stock (Hask.Show, GHC.Generic, Hask.Eq)
+  deriving stock (Show, GHC.Generic, Eq)
 
 data PResourceDatum s
   = PResourceDatum
@@ -69,20 +72,26 @@ data PResourceDatum s
           ( PDataRecord
               '[ "submittedBy" ':= PPubKeyHash
                , "publishedBy" ':= PPubKeyHash
-               , "description" ':= PString
-               , "resource" ':= PString
+               , "description" ':= PByteString
+               , "resource" ':= PByteString
                ]
           )
       )
   deriving stock (GHC.Generic)
-  deriving anyclass (Generic, PlutusType, PIsData, PEq)
+  deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
 
 instance DerivePlutusType PResourceDatum where type DPTStrat _ = PlutusTypeData
-instance PTryFrom PData (PAsData PResourceDatum)
+instance PTryFrom PData (PAsData PResourceDatum) -- FIXME: This probably doesn't do anything
 
-instance PTryFrom PData (PAsData POpaque)
-instance PTryFrom PData (PAsData PString)
-instance PTryFrom PData (PAsData PPubKeyHash)
+-- FIXME: Integrate https://github.com/Plutonomicon/plutarch-plutus/pull/520
+instance PTryFrom PData (PAsData PPubKeyHash) where
+  type PTryFromExcess PData (PAsData PPubKeyHash) = Flip Term PPubKeyHash
+  ptryFrom' opq = runTermCont $ do
+    unwrapped <- tcont . plet $ ptryFrom @(PAsData PByteString) opq snd
+    tcont $ \f -> pif (plengthBS # unwrapped #== 28) (f ()) (ptraceError "a PubKeyHash must be 28 bytes long")
+    pure (punsafeCoerce opq, pcon . PPubKeyHash $ unwrapped)
+
+newtype Flip f a b = Flip (f b a) deriving stock (GHC.Generic)
 
 data ResourceMintingParams = ResourceMintingParams
   { rmp'instanceCs :: CurrencySymbol -- provided by the one shot mp,
@@ -147,36 +156,32 @@ parseOutputWithResource = phoistAcyclic $
             pure $ pmatch mayDatum \case
               PNothing -> ptraceError "parseOutputWithResource: no datum with a given hash present in the transaction datums"
               PJust datum -> unTermCont $ do
-                mayResDat <- pletC $ pcon $ PJust $ pfromData (ptryFromData (pto datum))
-                pure $ pmatch mayResDat \case
-                  PNothing -> ptraceError "parseOutputWithResource: could not coerce datum to ResourceDatum"
-                  PJust resDat -> unTermCont do
-                    PResourceDatum rd <- pmatchC resDat
-                    publishedBy <- pletC $ pfield @"publishedBy" # rd
-                    PPubKeyHash publishedByBytes <- pmatchC publishedBy
-                    publishedByTokenName <- pletC $ pcon $ PTokenName publishedByBytes
-                    quantity <- pletC $ pvalueOf # outVal # ownCs # publishedByTokenName
-                    hasSinglePublisherToken <- pletC $ quantity #== 1
-                    ptraceBoolC
-                      "parseOutputWithResource: invalid resource minting asset"
-                      "parseOutputWithResource: valid resource minting asset"
-                      hasSinglePublisherToken
+                resDat <- pletC $ pfromData (ptryFromData @PResourceDatum (pto datum))
+                publishedBy <- pletC $ pfield @"publishedBy" # resDat
+                PPubKeyHash publishedByBytes <- pmatchC publishedBy
+                publishedByTokenName <- pletC $ pcon $ PTokenName publishedByBytes
+                quantity <- pletC $ pvalueOf # outVal # ownCs # publishedByTokenName
+                hasSinglePublisherToken <- pletC $ quantity #== 1
+                ptraceBoolC
+                  "parseOutputWithResource: invalid resource minting asset"
+                  "parseOutputWithResource: valid resource minting asset"
+                  hasSinglePublisherToken
 
-                    publisherIsSignatory <- pletC $ pelem # (pfield @"publishedBy" # rd) # sigs
-                    ptraceBoolC
-                      "parseOutputWithResource: publisher didn't sign the transaction"
-                      "parseOutputWithResource: publisher signed the transaction"
-                      publisherIsSignatory
-                    sentToResourceValidator <- pletC $ outAddr #== resValAddr
-                    ptraceBoolC
-                      "parseOutputWithResource: output not sent to resourceValidator"
-                      "parseOutputWithResource: output sent to resourceValidator"
-                      sentToResourceValidator
-                    pure $
-                      pif
-                        (hasSinglePublisherToken #&& publisherIsSignatory #&& sentToResourceValidator)
-                        (ptraceError "parseOutputWithResource: failed")
-                        (pcon PTrue)
+                publisherIsSignatory <- pletC $ pelem # (pfield @"publishedBy" # resDat) # sigs
+                ptraceBoolC
+                  "parseOutputWithResource: publisher didn't sign the transaction"
+                  "parseOutputWithResource: publisher signed the transaction"
+                  publisherIsSignatory
+                sentToResourceValidator <- pletC $ outAddr #== resValAddr
+                ptraceBoolC
+                  "parseOutputWithResource: output not sent to resourceValidator"
+                  "parseOutputWithResource: output sent to resourceValidator"
+                  sentToResourceValidator
+                pure $
+                  pif
+                    (hasSinglePublisherToken #&& publisherIsSignatory #&& sentToResourceValidator)
+                    (ptraceError "parseOutputWithResource: failed")
+                    (pcon PTrue)
 
 -- | Check if a 'PValue' contains the given currency symbol.
 phasCurrency :: Term s (PCurrencySymbol :--> PValue 'PValue.Sorted 'PValue.NonZero :--> PBool)
