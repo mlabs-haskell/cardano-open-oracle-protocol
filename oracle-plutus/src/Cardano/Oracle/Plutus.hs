@@ -288,7 +288,7 @@ pfindMap = phoistAcyclic $
 mkOneShotMintingPolicy ::
   ClosedTerm
     ( PTokenName
-        :--> PTxOutRef
+        :--> PAsData PTxOutRef
         :--> POpaque
         :--> PScriptContext
         :--> POpaque
@@ -313,12 +313,12 @@ mkOneShotMintingPolicy = phoistAcyclic $
     pure $ popaque $ pconstant ()
 
 -- | Check if utxo is consumed
-pconsumesRef :: Term s (PTxOutRef :--> PBuiltinList PTxInInfo :--> PBool)
+pconsumesRef :: Term s (PAsData PTxOutRef :--> PBuiltinList PTxInInfo :--> PBool)
 pconsumesRef = phoistAcyclic $
   plam $ \txOutRef ->
     pany #$ plam $ \input -> unTermCont do
       txOutRef' <- pletC $ pfield @"outRef" # input
-      pure $ pdata txOutRef #== pdata txOutRef'
+      pure $ txOutRef #== txOutRef'
 
 -- | Check if a value has exactly one of the given token
 phasSingleToken ::
