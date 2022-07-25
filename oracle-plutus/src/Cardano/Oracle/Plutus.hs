@@ -263,7 +263,7 @@ pfindDatum = phoistAcyclic $
                   (pcon $ PDJust $ pdcons # pdata datum # pdnil)
                   (pcon $ PDNothing pdnil)
           )
-        #$ pfromData ds
+        #$ ds
 
 pfindMap :: PIsListLike l a => Term s ((a :--> PMaybeData b) :--> l a :--> PMaybeData b)
 pfindMap = phoistAcyclic $
