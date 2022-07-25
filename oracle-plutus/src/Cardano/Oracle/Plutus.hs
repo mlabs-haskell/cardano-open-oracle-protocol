@@ -24,8 +24,8 @@ import Plutarch.Api.V1 (
   PPubKeyHash (PPubKeyHash),
   PScriptContext,
   PScriptPurpose (PMinting),
+  PTuple,
   PTxInInfo,
-  PTxInfo,
   PTxOut,
   PTxOutRef,
   PValue,
@@ -125,12 +125,12 @@ parseOutputs :: Term s (PAddress :--> PScriptContext :--> PBuiltinList PBool)
 parseOutputs = phoistAcyclic $
   plam $ \resValAddr ctx -> unTermCont $ do
     ptraceC "parseOutputs"
-    ownCs <- pletC $ pownCurrencySymbol # ctx
-    txInfo <- pletC $ pfield @"txInfo" # ctx
-    findDatum' <- pletC $ pfindDatum # txInfo
-    txInfo' <- pletFieldsC @'["signatories", "outputs"] txInfo
-    sigs <- pletC $ getField @"signatories" txInfo'
-    txOuts <- pletC $ getField @"outputs" txInfo'
+    ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
+    txInfo <- pletFieldsC @'["datums", "signatories", "outputs"] (getField @"txInfo" ctx')
+    ownCs <- pletC $ pownCurrencySymbol # getField @"purpose" ctx'
+    findDatum' <- pletC $ pfindDatum # getField @"datums" txInfo
+    sigs <- pletC $ getField @"signatories" txInfo
+    txOuts <- pletC $ getField @"outputs" txInfo
     parseOutput' <- pletC $ parseOutput # resValAddr # ownCs # sigs # findDatum'
     pure $ pmap # parseOutput' # txOuts
 
@@ -235,21 +235,19 @@ punit = pcon PUnit
 ptryFromData :: forall a s. PTryFrom PData (PAsData a) => Term s PData -> Term s (PAsData a)
 ptryFromData x = unTermCont $ fst <$> tcont (ptryFrom @(PAsData a) x)
 
-pownCurrencySymbol :: Term s (PScriptContext :--> PCurrencySymbol)
+pownCurrencySymbol :: Term s (PScriptPurpose :--> PCurrencySymbol)
 pownCurrencySymbol = phoistAcyclic $
-  plam $ \ctx -> unTermCont do
+  plam $ \purpose -> unTermCont do
     ptraceC "pownCurrencySymbol"
-    purpose <- pmatchC $ pfield @"purpose" # ctx
-    pure $ case purpose of
+    pure $ pmatch purpose \case
       PMinting cs -> pfield @"_0" # cs
-      _ -> ptraceError "Script purpose is not 'Minting'!"
+      _ -> ptraceError "pownCurrencySymbol: Script purpose is not 'Minting'!"
 
 -- | Find the data corresponding to a data hash, if there is one
-pfindDatum :: Term s (PTxInfo :--> PDatumHash :--> PMaybeData PDatum)
+pfindDatum :: Term s (PBuiltinList (PAsData (PTuple PDatumHash PDatum)) :--> PDatumHash :--> PMaybeData PDatum)
 pfindDatum = phoistAcyclic $
-  plam $ \txInfo dh -> unTermCont do
+  plam $ \datums dh -> unTermCont do
     ptraceC "findDatum"
-    ds <- pletC $ pfield @"datums" # txInfo
     pure $
       pfindMap
         # plam
@@ -263,7 +261,7 @@ pfindDatum = phoistAcyclic $
                   (pcon $ PDJust $ pdcons # pdata datum # pdnil)
                   (pcon $ PDNothing pdnil)
           )
-        #$ ds
+        #$ datums
 
 pfindMap :: PIsListLike l a => Term s ((a :--> PMaybeData b) :--> l a :--> PMaybeData b)
 pfindMap = phoistAcyclic $
@@ -295,10 +293,11 @@ mkOneShotMintingPolicy ::
     )
 mkOneShotMintingPolicy = phoistAcyclic $
   plam $ \tn txOutRef _ ctx -> unTermCont do
-    txInfo <- pletFieldsC @'["inputs", "mint"] (pfield @"txInfo" # ctx)
+    ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
+    txInfo <- pletFieldsC @'["inputs", "mint"] (getField @"txInfo" ctx')
     inputs <- pletC $ pfromData $ getField @"inputs" txInfo
     mint <- pletC $ pfromData $ getField @"mint" txInfo
-    cs <- pletC $ pownCurrencySymbol # ctx
+    cs <- pletC $ pownCurrencySymbol # getField @"purpose" ctx'
 
     pboolC
       (fail "mkOneShotMintingPolicy: Doesn't consume utxo")
