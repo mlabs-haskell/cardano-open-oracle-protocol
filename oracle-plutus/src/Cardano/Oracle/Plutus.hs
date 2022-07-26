@@ -1,8 +1,6 @@
 {-# LANGUAGE BlockArguments #-}
-{-# HLINT ignore "Use newtype instead of data" #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module Cardano.Oracle.Plutus (
   resourceMintingPolicy,
@@ -67,7 +65,7 @@ data ResourceDatum = ResourceDatum
   }
   deriving stock (Show, GHC.Generic, Eq)
 
-data PResourceDatum s
+newtype PResourceDatum s
   = PResourceDatum
       ( Term
           s
@@ -83,7 +81,7 @@ data PResourceDatum s
   deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
 
 instance DerivePlutusType PResourceDatum where type DPTStrat _ = PlutusTypeData
-instance PTryFrom PData (PAsData PResourceDatum) -- FIXME: This probably doesn't do anything
+instance PTryFrom PData (PAsData PResourceDatum)
 
 -- FIXME: Integrate https://github.com/Plutonomicon/plutarch-plutus/pull/520
 instance PTryFrom PData (PAsData PPubKeyHash) where
@@ -103,7 +101,7 @@ data ResourceMintingParams = ResourceMintingParams
 
 PlutusTx.unstableMakeIsData ''ResourceMintingParams
 
-data PResourceMintingParams s
+newtype PResourceMintingParams s
   = PResourceMintingParams
       ( Term
           s
@@ -170,7 +168,7 @@ parseOutput = phoistAcyclic $
   plam $ \params ownCs sigs findDatum txOut -> unTermCont do
     ptraceC "parseOutput"
     txOut' <- pletFieldsC @'["value"] txOut
-    outVal <- pletC $ pnormalize #$ getField @"value" txOut'
+    outVal <- pletC $ pnormalize # getField @"value" txOut'
 
     hasOwnCs <- pletC $ phasCurrency # ownCs # outVal
     pboolC
@@ -189,7 +187,7 @@ parseOutputWithResource = phoistAcyclic $
   plam $ \params ownCs sigs findDatum txOut -> unTermCont do
     ptraceC "parseOutputWithResource"
     txOut' <- pletFieldsC @'["value", "address", "datumHash"] txOut
-    outVal <- pletC $ pnormalize #$ getField @"value" txOut'
+    outVal <- pletC $ pnormalize # getField @"value" txOut'
     outAddr <- pletC $ getField @"address" txOut'
 
     outDatumHash <-
@@ -241,7 +239,9 @@ parseOutputWithResource = phoistAcyclic $
       (pure $ pcon PTrue)
       (hasSinglePublisherToken #&& publisherIsSignatory #&& sentToResourceValidator)
 
--- | Check if a 'PValue' contains the given currency symbol.
+{- | Check if a 'PValue' contains the given currency symbol.
+ NOTE: MangoIV says the plookup should be inlined here
+-}
 phasCurrency :: Term s (PCurrencySymbol :--> PValue 'PValue.Sorted 'PValue.NonZero :--> PBool)
 phasCurrency = phoistAcyclic $
   plam $ \cs val ->
@@ -283,9 +283,9 @@ pfindDatum = phoistAcyclic $
       pfindMap
         # plam
           ( \pair -> unTermCont do
-              pair' <- pletC $ pfromData pair
-              dh' <- pletC $ pfield @"_0" # pair'
-              datum <- pletC $ pfield @"_1" # pair'
+              pair' <- pletFieldsC @'["_0", "_1"] $ pfromData pair
+              dh' <- pletC $ getField @"_0" pair'
+              datum <- pletC $ getField @"_1" pair'
               pure $
                 pif
                   (dh' #== dh)
@@ -294,6 +294,7 @@ pfindDatum = phoistAcyclic $
           )
         #$ datums
 
+-- NOTE: MangoIV warns against (de)constructing Maybe values like this.
 pfindMap :: PIsListLike l a => Term s ((a :--> PMaybeData b) :--> l a :--> PMaybeData b)
 pfindMap = phoistAcyclic $
   pfix #$ plam $ \self f xs ->
