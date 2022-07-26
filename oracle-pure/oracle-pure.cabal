@@ -44,6 +44,7 @@ executable oracle-pure-cli
     FunctionalDependencies
     GeneralisedNewtypeDeriving
     HexFloatLiterals
+    ImportQualifiedPost
     InstanceSigs
     LambdaCase
     NamedFieldPuns

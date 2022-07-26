@@ -10,6 +10,10 @@ description:
 
 extra-source-files: CHANGELOG.md
 
+flag dev
+  description: Enable non-strict compilation for development
+  manual:      True
+
 library
   exposed-modules:    Cardano.Oracle.Plutus
   hs-source-dirs:     src
@@ -36,6 +40,7 @@ library
     EmptyDataDeriving
     ExistentialQuantification
     ExplicitForAll
+    ExplicitNamespaces
     FlexibleContexts
     FlexibleInstances
     ForeignFunctionInterface
@@ -56,11 +61,13 @@ library
     PatternGuards
     PolyKinds
     PostfixOperators
+    QualifiedDo
     RankNTypes
     RelaxedPolyRec
     ScopedTypeVariables
     StandaloneDeriving
     StandaloneKindSignatures
+    TemplateHaskell
     TraditionalRecordSyntax
     TupleSections
     TypeApplications
@@ -69,19 +76,24 @@ library
     TypeSynonymInstances
     ViewPatterns
     OverloadedRecordDot
-    QualifiedDo
 
   ghc-options:
     -Wall -Wcompat -Wincomplete-uni-patterns -Wno-unused-do-bind
     -Wno-partial-type-signatures -Wmissing-export-lists
     -Wincomplete-record-updates -Wmissing-deriving-strategies
     -Wno-name-shadowing -Wunused-foralls -fprint-explicit-foralls
-    -fprint-explicit-kinds -fwarn-missing-import-lists -Werror
+    -fprint-explicit-kinds -fwarn-missing-import-lists
 
   build-depends:
     , base
+    , generics-sop
     , plutarch
+    , plutarch-extra
     , plutus-ledger-api
+    , plutus-tx
+
+  if !flag(dev)
+    ghc-options: -Werror
 
 executable oracle-plutus-cli
   main-is:          Main.hs

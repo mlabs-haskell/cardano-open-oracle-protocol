@@ -15,7 +15,7 @@ import Network.GRPC.Server as Server (
   runGrpc,
   unary,
  )
-import qualified Network.Wai.Handler.Warp as Warp
+import Network.Wai.Handler.Warp qualified as Warp
 import Network.Wai.Handler.WarpTLS (defaultTlsSettings)
 import Proto.Google.Protobuf.Empty (Empty)
 import Proto.Oracle (CreateResourceTransactionRequest, CreateResourceTransactionResponse, GetCatalogResponse, GetSignatoriesResponse, Oracle)
