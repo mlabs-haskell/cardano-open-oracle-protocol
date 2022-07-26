@@ -203,7 +203,7 @@ parseOutputWithResource = phoistAcyclic $
 
     resDat <- pletC $ pfromData (ptryFromData @PResourceDatum (pto datum))
     publishedBy <- pletC $ pfield @"publishedBy" # resDat
-    publishedByBytes <- punwrapC publishedBy
+    let publishedByBytes = pto publishedBy
     publishedByTokenName <- pletC $ pcon $ PTokenName publishedByBytes -- TODO: Test TokenName invariants (hex 32bytes)
     quantity <- pletC $ pvalueOf # outVal # ownCs # publishedByTokenName
 
@@ -238,9 +238,6 @@ parseOutputWithResource = phoistAcyclic $
       (fail "parseOutputWithResource: failed")
       (pure $ pcon PTrue)
       (hasSinglePublisherToken #&& publisherIsSignatory #&& sentToResourceValidator)
-
-punwrapC :: Term s a -> TermCont s (Term s (PInner a))
-punwrapC = pletC . pto
 
 {- | Check if a 'PValue' contains the given currency symbol.
  NOTE: MangoIV says the plookup should be inlined here
