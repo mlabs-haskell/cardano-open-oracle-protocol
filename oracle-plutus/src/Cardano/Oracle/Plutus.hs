@@ -297,13 +297,13 @@ pfindDatum = phoistAcyclic $
 -- NOTE: MangoIV warns against (de)constructing Maybe values like this.
 pfindMap :: PIsListLike l a => Term s ((a :--> PMaybeData b) :--> l a :--> PMaybeData b)
 pfindMap = phoistAcyclic $
-  pfix #$ plam $ \self f xs ->
+  plam \f -> pfix #$ plam $ \self xs ->
     pelimList
       ( \y ys ->
           plet
             (f # y)
             ( \may -> pmatch may \case
-                PDNothing _ -> self # f # ys
+                PDNothing _ -> self # ys
                 PDJust res -> pcon $ PDJust res
             )
       )
