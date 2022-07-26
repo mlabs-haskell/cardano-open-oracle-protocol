@@ -41,10 +41,10 @@ import Plutarch.DataRepr (
   PlutusTypeData,
   pdcons,
  )
-import Plutarch.Extra.TermCont (pletC, pletFieldsC, pmatchC, ptraceC)
+import Plutarch.Extra.TermCont (pletC, pletFieldsC, ptraceC)
 import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
 import Plutarch.List (PIsListLike, PListLike (pelimList), pany)
-import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PDataRecord, PEq ((#==)), PIsData, PLabeledType ((:=)), PMaybe (PNothing), PTryFrom, PUnit, PlutusType, S, Term, getField, pcon, pconstant, pdata, pdnil, pelem, pfield, pfix, pfromData, phoistAcyclic, pif, plam, plet, pmap, pmatch, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PDataRecord, PEq ((#==)), PIsData, PLabeledType ((:=)), PMaybe (PNothing), PTryFrom, PUnit, PlutusType (PInner), S, Term, getField, pcon, pconstant, pdata, pdnil, pelem, pfield, pfix, pfromData, phoistAcyclic, pif, plam, plet, pmap, pmatch, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
 import Plutarch.TermCont (TermCont (runTermCont), tcont, unTermCont)
 import Plutarch.TryFrom (PTryFrom (PTryFromExcess, ptryFrom'))
 import Plutarch.Unsafe (punsafeCoerce)
@@ -203,8 +203,8 @@ parseOutputWithResource = phoistAcyclic $
 
     resDat <- pletC $ pfromData (ptryFromData @PResourceDatum (pto datum))
     publishedBy <- pletC $ pfield @"publishedBy" # resDat
-    PPubKeyHash publishedByBytes <- pmatchC publishedBy
-    publishedByTokenName <- pletC $ pcon $ PTokenName publishedByBytes
+    publishedByBytes <- punwrapC publishedBy
+    publishedByTokenName <- pletC $ pcon $ PTokenName publishedByBytes -- TODO: Test TokenName invariants (hex 32bytes)
     quantity <- pletC $ pvalueOf # outVal # ownCs # publishedByTokenName
 
     hasSinglePublisherToken <-
@@ -238,6 +238,9 @@ parseOutputWithResource = phoistAcyclic $
       (fail "parseOutputWithResource: failed")
       (pure $ pcon PTrue)
       (hasSinglePublisherToken #&& publisherIsSignatory #&& sentToResourceValidator)
+
+punwrapC :: Term s a -> TermCont s (Term s (PInner a))
+punwrapC = pletC . pto
 
 {- | Check if a 'PValue' contains the given currency symbol.
  NOTE: MangoIV says the plookup should be inlined here
