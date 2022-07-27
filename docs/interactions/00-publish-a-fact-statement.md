@@ -48,7 +48,7 @@ sequenceDiagram
   submitterWallet -->>- submitter: feeTrxId
   
   submitter ->>+ publisher: createFactStatementTransaction(<br />feeTrxId=feeTrxId,<br />at=1658412764,<br />urn="/prices/goog")
-  note right of publisher: Checks the feeTrx<br/>? TrxUtxos(feeTrxId, utxo(@FeeV, (publisher, sessionId), Value)),<br/>1 $FEE(publisher) in Value),<br/>1 ADA in Value
+  note right of publisher: Checks the feeTrx<br/>? TrxUtxos(feeTrxId, utxo(@FeeV, (publisher, sessionId), Value)),<br/>1 $FEE(publisher) in Value,<br/>1 ADA in Value
   note right of publisher: Prepares the Fact Statement transaction<br/>factStatementTrx = {<br/>minted = 1 $FACT(publisher), <br/>outDatum = (publisher, submitter, sessionId, factStatement),<br/>outAddress = @FactV}
     publisher ->>+ publisherWallet: signTrx(factStatementTrx)
     publisherWallet -->>- publisher: factStatementTrx {signatories += publisher}
