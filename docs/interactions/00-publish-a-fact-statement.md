@@ -30,7 +30,7 @@ sequenceDiagram
   actor publisherWallet as Publisher's wallet
 
   submitter ->>+ publisher: getCatalog() [no fee]
-  note right of publisher: Talks to its backend to get the list of fact statement types
+  note right of publisher: Talks to its Resolvers to get the list of fact statement types
   publisher -->>- submitter: [{urn: "/climate/temp/usa", type: r, fee: 1 ADA},<br />{urn: "/climate/temp/uk", type: r, fee: 1 ADA}]
   note over submitter: Wants to publish the Temperature in UK at Thu, 21 Jul 2022 14:12:44 GMT
 
@@ -49,6 +49,7 @@ sequenceDiagram
   
   submitter ->>+ publisher: createFactStatementTransaction(<br />feeTrxId=feeTrxId,<br />at=1658412764,<br />urn="/prices/goog")
   note right of publisher: Checks the feeTrx<br/>? TrxUtxos(feeTrxId, utxo(@FeeV, (publisher, sessionId), Value)),<br/>1 $FEE(publisher) in Value,<br/>1 ADA in Value
+  note right of publisher: Talks to its Resolvers to resolve the query and get the fact statement
   note right of publisher: Prepares the Fact Statement transaction<br/>factStatementTrx = {<br/>minted = 1 $FACT(publisher), <br/>outDatum = (publisher, submitter, sessionId, factStatement),<br/>outAddress = @FactV}
     publisher ->>+ publisherWallet: signTrx(factStatementTrx)
     publisherWallet -->>- publisher: factStatementTrx {signatories += publisher}
