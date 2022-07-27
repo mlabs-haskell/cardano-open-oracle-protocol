@@ -109,6 +109,13 @@
           compiler-nix-name = "ghc8107";
         };
         oracleServiceFlake = oracleServiceProj.flake { };
+
+        docsDevShell = import ./docs/build.nix {
+          inherit pkgs;
+          inherit (pre-commit-hooks.outputs.packages.${system}) markdownlint-cli;
+          inherit (pre-commit-check) shellHook;
+        };
+
       in
       rec {
         # Useful for nix repl
@@ -123,6 +130,7 @@
           dev-pre-commit = pre-commit-devShell;
           dev-plutus = oraclePlutusFlake.devShell;
           dev-service = oracleServiceFlake.devShell;
+          dev-docs = docsDevShell;
           default = dev-proto;
         };
 

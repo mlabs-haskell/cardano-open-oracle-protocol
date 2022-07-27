@@ -1,4 +1,3 @@
-<!-- markdownlint-disable MD013 -->
 # Publishing a fact statement
 
 - Publisher's Work is the work that the Publisher does in order to publish a fact statement
