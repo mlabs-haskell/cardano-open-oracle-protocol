@@ -1,21 +1,30 @@
-{ pkgs, haskell-nix, compiler-nix-name, plutarch, plutarchHsModule, shellHook }:
-haskell-nix.cabalProject' {
+{ pkgs, haskell-nix, compiler-nix-name, plutarch, shellHook }:
+let
+  hn-extra-hackage = plutarch.inputs.haskell-nix-extra-hackage;
+  myHackage = hn-extra-hackage.mkHackagesFor pkgs.system compiler-nix-name [
+    "${plutarch}"
+    "${plutarch}/plutarch-extra"
+    "${plutarch}/plutarch-test"
+    "${plutarch.inputs.plutus}/plutus-ledger-api"
+  ];
+in
+haskell-nix.cabalProject' (plutarch.applyPlutarchDep pkgs rec {
   src = ./.;
   name = "oracle-plutus";
   inherit compiler-nix-name;
-  inherit (plutarch) cabalProjectLocal;
-  #index-state = "2022-01-21T23:44:46Z";
-  extraSources = plutarch.extraSources ++ [
-    {
-      src = plutarch;
-      subdirs = [ "." ];
-    }
-  ];
-  modules = [ plutarchHsModule ];
+  inherit (myHackage) extra-hackages extra-hackage-tarballs;
+  modules = myHackage.modules ++ [{
+    packages = {
+      # Enable strict builds
+      oracle-plutus.configureFlags = [ "-f-dev" ];
+    };
+  }];
   shell = {
-    withHoogle = true;
+    # FIXME: withHoogle = true doesn't work
+    withHoogle = false;
 
     exactDeps = true;
+
     nativeBuildInputs = with pkgs; [
       # Code quality
       ## Haskell/Cabal
@@ -23,16 +32,17 @@ haskell-nix.cabalProject' {
       haskellPackages.fourmolu
       haskellPackages.cabal-fmt
       hlint
-      ## Nix
-      nixpkgs-fmt
+      (plutarch.hlsFor compiler-nix-name pkgs.system)
     ];
 
     additional = ps: [
       ps.plutarch
+      ps.plutarch-extra
+      ps.plutarch-test
+      ps.plutus-ledger-api
     ];
 
     tools = {
-      inherit (plutarch.tools) haskell-language-server;
       cabal = { };
     };
     shellHook = ''
@@ -44,5 +54,4 @@ haskell-nix.cabalProject' {
     '';
 
   };
-
-}
+})
