@@ -1,35 +1,53 @@
+<!-- markdownlint-disable MD013 -->
 # Publishing a fact statement
+
+- Publisher's Work is the work that the Publisher does in order to publish a fact statement
+  - Requesting information from a remote commerical data APIs,
+  - Requesting information from a decentralized oracle pool (validation, consensus)
+- Publisher's Work has to be paid for in terms of Fees
+
+## Interaction
 
 ```mermaid
 sequenceDiagram
-  actor resourceMp as Fact statement minting policy
-  actor cardano as Cardano (Blockfrost)
-  actor userWallet as User wallet (Nami)
-  actor user as User
-  actor oracle as Oracle service
-  actor oracleWallet as Oracle wallet
+  title Publishing a fact statement on Cardano
+  actor factMp as $FACT Minting Policy
+  actor feeMp as $FEE Minting Policy
+  actor cardano as Cardano
+  actor submitterWallet as Submitter's wallet
+  actor submitter as Submitter
+  actor publisher as Publisher
+  actor publisherWallet as Publisher's wallet
 
-  user ->>+ oracle: getCatalog()
-  note right of oracle: Oracle talks to its backend to get the list of fact statement types
-  oracle -->>- user: [{urn: "/prices/goog", type: r}, {urn: "/prices/amzn", type: r}]
-    
-  note over user: User want to publish the price of GOOG at Thu, 21 Jul 2022 14:12:44 GMT
-  user ->>+ oracle: createResourceTransaction(at=1658412764, urn="/prices/goog")
-  note right of oracle: Oracle prepares a transaction with the fact statement attached
-  oracle ->>+ oracleWallet: signTransaction(unsignedTrx)
-  oracleWallet -->>- oracle: trxSignedByOracle
-  oracle -->>- user: trxSignedByOracle (CBOR)
+  submitter ->>+ publisher: getCatalog() [no fee]
+  note right of publisher: Talks to its backend to get the list of fact statement types
+  publisher -->>- submitter: [{urn: "/climate/temp/usa", type: r, fee: 1 ADA},<br />{urn: "/climate/temp/uk", type: r, fee: 1 ADA}]
+  note over submitter: Wants to publish the Temperature in UK at Thu, 21 Jul 2022 14:12:44 GMT
+
+  submitter ->>+ publisher: createFeeTransaction(utxoWithFee)
+  note right of publisher: Prepares a Fee Transaction<br/>feeTrx = <br/>{<br/>input = utxoWithFee,<br/>minted = 1 $FEE(publisher)<br/>outDatum = (publisher, sessionId),<br/>outValue = input.value + minted.value,<br/>outAddress = @FeeV<br/>}
+    publisher ->>+ publisherWallet: signTrx(feeTrx)
+    publisherWallet -->>- publisher: feeTrx {signatories += publisher}
+  publisher -->>- submitter: feeTrx
+  submitter ->>+ submitterWallet: signAndSubmit(feeTrx)
+    submitterWallet ->>+ cardano: submit(feeTrx {signatories += submitter})
+      cardano ->>+ feeMp: validate(feeTrx)
+      note right of feeMp: Checks a Fee Transaction<br/>? OutAddr = @FeeV,<br/>(Publisher, _) = OutDatum,<br/>Publisher in Signatories,<br/>asset($FEE, Publisher, 1) in Minted,<br/>asset($FEE, Publisher, 1) in OutValue.
+      feeMp -->>- cardano: Ok!
+    cardano -->>- submitterWallet: feeTrxId
+  submitterWallet -->>- submitter: feeTrxId
   
-  note over user: User is prompted with transaction information before signing
-  user ->>+ userWallet: signTransaction(trxSignedByOracle)
-  userWallet -->>- user: trxSignedByOracleAndUser
-
-  user ->>+ userWallet: submitTransaction(trxSignedByOracleAndUser)
-  userWallet ->>+ cardano: submitTransaction(trxSignedByOracleAndUser)
-  cardano ->>+ resourceMp: validate
-  note left of resourceMp: publisher is signatory? outputs/mints look ok?
-  resourceMp -->>- cardano: ok
-  cardano -->>- userWallet: trxId
-  userWallet -->>- user: trxId
-  note over user: User now has the trxId with outputs containing desired fact statements that can be used onchain
+  submitter ->>+ publisher: createFactStatementTransaction(<br />feeTrxId=feeTrxId,<br />at=1658412764,<br />urn="/prices/goog")
+  note right of publisher: Checks the feeTrx<br/>? TrxUtxos(feeTrxId, utxo(@FeeV, (publisher, sessionId), Value)),<br/>1 $FEE(publisher) in Value),<br/>1 ADA in Value
+  note right of publisher: Prepares the Fact Statement transaction<br/>factStatementTrx = {<br/>minted = 1 $FACT(publisher), <br/>outDatum = (publisher, submitter, sessionId, factStatement),<br/>outAddress = @FactV}
+    publisher ->>+ publisherWallet: signTrx(factStatementTrx)
+    publisherWallet -->>- publisher: factStatementTrx {signatories += publisher}
+  publisher -->>- submitter: factStatementTrx
+  submitter ->>+ submitterWallet: signAndSubmit(factStatementTrx)
+      submitterWallet ->>+ cardano: submit(factStatementTrx {signatories += submitter})
+      cardano ->>+ factMp: validate(factStatementTrx)
+      note right of factMp: Checks a Fact Statement Transaction<br/>? OutAddr = @FactV,<br/>(Publisher, _, _, _) = OutDatum,<br/>Publisher in Signatories,<br/>asset($FACT, Publisher, 1) in Minted,<br/>asset($FACT, Publisher, 1) in OutValue.
+      factMp -->>- cardano: Ok!
+    cardano -->>- submitterWallet: factStatementTrxId
+  submitterWallet -->>- submitter: factStatementTrxId
 ```
