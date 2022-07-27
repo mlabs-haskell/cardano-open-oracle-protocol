@@ -11,10 +11,13 @@ Definitions:
 
 Properities:
 
-- Publisher's Work has to be paid for in terms of Fees,
-- The Publisher can't be overwhelmed by 'free' operations,
-- The Fee can be collected by the Publisher only after the Submitter successfully submitted the Fact Statement transaction,
-- Consumer Plutus programs can verify that a certain Fact Statement is signed by the Publisher
+- [x] Publisher's Work has to be paid for in terms of Fees,
+- [x] The Publisher can't be overwhelmed by 'free' operations,
+- [x] Consumer Plutus programs can verify that a certain Fact Statement is signed by the Publisher
+- [ ] The Fee can be collected by the Publisher only after the Submitter successfully submitted the Fact Statement transaction,
+  - TODO: Requires the **Fee Validator** (aka @FeeV)
+- [ ] Submitter can reclaim the Cardano operational costs (minUtxoAda, ttl),
+  - TODO: Requires the **Fact Statement Validator** (aka @FactV) and @FeeV
 
 ## Interaction
 
