@@ -6,13 +6,13 @@
 
 - **Publisher** is a service that interacts with Submitter clients and Collector and PAB services. It collects and packages fact statements in Cardano transactions along with the fees,
 - **Publisher's Work** is the work done by the Publisher that ends in successful service delivery to the Submitter,
-  - Requesting information from a remote commerical data APIs,
-  - Requesting information from a decentralized oracle pool (validation, consensus).
 - **Submitter** is a Publisher client that eventually submits a fact statement transaction on Cardano,
 - **Consumer** is a Cardano DApp (Plutus programs + environment) that uses a published Fact Statement,
 - **Collector** is a service that interacts with a data collection backend and delivers fact statements to Publisher clients.
+  - Requesting information from a remote commerical data APIs,
+  - Requesting information from a decentralized oracle pool (validation, consensus).
 
-## Properities
+## Properties
 
 - 1.1 Publisher's Work MUST be paid for in terms of the Publishing Fee,
   - **STATUS**: DONE ([caveat](#fee-escrow))
@@ -20,7 +20,7 @@
   - **STATUS**: DONE
 - 3.1 Submitter SHOULD NOT pay for failed Publishing,
   - **STATUS**: DONE
-- 3.3 Submitter CAN reclaim Cardano operational costs (minUtxoAda, ttl),
+- 3.2 Submitter CAN reclaim Cardano operational costs (minUtxoAda, ttl),
   - **STATUS**: TODO (requires the **Fact Statement Validator** (aka @FactV)
 
 ### Interaction
@@ -67,7 +67,7 @@ sequenceDiagram
 
 Fee escrow protocol SHOULD lock the **Publishing Fee** in a @FeeV Plutus validator via a Fee transaction cosigned by both Publisher and Submitter. The Publisher can claim the Fee by proving a successful Publishing and Submitter can claim the Fee back by proving a failed Publishing.
 
-#### Properities
+#### Properties
 
 1. Publisher MUST be able assert the existence of the valid Fee escrow by inspecting the submitted Fee transaction, before proceeding to doing any additional work.
 2. Publisher MUST be able to claim the Fee by providing a proof of a successful Publishing.
