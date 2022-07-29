@@ -966,6 +966,32 @@
         "type": "github"
       }
     },
+    "extra-hackage": {
+      "inputs": {
+        "haskell-nix": [
+          "plyForPlutarch",
+          "haskell-nix"
+        ],
+        "nixpkgs": [
+          "plyForPlutarch",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1658790167,
+        "narHash": "sha256-QRZCAz/k5hEvXiHc2aVDDc2jgPTeiRXUtARg0GA9rDU=",
+        "owner": "mlabs-haskell",
+        "repo": "haskell-nix-extra-hackage",
+        "rev": "ee50d7eb739819efdb27bda9f444e007c12e9833",
+        "type": "github"
+      },
+      "original": {
+        "owner": "mlabs-haskell",
+        "ref": "ee50d7eb739819efdb27bda9f444e007c12e9833",
+        "repo": "haskell-nix-extra-hackage",
+        "type": "github"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -3366,14 +3392,14 @@
         "lastModified": 1658833185,
         "narHash": "sha256-kOpzTnWkZge3+nCrb8jxGNACZDOq7pVz9NYKFZuxfz8=",
         "owner": "Plutonomicon",
-        "repo": "plutarch",
+        "repo": "plutarch-plutus",
         "rev": "e23f2d9ecad8482e9971bd6ec1c772f9693014ce",
         "type": "github"
       },
       "original": {
         "owner": "Plutonomicon",
-        "repo": "plutarch",
-        "rev": "e23f2d9ecad8482e9971bd6ec1c772f9693014ce",
+        "ref": "staging",
+        "repo": "plutarch-plutus",
         "type": "github"
       }
     },
@@ -3608,6 +3634,7 @@
         "cardano-base": "cardano-base_3",
         "cardano-crypto": "cardano-crypto_3",
         "cardano-prelude": "cardano-prelude_3",
+        "extra-hackage": "extra-hackage",
         "flat": "flat_3",
         "haskell-nix": [
           "plutarch",
@@ -3623,17 +3650,17 @@
         "pre-commit-hooks": "pre-commit-hooks"
       },
       "locked": {
-        "lastModified": 1659012272,
-        "narHash": "sha256-OURxbyNP4BRMcvhHja86hdWDXcjo50SitLUvnhMGxH4=",
+        "lastModified": 1659034986,
+        "narHash": "sha256-s8DWAuwDbSEBx3aeLmozPsCmLYUEr/FVdxo00p6t0II=",
         "owner": "mlabs-haskell",
         "repo": "ply",
-        "rev": "d92fd3504096585bfe215dbc0b830054ad3b2f2e",
+        "rev": "d89e7aa3bb1bb83d7ac333e16d8f899f6bd697fc",
         "type": "github"
       },
       "original": {
         "owner": "mlabs-haskell",
+        "ref": "staging",
         "repo": "ply",
-        "rev": "d92fd3504096585bfe215dbc0b830054ad3b2f2e",
         "type": "github"
       }
     },
