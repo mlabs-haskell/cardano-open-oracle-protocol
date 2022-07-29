@@ -1,31 +1,60 @@
 # Publishing a fact statement
 
-Definitions:
+**Submitters** ask the **Publisher** for a certain **Fact Statement** for a particular point in time, and the **Publisher** delivers a partially signed Cardano transaction for the **Submitter** to sign and submit to the Cardano ledger. This transaction contains an output containing the Fact Statement datum that any Cardano DApp can reference and use.
 
-- **Publisher** is a service that interacts with Submitter clients and Resolver services. It packages fee and fact statements in Cardano transactions,
-- **Publisher's Work** is the work done by the Publisher that includes a Resolver in a process called 'query resolution',
+## Definitions
+
+- **Publisher** is a service that interacts with Submitter clients and Collector and PAB services. It collects and packages fact statements in Cardano transactions along with the fees,
+- **Publisher's Work** is the work done by the Publisher that ends in successful service delivery to the Submitter,
   - Requesting information from a remote commerical data APIs,
   - Requesting information from a decentralized oracle pool (validation, consensus).
 - **Submitter** is a Publisher client that eventually submits a fact statement transaction on Cardano,
-- **Consumer** is a Cardano DApp (Plutus program + frontend) that uses a published Fact Statement.
+- **Consumer** is a Cardano DApp (Plutus programs + environment) that uses a published Fact Statement,
+- **Collector** is a service that interacts with a data collection backend and delivers fact statements to Publisher clients.
 
-Properities:
+## Properities
 
-- [x] Publisher's Work has to be paid for in terms of Fees,
-- [x] The Publisher can't be overwhelmed by 'free' operations,
-- [x] Consumer Plutus programs can verify that a certain Fact Statement is signed by the Publisher
-- [ ] The Fee can be collected by the Publisher only after the Submitter successfully submitted the Fact Statement transaction,
-  - TODO: Requires the **Fee Validator** (aka @FeeV)
-- [ ] Submitter can reclaim the Cardano operational costs (minUtxoAda, ttl),
-  - TODO: Requires the **Fact Statement Validator** (aka @FactV) and @FeeV
+- 1.1 Publisher's Work MUST be paid for in terms of the Publishing Fee,
+  - **STATUS**: DONE ([caveat](#fee-escrow))
+- 2.1 Consumer CAN verify that a certain Fact Statement is signed by the Publisher,
+  - **STATUS**: DONE
+- 3.1 Submitter SHOULD NOT pay for failed Publishing,
+  - **STATUS**: DONE
+- 3.3 Submitter CAN reclaim Cardano operational costs (minUtxoAda, ttl),
+  - **STATUS**: TODO (requires the **Fact Statement Validator** (aka @FactV)
 
-## Interaction
+### Fee Escrow protocol
+
+**STATUS**: We're not implemeting the fee escrow due to added complexity, time lag and cost that it would introduce in the system.
+
+[From Wikipedia](https://en.wikipedia.org/wiki/Escrow)
+
+> An escrow is a contractual arrangement in which a third party (the stakeholder or escrow agent) receives and disburses money or property for the primary transacting parties, with the disbursement dependent on conditions agreed to by the transacting parties
+
+Fee escrow protocol SHOULD lock the **Publishing Fee** in a @FeeV Plutus validator via a Fee transaction cosigned by both Publisher and Submitter. The Publisher can claim the Fee by proving a successful Publishing and Submitter can claim the Fee back by proving a failed Publishing.
+
+#### Properities
+
+1. Publisher MUST be able assert the existence of the valid Fee escrow by inspecting the submitted Fee transaction, before proceeding to doing any additional work.
+2. Publisher MUST be able to claim the Fee by providing a proof of a successful Publishing.
+3. Submitter MUST be able to claim the Fee by providing a proof of a failed Publishing.
+4. Submitter MUST be able to reclaim the Cardano operational fees (ie. minUtxoAda).
+
+Pros:
+
+- Prop 1.1 is strongly satisfied
+
+Cons:
+
+- More transactions,
+- Added complexity, time lag and cost.
+
+### Interaction
 
 ```mermaid
 sequenceDiagram
   title Publishing a fact statement on Cardano
   actor factMp as $FACT Minting Policy
-  actor feeMp as $FEE Minting Policy
   actor cardano as Cardano
   actor submitterWallet as Submitter's wallet
   actor submitter as Submitter
@@ -33,27 +62,13 @@ sequenceDiagram
   actor publisherWallet as Publisher's wallet
 
   submitter ->>+ publisher: getCatalog() [no fee]
-  note right of publisher: Talks to its Resolvers to get the list of fact statement types
+  note right of publisher: Talks to Collectors to get the list of fact statement types
   publisher -->>- submitter: [{urn: "/climate/temp/usa", type: r, fee: 1 ADA},<br />{urn: "/climate/temp/uk", type: r, fee: 1 ADA}]
   note over submitter: Wants to publish the Temperature in UK at Thu, 21 Jul 2022 14:12:44 GMT
 
-  submitter ->>+ publisher: createFeeTransaction(utxoWithFee)
-  note right of publisher: Prepares a Fee Transaction<br/>feeTrx = <br/>{<br/>input = utxoWithFee,<br/>minted = 1 $FEE(publisher)<br/>outDatum = (publisher, sessionId),<br/>outValue = input.value + minted.value,<br/>outAddress = @FeeV<br/>}
-    publisher ->>+ publisherWallet: signTrx(feeTrx)
-    publisherWallet -->>- publisher: feeTrx {signatories += publisher}
-  publisher -->>- submitter: feeTrx
-  submitter ->>+ submitterWallet: signAndSubmit(feeTrx)
-    submitterWallet ->>+ cardano: submit(feeTrx {signatories += submitter})
-      cardano ->>+ feeMp: validate(feeTrx)
-      note right of feeMp: Checks a Fee Transaction<br/>? OutAddr = @FeeV,<br/>(Publisher, _) = OutDatum,<br/>Publisher in Signatories,<br/>asset($FEE, Publisher, 1) in Minted,<br/>asset($FEE, Publisher, 1) in OutValue.
-      feeMp -->>- cardano: Ok!
-    cardano -->>- submitterWallet: feeTrxId
-  submitterWallet -->>- submitter: feeTrxId
-  
-  submitter ->>+ publisher: createFactStatementTransaction(<br />feeTrxId=feeTrxId,<br />at=1658412764,<br />urn="/prices/goog")
-  note right of publisher: Checks the feeTrx<br/>? TrxUtxos(feeTrxId, utxo(@FeeV, (publisher, sessionId), Value)),<br/>1 $FEE(publisher) in Value,<br/>1 ADA in Value
-  note right of publisher: Talks to its Resolvers to resolve the query and get the fact statement
-  note right of publisher: Prepares the Fact Statement transaction<br/>factStatementTrx = {<br/>minted = 1 $FACT(publisher), <br/>outDatum = (publisher, submitter, sessionId, factStatement),<br/>outAddress = @FactV}
+  submitter ->>+ publisher: createFactStatementTransaction(<br />at=1658412764,<br />urn="/climate/temp/uk")
+  note right of publisher: Talks to Collectors and possibly collects the requested fact statement
+  note right of publisher: Talks to the PAB and constructs a Fact Statement transaction<br/>factStatementTrx = {<br/>minted = 1 $FACT(publisher), <br/>outDatum = (publisher, submitter, factStatement),<br/>outAddress = @FactV}
     publisher ->>+ publisherWallet: signTrx(factStatementTrx)
     publisherWallet -->>- publisher: factStatementTrx {signatories += publisher}
   publisher -->>- submitter: factStatementTrx
