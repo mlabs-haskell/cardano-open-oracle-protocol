@@ -2360,11 +2360,11 @@
     "iohk-nix_4": {
       "flake": false,
       "locked": {
-        "lastModified": 1652903749,
-        "narHash": "sha256-sxU5Klk/h5rawQrCpNQJmKLhTKrIGzjdVnicIH7VERs=",
+        "lastModified": 1658222743,
+        "narHash": "sha256-yFH01psqx30y5Ws4dBElLkxYpIxxqZx4G+jCVhsXpnA=",
         "owner": "input-output-hk",
         "repo": "iohk-nix",
-        "rev": "5aca9f3d7d64ce6a2199bb2c6364c9e7bfa73f76",
+        "rev": "9a604d01bd4420ab7f396f14d1947fbe2ce7db8b",
         "type": "github"
       },
       "original": {
@@ -3650,11 +3650,11 @@
         "pre-commit-hooks": "pre-commit-hooks"
       },
       "locked": {
-        "lastModified": 1659034986,
-        "narHash": "sha256-s8DWAuwDbSEBx3aeLmozPsCmLYUEr/FVdxo00p6t0II=",
+        "lastModified": 1659081121,
+        "narHash": "sha256-H53KkOSY6y0UtDzpydNOncTd3sq6ySn3VxJ5WCSX+o8=",
         "owner": "mlabs-haskell",
         "repo": "ply",
-        "rev": "d89e7aa3bb1bb83d7ac333e16d8f899f6bd697fc",
+        "rev": "0368711cd0bccdedb4f749066bccae85d3eb4155",
         "type": "github"
       },
       "original": {
@@ -3702,11 +3702,11 @@
         "nixpkgs": "nixpkgs_12"
       },
       "locked": {
-        "lastModified": 1656169028,
-        "narHash": "sha256-y9DRauokIeVHM7d29lwT8A+0YoGUBXV3H0VErxQeA8s=",
+        "lastModified": 1658611562,
+        "narHash": "sha256-jktQ3mRrFAiFzzmVxQXh+8IxZOEE4hfr7St3ncXeVy4=",
         "owner": "cachix",
         "repo": "pre-commit-hooks.nix",
-        "rev": "db3bd555d3a3ceab208bed48f983ccaa6a71a25e",
+        "rev": "f436e6dbc10bb3500775785072a40eefe057b18e",
         "type": "github"
       },
       "original": {
