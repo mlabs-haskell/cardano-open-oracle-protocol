@@ -5,7 +5,7 @@
 
   inputs = {
     # Plutip maintains a compatible Plutus/Cardano derivation set
-    plutip.url = "github:mlabs-haskell/plutip";
+    plutip.url = "github:mlabs-haskell/plutip/gergely/vasil-with-latest-wallet";
 
     nixpkgs.follows = "plutip/nixpkgs";
     haskell-nix.follows = "plutip/haskell-nix";
@@ -25,8 +25,23 @@
     plutarch.url = "github:Plutonomicon/plutarch-plutus/staging";
 
     iohk-nix.follows = "plutip/iohk-nix";
-  };
 
+    plyForPlutarch = {
+      url = "github:mlabs-haskell/ply/staging";
+      inputs = {
+        haskell-nix.follows = "plutarch/haskell-nix";
+        nixpkgs.follows = "plutarch/nixpkgs";
+      };
+    };
+
+    plyForPlutip = {
+      url = "github:mlabs-haskell/ply";
+      inputs = {
+        haskell-nix.follows = "plutip/haskell-nix";
+        nixpkgs.follows = "plutip/nixpkgs";
+      };
+    };
+  };
   outputs =
     { self
     , nixpkgs
@@ -36,7 +51,9 @@
     , http2-grpc-native
     , plutarch
     , iohk-nix
-    , ...
+    , plutip
+    , plyForPlutarch
+    , plyForPlutip
     }:
     flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" ]
       (system:
@@ -54,9 +71,6 @@
             (import "${iohk-nix}/overlays/crypto")
           ];
         };
-
-        # cardanoInputs = plutip.inputs.bot-plutus-interface.inputs;
-        # cardanoExtraSources = plutip.inputs.bot-plutus-interface.extraSources;
 
         pre-commit-check = pre-commit-hooks.lib.${system}.run (import ./pre-commit-check.nix);
         pre-commit-devShell = pkgs.mkShell {
@@ -88,6 +102,7 @@
         oraclePlutusProj = import ./oracle-plutus/build.nix {
           inherit plutarch;
           pkgs = pkgsForPlutarch;
+          ply = plyForPlutarch;
           inherit (pkgsForPlutarch) haskell-nix;
           inherit (pre-commit-check) shellHook;
           compiler-nix-name = "ghc923";
@@ -116,13 +131,22 @@
           inherit (pre-commit-check) shellHook;
         };
 
+        oraclePabProj = import ./oracle-pab/build.nix {
+          inherit pkgs plutip;
+          ply = plyForPlutip;
+          inherit (pkgsWithOverlay) haskell-nix;
+          inherit (pre-commit-check) shellHook;
+          compiler-nix-name = "ghc8107";
+        };
+        oraclePabFlake = oraclePabProj.flake { };
+
       in
       rec {
         # Useful for nix repl
         inherit pkgs pkgsWithOverlay pkgsForPlutarch;
 
         # Standard flake attributes
-        packages = oraclePureFlake.packages // oraclePlutusFlake.packages // oracleServiceFlake.packages;
+        packages = oraclePureFlake.packages // oraclePlutusFlake.packages // oracleServiceFlake.packages // oraclePabFlake.packages;
 
         devShells = rec {
           dev-proto = protoDevShell;
@@ -131,12 +155,14 @@
           dev-plutus = oraclePlutusFlake.devShell;
           dev-service = oracleServiceFlake.devShell;
           dev-docs = docsDevShell;
+          dev-pab = oraclePabFlake.devShell;
           default = dev-proto;
         };
 
         checks = oraclePureFlake.checks //
           oraclePlutusFlake.checks //
           oracleServiceFlake.checks //
+          oraclePabFlake.checks //
           { inherit pre-commit-check; } // devShells // packages;
       });
 }
