@@ -15,7 +15,6 @@ haskell-nix.project' {
       haskell-language-server = { };
     };
     shellHook = ''
-      cd oracle-pure
       ${shellHook}
     '';
   };

@@ -8,8 +8,5 @@ pkgs.mkShell {
     nodejs
   ];
 
-  shellHook = ''
-    cd proto
-    ${shellHook}
-  '';
+  inherit shellHook;
 }
