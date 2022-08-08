@@ -106,10 +106,16 @@ executable oracle-plutus-cli
   hs-source-dirs: app
   other-modules:  Cardano.Oracle.Cli.Compile
   build-depends:
+    , aeson
     , base
+    , base16-bytestring
+    , bytestring
     , filepath
     , optparse-applicative
     , oracle-plutus
     , plutarch
+    , plutus-ledger-api
     , ply-core
     , ply-plutarch
+    , serialise
+    , text

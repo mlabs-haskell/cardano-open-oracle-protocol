@@ -39,7 +39,7 @@ compileOpts =
       auto
       ( long "mode"
           <> metavar "COMPILE_MODE"
-          <> help "Mode of compilation COMPILE_DEBUG|COMPILE_DEBUG"
+          <> help "Mode of compilation COMPILE_DEBUG|COMPILE_PROD"
           <> value COMPILE_DEBUG
           <> showDefault
       )
