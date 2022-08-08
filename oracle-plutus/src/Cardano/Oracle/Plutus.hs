@@ -10,15 +10,17 @@ module Cardano.Oracle.Plutus (
 ) where
 
 import Control.Monad.Fail (MonadFail (fail))
+import Data.Typeable (Typeable)
 import GHC.Generics qualified as GHC
 import Generics.SOP (Generic)
-import Plutarch (Config, DerivePlutusType (DPTStrat), POpaque, TermCont, popaque, pto)
+import Plutarch (DerivePlutusType (DPTStrat), TermCont, popaque, pto)
 import Plutarch.Api.V1 (
   PAddress,
   PCurrencySymbol (PCurrencySymbol),
   PDatum,
   PDatumHash,
   PMaybeData (PDJust, PDNothing),
+  PMintingPolicy,
   PPubKeyHash (PPubKeyHash),
   PScriptContext,
   PScriptPurpose (PMinting),
@@ -26,9 +28,8 @@ import Plutarch.Api.V1 (
   PTxInInfo,
   PTxOut,
   PTxOutRef,
+  PValidator,
   PValue,
-  mkMintingPolicy,
-  mkValidator,
  )
 import Plutarch.Api.V1.AssocMap (plookup)
 import Plutarch.Api.V1.Value (AmountGuarantees, KeyGuarantees, PTokenName (PTokenName), pnormalize, pvalueOf)
@@ -50,10 +51,10 @@ import Plutarch.TryFrom (PTryFrom (PTryFromExcess, ptryFrom'))
 import Plutarch.Unsafe (punsafeCoerce)
 import PlutusLedgerApi.V1 (Address, CurrencySymbol, LedgerBytes)
 import PlutusLedgerApi.V1.Crypto (PubKeyHash)
-import PlutusLedgerApi.V1.Scripts (MintingPolicy, Validator)
 import PlutusTx qualified
 import Prelude (Applicative (pure), Eq, Show, fst, snd, ($), (.), (<$>))
 
+-- TODO: Move this to coop-hs-types
 type ResourceDescription = LedgerBytes
 type Resource = LedgerBytes
 
@@ -97,7 +98,7 @@ data ResourceMintingParams = ResourceMintingParams
   { rmp'instanceCs :: CurrencySymbol -- provided by the one shot mp,
   , rmp'resourceValidatorAddress :: Address
   }
-  deriving stock (Show, GHC.Generic, Eq)
+  deriving stock (Show, GHC.Generic, Eq, Typeable)
 
 PlutusTx.unstableMakeIsData ''ResourceMintingParams
 
@@ -111,7 +112,7 @@ newtype PResourceMintingParams s
                ]
           )
       )
-  deriving stock (GHC.Generic)
+  deriving stock (GHC.Generic, Typeable)
   deriving anyclass (Generic, PlutusType, PIsData, PEq, PDataFields)
 
 instance DerivePlutusType PResourceMintingParams where type DPTStrat _ = PlutusTypeData
@@ -128,14 +129,14 @@ instance PTryFrom PData (PAsData PCurrencySymbol) where
     pure (punsafeCoerce opq, pcon . PCurrencySymbol $ unwrapped)
 
 -- TODO: Parametrize by the one-shot token and resourceMintingPolicy
-resourceValidator :: Config -> Validator
-resourceValidator cfg = mkValidator cfg $ plam $ \_ _ _ -> popaque $ pconstant ()
+resourceValidator :: ClosedTerm (PResourceMintingParams :--> PValidator)
+resourceValidator = phoistAcyclic $ plam $ \_ _ _ _ -> popaque $ pconstant ()
 
 -- | Minting policy that validates creation of new resources.
-resourceMintingPolicy :: Config -> ResourceMintingParams -> MintingPolicy
-resourceMintingPolicy cfg params = mkMintingPolicy cfg $
-  plam $ \_ ctx -> unTermCont do
-    _ <- pletC $ parseOutputs # pconstant params # ctx
+resourceMintingPolicy :: ClosedTerm (PResourceMintingParams :--> PMintingPolicy)
+resourceMintingPolicy = phoistAcyclic $
+  plam $ \params _ ctx -> unTermCont do
+    _ <- pletC $ parseOutputs # params # ctx
     pure $ popaque $ pconstant ()
 
 {- | Parse and validate transaction outputs that hold resources.
@@ -318,10 +319,8 @@ pfindMap = phoistAcyclic $
 mkOneShotMintingPolicy ::
   ClosedTerm
     ( PTokenName
-        :--> PAsData PTxOutRef
-        :--> POpaque
-        :--> PScriptContext
-        :--> POpaque
+        :--> PTxOutRef
+        :--> PMintingPolicy
     )
 mkOneShotMintingPolicy = phoistAcyclic $
   plam $ \tn txOutRef _ ctx -> unTermCont do
@@ -342,7 +341,7 @@ mkOneShotMintingPolicy = phoistAcyclic $
       (phasSingleToken # cs # tn # mint)
 
 -- | Check if utxo is consumed
-pconsumesRef :: Term s (PAsData PTxOutRef :--> PBuiltinList PTxInInfo :--> PBool)
+pconsumesRef :: Term s (PTxOutRef :--> PBuiltinList PTxInInfo :--> PBool)
 pconsumesRef = phoistAcyclic $
   plam $ \txOutRef ->
     pany #$ plam $ \input -> unTermCont do

@@ -1,4 +1,4 @@
-{ pkgs, haskell-nix, compiler-nix-name, ply, plutarch, shellHook }:
+{ pkgs, haskell-nix, compiler-nix-name, plutarch, shellHook }:
 let
   hn-extra-hackage = plutarch.inputs.haskell-nix-extra-hackage;
   myHackage = hn-extra-hackage.mkHackagesFor pkgs.system compiler-nix-name [
@@ -6,8 +6,6 @@ let
     "${plutarch}/plutarch-extra"
     "${plutarch}/plutarch-test"
     "${plutarch.inputs.plutus}/plutus-ledger-api"
-    "${ply}/ply-core"
-    "${ply}/ply-plutarch"
   ];
 in
 haskell-nix.cabalProject' (plutarch.applyPlutarchDep pkgs rec {
@@ -42,8 +40,6 @@ haskell-nix.cabalProject' (plutarch.applyPlutarchDep pkgs rec {
       ps.plutarch-extra
       ps.plutarch-test
       ps.plutus-ledger-api
-      ps.ply-core
-      ps.ply-plutarch
     ];
 
     tools = {
@@ -53,7 +49,6 @@ haskell-nix.cabalProject' (plutarch.applyPlutarchDep pkgs rec {
       export LC_CTYPE=C.UTF-8
       export LC_ALL=C.UTF-8
       export LANG=C.UTF-8
-      cd oracle-plutus
       ${shellHook}
     '';
 

@@ -26,14 +26,6 @@
 
     iohk-nix.follows = "plutip/iohk-nix";
 
-    plyForPlutarch = {
-      url = "github:mlabs-haskell/ply/staging";
-      inputs = {
-        haskell-nix.follows = "plutarch/haskell-nix";
-        nixpkgs.follows = "plutarch/nixpkgs";
-      };
-    };
-
     plyForPlutip = {
       url = "github:mlabs-haskell/ply";
       inputs = {
@@ -52,7 +44,6 @@
     , plutarch
     , iohk-nix
     , plutip
-    , plyForPlutarch
     , plyForPlutip
     }:
     flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" ]
@@ -102,7 +93,6 @@
         oraclePlutusProj = import ./oracle-plutus/build.nix {
           inherit plutarch;
           pkgs = pkgsForPlutarch;
-          ply = plyForPlutarch;
           inherit (pkgsForPlutarch) haskell-nix;
           inherit (pre-commit-check) shellHook;
           compiler-nix-name = "ghc923";
