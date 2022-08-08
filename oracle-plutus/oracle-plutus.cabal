@@ -97,8 +97,6 @@ library
     , plutarch-extra
     , plutus-ledger-api
     , plutus-tx
-    , ply-core
-    , ply-plutarch
 
 executable oracle-plutus-cli
   import:         common-language
@@ -115,7 +113,5 @@ executable oracle-plutus-cli
     , oracle-plutus
     , plutarch
     , plutus-ledger-api
-    , ply-core
-    , ply-plutarch
     , serialise
     , text
