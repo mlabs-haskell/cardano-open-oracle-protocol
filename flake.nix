@@ -27,7 +27,7 @@
     iohk-nix.follows = "plutip/iohk-nix";
 
     plyForPlutarch = {
-      url = "github:mlabs-haskell/ply/staging";
+      url = "github:mlabs-haskell/ply/export-argdata";
       inputs = {
         haskell-nix.follows = "plutarch/haskell-nix";
         nixpkgs.follows = "plutarch/nixpkgs";

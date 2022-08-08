@@ -49,11 +49,11 @@ import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PDat
 import Plutarch.TermCont (TermCont (runTermCont), tcont, unTermCont)
 import Plutarch.TryFrom (PTryFrom (PTryFromExcess, ptryFrom'))
 import Plutarch.Unsafe (punsafeCoerce)
-import PlutusLedgerApi.V1 (Address, CurrencySymbol, LedgerBytes)
+import PlutusLedgerApi.V1 (Address, CurrencySymbol, Data, LedgerBytes, toData)
 import PlutusLedgerApi.V1.Crypto (PubKeyHash)
 import PlutusTx qualified
-import Ply.Core.Class (PlyArg (UPLCRep, toBuiltinArg))
-import Ply.LedgerExports (Data, toData)
+import Ply.Core.Class (PlyArg (UPLCRep, toBuiltinArg, toBuiltinArgData))
+import Ply.Plutarch.Class (PlyArgOf)
 import Prelude (Applicative (pure), Eq, Show, fst, snd, ($), (.), (<$>))
 
 type ResourceDescription = LedgerBytes
@@ -106,6 +106,7 @@ PlutusTx.unstableMakeIsData ''ResourceMintingParams
 instance PlyArg ResourceMintingParams where
   type UPLCRep ResourceMintingParams = Data
   toBuiltinArg = toData
+  toBuiltinArgData = toBuiltinArg
 
 newtype PResourceMintingParams s
   = PResourceMintingParams
@@ -123,6 +124,7 @@ newtype PResourceMintingParams s
 instance DerivePlutusType PResourceMintingParams where type DPTStrat _ = PlutusTypeData
 instance PUnsafeLiftDecl PResourceMintingParams where type PLifted PResourceMintingParams = ResourceMintingParams
 deriving via (DerivePConstantViaData ResourceMintingParams PResourceMintingParams) instance (PConstantDecl ResourceMintingParams)
+type instance PlyArgOf PResourceMintingParams = ResourceMintingParams
 
 instance PTryFrom PData (PAsData PCurrencySymbol) where
   type PTryFromExcess PData (PAsData PCurrencySymbol) = Flip Term PCurrencySymbol

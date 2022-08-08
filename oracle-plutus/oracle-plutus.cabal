@@ -98,6 +98,7 @@ library
     , plutus-ledger-api
     , plutus-tx
     , ply-core
+    , ply-plutarch
 
 executable oracle-plutus-cli
   import:         common-language

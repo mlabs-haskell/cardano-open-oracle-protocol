@@ -3,17 +3,15 @@
 {-# HLINT ignore "Use newtype instead of data" #-}
 module Main (main) where
 
-import Cardano.Oracle.Cli.Compile (CompileMode (CMDEBUG, COMPILE_DEBUG), CompileOpts (CompileOpts), compile)
+import Cardano.Oracle.Cli.Compile (CompileMode (COMPILE_DEBUG), CompileOpts (CompileOpts), compile)
 
 import Control.Applicative ((<**>))
 import Options.Applicative (
-  Applicative ((<*>)),
   Parser,
   ParserInfo,
   auto,
   command,
   customExecParser,
-  flag',
   fullDesc,
   help,
   helper,
@@ -29,7 +27,6 @@ import Options.Applicative (
   strOption,
   subparser,
   value,
-  (<$>),
  )
 
 data Command

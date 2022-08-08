@@ -987,7 +987,6 @@
       },
       "original": {
         "owner": "mlabs-haskell",
-        "ref": "ee50d7eb739819efdb27bda9f444e007c12e9833",
         "repo": "haskell-nix-extra-hackage",
         "type": "github"
       }
@@ -3389,16 +3388,15 @@
         "secp256k1-haskell": "secp256k1-haskell_2"
       },
       "locked": {
-        "lastModified": 1658833185,
-        "narHash": "sha256-kOpzTnWkZge3+nCrb8jxGNACZDOq7pVz9NYKFZuxfz8=",
+        "lastModified": 1659381725,
+        "narHash": "sha256-W0EWY0DV2idbIeqtJnShVHQ83exME8TK2GYQGbVpz8A=",
         "owner": "Plutonomicon",
         "repo": "plutarch-plutus",
-        "rev": "e23f2d9ecad8482e9971bd6ec1c772f9693014ce",
+        "rev": "3140f47adefae4523a0ca777fc09e724703d9269",
         "type": "github"
       },
       "original": {
         "owner": "Plutonomicon",
-        "ref": "staging",
         "repo": "plutarch-plutus",
         "type": "github"
       }
@@ -3650,16 +3648,16 @@
         "pre-commit-hooks": "pre-commit-hooks"
       },
       "locked": {
-        "lastModified": 1659081121,
-        "narHash": "sha256-H53KkOSY6y0UtDzpydNOncTd3sq6ySn3VxJ5WCSX+o8=",
+        "lastModified": 1659943978,
+        "narHash": "sha256-4iXsoJojVphhym7zCJZlZ/Zc89YlvB5+O5iv+7ZU3nQ=",
         "owner": "mlabs-haskell",
         "repo": "ply",
-        "rev": "0368711cd0bccdedb4f749066bccae85d3eb4155",
+        "rev": "5204e11318498f183afe0ea3a7833d540c644172",
         "type": "github"
       },
       "original": {
         "owner": "mlabs-haskell",
-        "ref": "staging",
+        "ref": "export-argdata",
         "repo": "ply",
         "type": "github"
       }
