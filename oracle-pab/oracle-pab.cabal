@@ -113,8 +113,12 @@ test-suite oracle-pab-tests
   import:         common-language
   build-depends:
     , base
+    , data-default
+    , oracle-hs-types
     , oracle-pab
+    , plutip
     , tasty
+    , text
 
   hs-source-dirs: test
   main-is:        Main.hs

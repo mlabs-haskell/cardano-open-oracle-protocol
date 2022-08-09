@@ -125,6 +125,7 @@
           inherit pkgs plutip;
           inherit (pkgsWithOverlay) haskell-nix;
           inherit (pre-commit-check) shellHook;
+          oraclePlutusCli = oraclePlutusProj.getComponent "oracle-plutus:exe:oracle-plutus-cli";
           oracle-hs-types = ./oracle-hs-types;
           compiler-nix-name = "ghc8107";
         };

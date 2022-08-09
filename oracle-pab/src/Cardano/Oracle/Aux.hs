@@ -19,9 +19,10 @@ loadCoopPlutus :: DeployMode -> IO CoopPlutus
 loadCoopPlutus mode = do
   tempDir <- getTemporaryDirectory
   let compileMode = if mode == DEPLOY_PROD then "COMPILE_PROD" else "COMPILE_DEBUG"
-  runProcess "oracle-plutus-cli" ["compile", "--mode", compileMode] (Just tempDir) Nothing Nothing Nothing Nothing
-  mayCoopPlutus :: Maybe CoopPlutus <- decodeFileStrict (tempDir </> "coop-plutus.json")
-  maybe (fail "Failed decoding coop-plutus.json") return mayCoopPlutus
+      coopPlutusFp = tempDir </> "coop-plutus.json"
+  runProcess "oracle-plutus-cli" ["compile", "--mode", compileMode, "--file", coopPlutusFp] Nothing Nothing Nothing Nothing Nothing
+  mayCoopPlutus :: Maybe CoopPlutus <- decodeFileStrict coopPlutusFp
+  maybe (fail "Failed decoding CoopPlutus") return mayCoopPlutus
 
 runBpi :: ToJSON w => Monoid w => PABConfig -> Contract w s e a -> IO (ContractInstanceId, Either e a)
 runBpi pabConf contract = do

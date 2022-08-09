@@ -42,10 +42,10 @@ deployOpts =
           <> showDefault
       )
     <*> strOption
-      ( long "plutus-file"
-          <> metavar "PLUTUS_FILE"
-          <> help "A JSON file to read the compiled COOP Plutus scripts from"
-          <> value "coop-plutus.json"
+      ( long "pab-config"
+          <> metavar "PAB_CONFIG"
+          <> help "A bot-plutus-interface PAB config file"
+          <> value "resources/pabConfig.yaml"
           <> showDefault
       )
     <*> strOption

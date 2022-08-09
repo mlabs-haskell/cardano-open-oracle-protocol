@@ -38,7 +38,7 @@ createInstanceCs coopPlutus = do
     oref : _ -> do
       logI $ "Using oref " <> show oref
       let instTokenName = TokenName . getTxId . txOutRefId $ oref
-          instMp = MintingPolicy $ applyArguments instMp' [toData oref, toData instTokenName]
+          instMp = MintingPolicy $ applyArguments instMp' [toData instTokenName, toData oref]
           instCs = scriptCurrencySymbol instMp
           val = Value.singleton instCs instTokenName 1
           lookups =
