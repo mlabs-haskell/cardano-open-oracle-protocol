@@ -81,6 +81,14 @@
           inherit (pre-commit-check) shellHook;
         };
 
+        oracleHsTypesProj = import ./oracle-hs-types/build.nix {
+          inherit pkgs plutip;
+          inherit (pkgsWithOverlay) haskell-nix;
+          inherit (pre-commit-check) shellHook;
+          compiler-nix-name = "ghc8107";
+        };
+        oracleHsTypesFlake = oracleHsTypesProj.flake { };
+
         pkgsForPlutarch = import plutarch.inputs.nixpkgs {
           inherit system;
           inherit (plutarch.inputs.haskell-nix) config;
@@ -129,14 +137,13 @@
           compiler-nix-name = "ghc8107";
         };
         oraclePabFlake = oraclePabProj.flake { };
-
       in
       rec {
         # Useful for nix repl
         inherit pkgs pkgsWithOverlay pkgsForPlutarch;
 
         # Standard flake attributes
-        packages = oraclePureFlake.packages // oraclePlutusFlake.packages // oracleServiceFlake.packages // oraclePabFlake.packages;
+        packages = oraclePureFlake.packages // oraclePlutusFlake.packages // oracleServiceFlake.packages // oraclePabFlake.packages // oracleHsTypesFlake.packages;
 
         devShells = rec {
           dev-proto = protoDevShell;
@@ -146,6 +153,7 @@
           dev-service = oracleServiceFlake.devShell;
           dev-docs = docsDevShell;
           dev-pab = oraclePabFlake.devShell;
+          dev-hs-types = oracleHsTypesFlake.devShell;
           default = dev-proto;
         };
 
@@ -153,6 +161,7 @@
           oraclePlutusFlake.checks //
           oracleServiceFlake.checks //
           oraclePabFlake.checks //
+          oracleHsTypesFlake.checks //
           { inherit pre-commit-check; } // devShells // packages;
       });
 }
