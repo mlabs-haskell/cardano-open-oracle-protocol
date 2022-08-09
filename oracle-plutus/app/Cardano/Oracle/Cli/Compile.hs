@@ -3,18 +3,11 @@
 module Cardano.Oracle.Cli.Compile (CompileOpts (..), CompileMode (..), compile) where
 
 import Cardano.Oracle.Plutus (mkOneShotMintingPolicy, resourceMintingPolicy, resourceValidator)
-import Codec.Serialise (deserialise, serialise)
-import Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON), encode)
-import Data.Aeson.Types (prependFailure, typeMismatch)
-import Data.Aeson.Types qualified as Aeson
-import Data.ByteString (ByteString, fromStrict, toStrict)
-import Data.ByteString.Base16 qualified as Base16S
+import Cardano.Oracle.Types (CoopPlutus (CoopPlutus, cp'instanceMintingPolicy, cp'resourceMintingPolicy, cp'resourceValidator))
+import Data.Aeson (encode)
 import Data.ByteString.Lazy (writeFile)
-import Data.Text.Encoding (decodeUtf8, encodeUtf8)
-import GHC.Generics (Generic)
 import Plutarch (Config (Config), TracingMode (DoTracing, NoTracing))
 import Plutarch qualified (compile)
-import PlutusLedgerApi.V1 (Script)
 
 data CompileMode = COMPILE_PROD | COMPILE_DEBUG deriving stock (Show, Read, Eq)
 
@@ -41,30 +34,3 @@ compile opts = do
           }
   Data.ByteString.Lazy.writeFile (co'File opts) (encode cs)
   return ()
-
--- TODO: Move this to coop-hs-types
-data CoopPlutus = CoopPlutus
-  { cp'instanceMintingPolicy :: Script
-  , cp'resourceMintingPolicy :: Script
-  , cp'resourceValidator :: Script
-  }
-  deriving stock (Show, Eq, Generic)
-
-instance ToJSON CoopPlutus
-instance FromJSON CoopPlutus
-
-instance ToJSON Script where
-  toJSON = toJSON . toStrict . serialise
-
-instance ToJSON ByteString where
-  toJSON = toJSON . decodeUtf8 . Base16S.encode
-
-instance FromJSON Script where
-  parseJSON json = deserialise . fromStrict <$> parseJSON json
-
-instance FromJSON ByteString where
-  parseJSON (Aeson.String text) = either fail pure (Base16S.decode . encodeUtf8 $ text)
-  parseJSON invalid =
-    prependFailure
-      "parsing ByteString failed, "
-      (typeMismatch "base16 encoded bytes" invalid)

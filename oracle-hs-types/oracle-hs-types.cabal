@@ -1,14 +1,16 @@
-cabal-version:      3.0
-name:               oracle-pab
-version:            0.1.0.0
-license:            MIT
-license-file:       LICENSE
-maintainer:         info@mlabs.city
-author:             mlabs-haskell
-description:
-  Cardano Oracle BPI based PAB programs for testing and interacting with the Plutus counterpart
+cabal-version: 3.0
+name:          oracle-hs-types
+version:       0.1.0.0
+license:       MIT
+license-file:  LICENSE
+maintainer:    info@mlabs.city
+author:        mlabs-haskell
+description:   COOP Haskell types shared across different project parts.
 
-extra-source-files: CHANGELOG.md
+flag new-ledger-namespace
+  description: Use the new plutus-ledger-api namespace (0a8b1ad)
+  manual:      True
+  default:     False
 
 flag dev
   description: Enable non-strict compilation for development
@@ -24,6 +26,9 @@ common common-language
 
   if !flag(dev)
     ghc-options: -Werror
+
+  if flag(new-ledger-namespace)
+    cpp-options: -DNEW_LEDGER_NAMESPACE
 
   default-extensions:
     NoStarIsType
@@ -86,64 +91,13 @@ common common-language
 
 library
   import:          common-language
-  exposed-modules:
-    Cardano.Oracle.Aux
-    Cardano.Oracle.Pab
-
+  exposed-modules: Cardano.Oracle.Types
   hs-source-dirs:  src
   build-depends:
     , aeson
     , base
-    , bot-plutus-interface
-    , containers
-    , directory
-    , filepath
-    , oracle-hs-types
-    , plutip
-    , plutus-contract
-    , plutus-ledger
+    , base16-bytestring
+    , bytestring
     , plutus-ledger-api
-    , plutus-pab
-    , process
-    , stm
+    , serialise
     , text
-    , uuid
-
-test-suite oracle-pab-tests
-  import:         common-language
-  build-depends:
-    , base
-    , data-default
-    , oracle-hs-types
-    , oracle-pab
-    , plutip
-    , tasty
-    , text
-
-  hs-source-dirs: test
-  main-is:        Main.hs
-  ghc-options:    -Wall -threaded -rtsopts
-  type:           exitcode-stdio-1.0
-
-executable oracle-pab-cli
-  import:         common-language
-  main-is:        Main.hs
-  hs-source-dirs: app
-  other-modules:  Cardano.Oracle.Cli.Deploy
-  build-depends:
-    , aeson
-    , base
-    , bot-plutus-interface
-    , containers
-    , directory
-    , filepath
-    , optparse-applicative
-    , oracle-hs-types
-    , oracle-pab
-    , plutus-contract
-    , plutus-ledger-api
-    , plutus-pab
-    , process
-    , stm
-    , text
-    , uuid
