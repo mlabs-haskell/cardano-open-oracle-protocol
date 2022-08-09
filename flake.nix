@@ -135,6 +135,7 @@
           ply = plyForPlutip;
           inherit (pkgsWithOverlay) haskell-nix;
           inherit (pre-commit-check) shellHook;
+          oracle-hs-types = ./oracle-hs-types;
           compiler-nix-name = "ghc8107";
         };
         oraclePabFlake = oraclePabProj.flake { };

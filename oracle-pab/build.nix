@@ -1,4 +1,4 @@
-{ pkgs, haskell-nix, compiler-nix-name, ply, plutip, shellHook }:
+{ pkgs, haskell-nix, compiler-nix-name, ply, plutip, oracle-hs-types, shellHook }:
 haskell-nix.cabalProject' {
   src = ./.;
   name = "oracle-pab";
@@ -9,6 +9,9 @@ haskell-nix.cabalProject' {
     packages = {
       # Enable strict builds
       oracle-pab.configureFlags = [ "-f-dev" ];
+
+      # Don't use the new-ledger-namespace
+      oracle-hs-types.configureFlags = [ "-f-new-ledger-namespace" ];
     };
   }];
 
@@ -20,6 +23,10 @@ haskell-nix.cabalProject' {
     {
       src = ply;
       subdirs = [ "ply-core" ];
+    }
+    {
+      src = oracle-hs-types;
+      subdirs = [ "." ];
     }
   ];
 
@@ -41,6 +48,7 @@ haskell-nix.cabalProject' {
       ps.bot-plutus-interface
       ps.plutip
       ps.ply-core
+      ps.oracle-hs-types
     ];
 
     tools = {

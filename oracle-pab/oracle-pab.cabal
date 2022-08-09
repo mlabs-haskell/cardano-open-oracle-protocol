@@ -91,9 +91,14 @@ library
   build-depends:
     , base
     , bot-plutus-interface
+    , containers
+    , oracle-hs-types
     , plutip
     , plutus-contract
+    , plutus-ledger
+    , plutus-ledger-api
     , ply-core
+    , text
 
 executable oracle-pab-cli
   import:         common-language
@@ -104,9 +109,19 @@ executable oracle-pab-cli
     , aeson
     , base
     , base16-bytestring
+    , bot-plutus-interface
     , bytestring
+    , containers
+    , directory
     , filepath
     , optparse-applicative
+    , oracle-hs-types
+    , oracle-pab
+    , plutus-contract
     , plutus-ledger-api
+    , plutus-pab
+    , process
     , serialise
+    , stm
     , text
+    , uuid
