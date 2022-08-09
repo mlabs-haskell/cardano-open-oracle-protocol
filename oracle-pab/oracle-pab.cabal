@@ -86,19 +86,40 @@ common common-language
 
 library
   import:          common-language
-  exposed-modules: Cardano.Oracle.Pab
+  exposed-modules:
+    Cardano.Oracle.Aux
+    Cardano.Oracle.Pab
+
   hs-source-dirs:  src
   build-depends:
+    , aeson
     , base
     , bot-plutus-interface
     , containers
+    , directory
+    , filepath
     , oracle-hs-types
     , plutip
     , plutus-contract
     , plutus-ledger
     , plutus-ledger-api
-    , ply-core
+    , plutus-pab
+    , process
+    , stm
     , text
+    , uuid
+
+test-suite oracle-pab-tests
+  import:         common-language
+  build-depends:
+    , base
+    , oracle-pab
+    , tasty
+
+  hs-source-dirs: test
+  main-is:        Main.hs
+  ghc-options:    -Wall -threaded -rtsopts
+  type:           exitcode-stdio-1.0
 
 executable oracle-pab-cli
   import:         common-language
@@ -108,9 +129,7 @@ executable oracle-pab-cli
   build-depends:
     , aeson
     , base
-    , base16-bytestring
     , bot-plutus-interface
-    , bytestring
     , containers
     , directory
     , filepath
@@ -121,7 +140,6 @@ executable oracle-pab-cli
     , plutus-ledger-api
     , plutus-pab
     , process
-    , serialise
     , stm
     , text
     , uuid

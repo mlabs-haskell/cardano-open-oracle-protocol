@@ -1,6 +1,7 @@
 module Main (main) where
 
-import Cardano.Oracle.Cli.Deploy (DeployMode (DEPLOY_DEBUG), DeployOpts (DeployOpts), deploy)
+import Cardano.Oracle.Aux (DeployMode (DEPLOY_DEBUG))
+import Cardano.Oracle.Cli.Deploy (DeployOpts (DeployOpts), deploy)
 
 import Control.Applicative ((<**>))
 import Options.Applicative (
