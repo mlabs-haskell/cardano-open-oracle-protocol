@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Cardano.Oracle.Types (CoopPlutus (..)) where
@@ -11,7 +12,12 @@ import Data.ByteString.Base16 qualified as Base16S
 import Data.ByteString.Lazy (fromStrict, toStrict)
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import GHC.Generics (Generic)
+
+#ifdef NEW_LEDGER_NAMESPACE
+import PlutusLedgerApi.V1 (Script)
+#else
 import Plutus.V1.Ledger.Api (Script)
+#endif
 
 data CoopPlutus = CoopPlutus
   { cp'instanceMintingPolicy :: Script

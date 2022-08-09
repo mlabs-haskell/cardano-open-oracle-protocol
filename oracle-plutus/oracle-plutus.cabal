@@ -106,12 +106,9 @@ executable oracle-plutus-cli
   build-depends:
     , aeson
     , base
-    , base16-bytestring
     , bytestring
-    , filepath
     , optparse-applicative
+    , oracle-hs-types
     , oracle-plutus
     , plutarch
     , plutus-ledger-api
-    , serialise
-    , text

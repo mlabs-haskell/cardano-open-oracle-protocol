@@ -103,6 +103,7 @@
           pkgs = pkgsForPlutarch;
           inherit (pkgsForPlutarch) haskell-nix;
           inherit (pre-commit-check) shellHook;
+          oracle-hs-types = ./oracle-hs-types;
           compiler-nix-name = "ghc923";
         };
         oraclePlutusFlake = oraclePlutusProj.flake { };

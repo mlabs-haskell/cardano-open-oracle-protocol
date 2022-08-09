@@ -10,5 +10,5 @@ data DeployOpts = DeployOpts
   deriving stock (Show, Eq)
 
 deploy :: DeployOpts -> IO ()
-deploy opts = do
+deploy _ = do
   return ()

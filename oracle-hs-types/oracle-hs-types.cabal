@@ -7,6 +7,11 @@ maintainer:    info@mlabs.city
 author:        mlabs-haskell
 description:   COOP Haskell types shared across different project parts.
 
+flag new-ledger-namespace
+  description: Use the new plutus-ledger-api namespace (0a8b1ad)
+  manual:      True
+  default:     False
+
 flag dev
   description: Enable non-strict compilation for development
   manual:      True
@@ -21,6 +26,9 @@ common common-language
 
   if !flag(dev)
     ghc-options: -Werror
+
+  if flag(new-ledger-namespace)
+    cpp-options: -DNEW_LEDGER_NAMESPACE
 
   default-extensions:
     NoStarIsType
