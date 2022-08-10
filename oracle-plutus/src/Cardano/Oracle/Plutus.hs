@@ -6,7 +6,7 @@ module Cardano.Oracle.Plutus (
 ) where
 
 import Cardano.Oracle.Plutus.Aux (pboolC, pfindDatum, phasCurrency, pmaybeDataC, pownCurrencySymbol, ptryFromData)
-import Cardano.Oracle.Plutus.Types (PResourceDatum, PResourceMintingParams)
+import Cardano.Oracle.Plutus.Types (PResourceDatum, PResourceMintingParams, PResourceValidatorParams)
 import Control.Monad.Fail (MonadFail (fail))
 import Plutarch (popaque, pto)
 import Plutarch.Api.V1 (PCurrencySymbol, PDatum, PDatumHash, PMaybeData, PMintingPolicy, PPubKeyHash, PScriptContext, PTxOut, PValidator)
@@ -18,14 +18,14 @@ import Plutarch.TermCont (unTermCont)
 import Prelude (Applicative (pure), ($))
 
 -- TODO: Parametrize by the one-shot token and resourceMintingPolicy
-resourceValidator :: ClosedTerm (PResourceMintingParams :--> PValidator)
+resourceValidator :: ClosedTerm (PAsData PResourceValidatorParams :--> PValidator)
 resourceValidator = phoistAcyclic $ plam $ \_ _ _ _ -> popaque $ pconstant ()
 
 -- | Minting policy that validates creation of new resources.
-resourceMintingPolicy :: ClosedTerm (PResourceMintingParams :--> PMintingPolicy)
+resourceMintingPolicy :: ClosedTerm (PAsData PResourceMintingParams :--> PMintingPolicy)
 resourceMintingPolicy = phoistAcyclic $
   plam $ \params _ ctx -> unTermCont do
-    _ <- pletC $ parseOutputs # params # ctx
+    _ <- pletC $ parseOutputs # pfromData params # ctx
     pure $ popaque $ pconstant ()
 
 {- | Parse and validate transaction outputs that hold resources.

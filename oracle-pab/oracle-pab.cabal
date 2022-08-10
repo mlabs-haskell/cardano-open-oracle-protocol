@@ -104,6 +104,7 @@ library
     , plutus-ledger
     , plutus-ledger-api
     , plutus-pab
+    , plutus-script-utils
     , process
     , stm
     , text

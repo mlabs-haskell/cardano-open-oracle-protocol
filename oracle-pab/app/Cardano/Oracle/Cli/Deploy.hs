@@ -2,7 +2,8 @@ module Cardano.Oracle.Cli.Deploy (DeployOpts (..), deploy) where
 
 import BotPlutusInterface.Config (loadPABConfig)
 import Cardano.Oracle.Aux (DeployMode, loadCoopPlutus, runBpi)
-import Cardano.Oracle.Pab (createInstanceCs)
+import Cardano.Oracle.Pab qualified as Pab
+import Data.Aeson (encodeFile)
 import Data.Text (Text)
 
 data DeployOpts = DeployOpts
@@ -17,5 +18,7 @@ deploy opts = do
   coopPlutus <- loadCoopPlutus (do'Mode opts)
   pabConf <-
     either error id <$> loadPABConfig (do'PabConfig opts)
-  runBpi @Text pabConf $ createInstanceCs @Text coopPlutus
+  (_, errOrCoopDeployment) <- runBpi @Text pabConf $ Pab.deploy @Text coopPlutus
+  coopDeployment <- either (fail . show) pure errOrCoopDeployment
+  encodeFile (do'DeploymentFile opts) coopDeployment
   return ()
