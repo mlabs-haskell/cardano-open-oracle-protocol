@@ -4,12 +4,13 @@ module Cardano.Oracle.Pab (
 
 import Cardano.Oracle.Types (CoopPlutus (cp'instanceMintingPolicy))
 import Data.Map (keys)
+import Data.Text (Text)
 import Data.Void (Void)
 import Ledger (applyArguments, getCardanoTxId, scriptCurrencySymbol)
 import Ledger.Address (pubKeyHashAddress)
-import Plutus.Contract (AsContractError, Contract, ownFirstPaymentPubKeyHash, submitTxConstraintsWith, utxosAt)
+import Plutus.Contract (Contract, ownFirstPaymentPubKeyHash, submitTxConstraintsWith, throwError, utxosAt)
 import Plutus.Contract.Constraints (mintingPolicy, mustMintValue, mustPayToPubKey, mustSpendPubKeyOutput, unspentOutputs)
-import Plutus.Contract.Logging (logError, logInfo)
+import Plutus.Contract.Logging (logInfo)
 import Plutus.V1.Ledger.Api (
   CurrencySymbol,
   MintingPolicy (MintingPolicy),
@@ -23,18 +24,15 @@ import Test.Plutip.Internal.BotPlutusInterface.Setup ()
 import Test.Plutip.Internal.LocalCluster ()
 import Text.Printf (printf)
 
-createInstanceCs :: AsContractError e => CoopPlutus -> Contract w s e (Maybe (TxId, CurrencySymbol))
+createInstanceCs :: CoopPlutus -> Contract w s Text (Maybe (TxId, CurrencySymbol))
 createInstanceCs coopPlutus = do
-  let logE m = logError @String ("doStuff: " <> m)
-      logI m = logInfo @String ("doStuff: " <> m)
+  let logI m = logInfo @String ("createInstaceCs: " <> m)
       instMp' = cp'instanceMintingPolicy coopPlutus
   pkh <- ownFirstPaymentPubKeyHash
   utxos <- utxosAt (pubKeyHashAddress pkh Nothing)
   case keys utxos of
     [] -> do
-      logE "no utxo found"
-      logI "Finished"
-      return Nothing
+      throwError "no utxo found"
     oref : _ -> do
       logI $ "Using oref " <> show oref
       let instTokenName = TokenName . getTxId . txOutRefId $ oref
@@ -52,6 +50,8 @@ createInstanceCs coopPlutus = do
               , mustSpendPubKeyOutput oref
               , mustPayToPubKey pkh val
               ]
+      logI $ show (toData instTokenName)
+      logI $ show (toData oref)
       tx <- submitTxConstraintsWith @Void lookups tx
       logI $ printf "forged %s" (show val)
       logI "Finished"

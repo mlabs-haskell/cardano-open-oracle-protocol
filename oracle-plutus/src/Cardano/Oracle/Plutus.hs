@@ -318,12 +318,13 @@ pfindMap = phoistAcyclic $
 -}
 mkOneShotMintingPolicy ::
   ClosedTerm
-    ( PTokenName
-        :--> PTxOutRef
+    ( PAsData PTokenName
+        :--> PAsData PTxOutRef
         :--> PMintingPolicy
     )
 mkOneShotMintingPolicy = phoistAcyclic $
   plam $ \tn txOutRef _ ctx -> unTermCont do
+    ptraceC "mkOneShotMintingPolicy"
     ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
     txInfo <- pletFieldsC @'["inputs", "mint"] (getField @"txInfo" ctx')
     inputs <- pletC $ pfromData $ getField @"inputs" txInfo
@@ -333,12 +334,12 @@ mkOneShotMintingPolicy = phoistAcyclic $
     pboolC
       (fail "mkOneShotMintingPolicy: Doesn't consume utxo")
       (pure punit)
-      (pconsumesRef # txOutRef # inputs)
+      (pconsumesRef # pfromData txOutRef # inputs)
 
     pboolC
       (fail "mkOneShotMintingPolicy: Incorrect minted value")
       (pure $ popaque punit)
-      (phasSingleToken # cs # tn # mint)
+      (phasSingleToken # cs # pfromData tn # mint)
 
 -- | Check if utxo is consumed
 pconsumesRef :: Term s (PTxOutRef :--> PBuiltinList PTxInInfo :--> PBool)

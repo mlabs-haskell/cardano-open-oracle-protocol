@@ -117,6 +117,7 @@ test-suite oracle-pab-tests
     , oracle-hs-types
     , oracle-pab
     , plutip
+    , plutus-contract
     , tasty
     , text
 
