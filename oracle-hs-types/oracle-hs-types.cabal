@@ -99,5 +99,6 @@ library
     , base16-bytestring
     , bytestring
     , plutus-ledger-api
+    , plutus-tx
     , serialise
     , text

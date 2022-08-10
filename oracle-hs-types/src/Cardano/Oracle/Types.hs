@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Cardano.Oracle.Types (CoopPlutus (..)) where
+module Cardano.Oracle.Types (CoopPlutus (..), ResourceMintingParams (..), ResourceDescription, Resource, ResourceDatum) where
 
 import Codec.Serialise (deserialise, serialise)
 import Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON))
@@ -11,12 +11,14 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Base16 qualified as Base16S
 import Data.ByteString.Lazy (fromStrict, toStrict)
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
+import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
+import PlutusTx qualified
 
 #ifdef NEW_LEDGER_NAMESPACE
-import PlutusLedgerApi.V1 (Script)
+import PlutusLedgerApi.V1 (Script, LedgerBytes, PubKeyHash, CurrencySymbol, Address)
 #else
-import Plutus.V1.Ledger.Api (Script)
+import Plutus.V1.Ledger.Api (Script, LedgerBytes, PubKeyHash, CurrencySymbol, Address)
 #endif
 
 data CoopPlutus = CoopPlutus
@@ -44,3 +46,23 @@ instance FromJSON ByteString where
     prependFailure
       "parsing ByteString failed, "
       (typeMismatch "base16 encoded bytes" invalid)
+
+-- Plutus types
+type ResourceDescription = LedgerBytes
+type Resource = LedgerBytes
+
+data ResourceDatum = ResourceDatum
+  { submittedBy :: PubKeyHash
+  , publishedBy :: PubKeyHash
+  , description :: ResourceDescription
+  , resource :: Resource
+  }
+  deriving stock (Show, Generic, Eq)
+
+data ResourceMintingParams = ResourceMintingParams
+  { rmp'instanceCs :: CurrencySymbol -- provided by the one shot mp,
+  , rmp'resourceValidatorAddress :: Address
+  }
+  deriving stock (Show, Generic, Eq, Typeable)
+
+PlutusTx.unstableMakeIsData ''ResourceMintingParams

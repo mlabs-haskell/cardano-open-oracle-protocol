@@ -2,7 +2,8 @@
 
 module Cardano.Oracle.Cli.Compile (CompileOpts (..), CompileMode (..), compile) where
 
-import Cardano.Oracle.Plutus (mkOneShotMintingPolicy, resourceMintingPolicy, resourceValidator)
+import Cardano.Oracle.Plutus (resourceMintingPolicy, resourceValidator)
+import Cardano.Oracle.Plutus.Aux (mkOneShotMintingPolicy)
 import Cardano.Oracle.Types (CoopPlutus (CoopPlutus, cp'instanceMintingPolicy, cp'resourceMintingPolicy, cp'resourceValidator))
 import Data.Aeson (encode)
 import Data.ByteString.Lazy (writeFile)
