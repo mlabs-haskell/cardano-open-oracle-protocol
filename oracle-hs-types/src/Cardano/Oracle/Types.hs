@@ -6,8 +6,8 @@ module Cardano.Oracle.Types (
   CoopDeployment (..),
   ResourceMintingParams (..),
   ResourceValidatorParams (..),
-  ResourceDescription (..),
-  Resource (..),
+  ResourceDescription (),
+  Resource (),
   ResourceDatum (..),
 ) where
 

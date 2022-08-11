@@ -87,8 +87,8 @@ common common-language
 library
   import:          common-language
   exposed-modules:
-    Cardano.Oracle.Aux
     Cardano.Oracle.Pab
+    Cardano.Oracle.Pab.Aux
 
   hs-source-dirs:  src
   build-depends:
@@ -119,6 +119,7 @@ test-suite oracle-pab-tests
     , oracle-pab
     , plutip
     , plutus-contract
+    , plutus-ledger
     , tasty
     , text
 
