@@ -88,11 +88,16 @@ common common-language
 
 library
   import:          common-language
-  exposed-modules: Cardano.Oracle.Plutus
+  exposed-modules:
+    Cardano.Oracle.Plutus
+    Cardano.Oracle.Plutus.Aux
+    Cardano.Oracle.Plutus.Types
+
   hs-source-dirs:  src
   build-depends:
     , base
     , generics-sop
+    , oracle-hs-types
     , plutarch
     , plutarch-extra
     , plutus-ledger-api

@@ -130,6 +130,8 @@
           compiler-nix-name = "ghc8107";
         };
         oraclePabFlake = oraclePabProj.flake { };
+
+        renameAttrs = rnFn: pkgs.lib.attrsets.mapAttrs' (n: value: { name = rnFn n; inherit value; });
       in
       rec {
         # Useful for nix repl
@@ -150,11 +152,12 @@
           default = dev-proto;
         };
 
-        checks = oraclePureFlake.checks //
-          oraclePlutusFlake.checks //
-          oracleServiceFlake.checks //
-          oraclePabFlake.checks //
-          oracleHsTypesFlake.checks //
-          { inherit pre-commit-check; } // devShells // packages;
+        checks = renameAttrs (n: "check-${n}")
+          (oraclePureFlake.checks //
+            oraclePlutusFlake.checks //
+            oracleServiceFlake.checks //
+            oraclePabFlake.checks //
+            oracleHsTypesFlake.checks) //
+        { inherit pre-commit-check; } // devShells // packages;
       });
 }
