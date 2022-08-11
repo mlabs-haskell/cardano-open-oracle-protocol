@@ -1,7 +1,15 @@
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Cardano.Oracle.Types (CoopPlutus (..), CoopDeployment (..), ResourceMintingParams (..), ResourceValidatorParams (..), ResourceDescription, Resource, ResourceDatum) where
+module Cardano.Oracle.Types (
+  CoopPlutus (..),
+  CoopDeployment (..),
+  ResourceMintingParams (..),
+  ResourceValidatorParams (..),
+  ResourceDescription (..),
+  Resource (..),
+  ResourceDatum (..),
+) where
 
 import Codec.Serialise (deserialise, serialise)
 import Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON))
@@ -116,3 +124,4 @@ instance FromJSON BuiltinByteString where
 
 PlutusTx.unstableMakeIsData ''ResourceMintingParams
 PlutusTx.unstableMakeIsData ''ResourceValidatorParams
+PlutusTx.unstableMakeIsData ''ResourceDatum

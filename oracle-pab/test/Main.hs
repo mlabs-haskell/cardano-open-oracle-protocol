@@ -46,4 +46,16 @@ tests coopPlutus =
             )
         )
         [shouldSucceed, Predicate.not shouldFail]
+    , assertExecutionWith
+        [ShowTrace, ShowBudgets]
+        "self-publish a statement of fact"
+        (initAda (100 : replicate 10 7))
+        ( withContract
+            ( const $ do
+                _ <- waitNSlots 5
+                _ <- deploy @String coopPlutus
+                waitNSlots 10
+            )
+        )
+        [shouldSucceed, Predicate.not shouldFail]
     ]
