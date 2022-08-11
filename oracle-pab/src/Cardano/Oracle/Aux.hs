@@ -10,7 +10,7 @@ import Plutus.Contract (Contract, ContractInstanceId)
 import Plutus.PAB.Core.ContractInstance.STM (Activity (Active))
 import System.Directory (getTemporaryDirectory)
 import System.FilePath ((</>))
-import System.Process (runProcess)
+import System.Process (callProcess)
 import Wallet.Types (ContractInstanceId (ContractInstanceId))
 
 data DeployMode = DEPLOY_PROD | DEPLOY_DEBUG deriving stock (Show, Read, Eq)
@@ -20,7 +20,7 @@ loadCoopPlutus mode = do
   tempDir <- getTemporaryDirectory
   let compileMode = if mode == DEPLOY_PROD then "COMPILE_PROD" else "COMPILE_DEBUG"
       coopPlutusFp = tempDir </> "coop-plutus.json"
-  runProcess "oracle-plutus-cli" ["compile", "--mode", compileMode, "--file", coopPlutusFp] Nothing Nothing Nothing Nothing Nothing
+  callProcess "oracle-plutus-cli" ["compile", "--mode", compileMode, "--file", coopPlutusFp]
   mayCoopPlutus :: Maybe CoopPlutus <- decodeFileStrict coopPlutusFp
   maybe (fail "Failed decoding CoopPlutus") return mayCoopPlutus
 

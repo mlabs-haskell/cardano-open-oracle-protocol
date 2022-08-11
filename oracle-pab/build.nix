@@ -16,7 +16,7 @@ let
           oracle-pab.configureFlags = [ "-f-dev" ];
 
           # Link oracle-plutus-cli into tests
-          oracle-pab.components.tests.oracle-pab-test.build-tools = [
+          oracle-pab.components.tests.oracle-pab-tests.build-tools = [
             oraclePlutusCli
             cardanoNode
             cardanoCli
