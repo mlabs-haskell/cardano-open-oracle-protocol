@@ -1,8 +1,8 @@
 module Cardano.Oracle.Cli.Deploy (DeployOpts (..), deploy) where
 
 import BotPlutusInterface.Config (loadPABConfig)
-import Cardano.Oracle.Aux (DeployMode, loadCoopPlutus, runBpi)
 import Cardano.Oracle.Pab qualified as Pab
+import Cardano.Oracle.Pab.Aux (DeployMode, loadCoopPlutus, runBpi)
 import Data.Aeson (encodeFile)
 import Data.Text (Text)
 
