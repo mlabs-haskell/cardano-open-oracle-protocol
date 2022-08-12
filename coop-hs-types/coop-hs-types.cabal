@@ -5,7 +5,8 @@ license:       MIT
 license-file:  LICENSE
 maintainer:    info@mlabs.city
 author:        mlabs-haskell
-description:   COOP Haskell types shared across different COOP parts.
+description:
+  COOP Haskell types shared across different COOP Haskell projects.
 
 flag new-ledger-namespace
   description: Use the new plutus-ledger-api namespace (0a8b1ad)
@@ -91,7 +92,7 @@ common common-language
 
 library
   import:          common-language
-  exposed-modules: Cardano.Oracle.Types
+  exposed-modules: Coop.Types
   hs-source-dirs:  src
   build-depends:
     , aeson

@@ -1,14 +1,14 @@
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Cardano.Oracle.Types (
+module Coop.Types (
   CoopPlutus (..),
   CoopDeployment (..),
-  ResourceMintingParams (..),
-  ResourceValidatorParams (..),
-  ResourceDescription (),
-  Resource (),
-  ResourceDatum (..),
+  SofMpParams (..),
+  SofVParams (..),
+  SofDescription (),
+  Sof (),
+  SofDatum (..),
 ) where
 
 import Codec.Serialise (deserialise, serialise)
@@ -30,44 +30,44 @@ import Plutus.V1.Ledger.Api (Script, LedgerBytes(LedgerBytes), PubKeyHash, Curre
 #endif
 
 data CoopPlutus = CoopPlutus
-  { cp'instanceMintingPolicy :: Script
-  , cp'resourceMintingPolicy :: Script
-  , cp'resourceValidator :: Script
+  { cp'coopInstanceMp :: Script
+  , cp'sofMp :: Script
+  , cp'sofV :: Script
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
 data CoopDeployment = CoopDeployment
-  { cd'resourceMintingParams :: ResourceMintingParams
-  , cd'resourceMintingPolicy :: MintingPolicy
-  , cd'resourceValidatorParams :: ResourceValidatorParams
-  , cd'resourceValidator :: Validator
+  { cd'sofMpParams :: SofMpParams
+  , cd'sofMp :: MintingPolicy
+  , cd'sofVParams :: SofVParams
+  , cd'sofV :: Validator
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
 -- Plutus types
-type ResourceDescription = LedgerBytes
-type Resource = LedgerBytes
+type SofDescription = LedgerBytes
+type Sof = LedgerBytes
 
-data ResourceDatum = ResourceDatum
-  { submittedBy :: PubKeyHash
-  , publishedBy :: PubKeyHash
-  , description :: ResourceDescription
-  , resource :: Resource
+data SofDatum = SofDatum
+  { sd'submittedBy :: PubKeyHash
+  , sd'publishedBy :: PubKeyHash
+  , sd'description :: SofDescription
+  , sd'sof :: Sof
   }
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
 
-data ResourceMintingParams = ResourceMintingParams
-  { rmp'instanceCs :: CurrencySymbol -- provided by the one shot mp,
-  , rmp'resourceValidatorAddress :: Address
+data SofMpParams = SofMpParams
+  { smp'coopInstanceCs :: CurrencySymbol -- provided by the one shot mp,
+  , smp'sofVAddress :: Address
   }
   deriving stock (Show, Generic, Eq, Typeable)
   deriving anyclass (ToJSON, FromJSON)
 
-newtype ResourceValidatorParams = ResourceValidatorParams
-  { rvp'instanceCs :: CurrencySymbol -- provided by the one shot mp
+newtype SofVParams = SofVParams
+  { svp'coopInstanceCs :: CurrencySymbol -- provided by the one shot mp
   }
   deriving stock (Show, Generic, Eq, Typeable)
   deriving anyclass (ToJSON, FromJSON)
@@ -122,6 +122,6 @@ instance ToJSON BuiltinByteString where
 instance FromJSON BuiltinByteString where
   parseJSON v = toBuiltin <$> parseJSON @ByteString v
 
-PlutusTx.unstableMakeIsData ''ResourceMintingParams
-PlutusTx.unstableMakeIsData ''ResourceValidatorParams
-PlutusTx.unstableMakeIsData ''ResourceDatum
+PlutusTx.unstableMakeIsData ''SofMpParams
+PlutusTx.unstableMakeIsData ''SofVParams
+PlutusTx.unstableMakeIsData ''SofDatum
