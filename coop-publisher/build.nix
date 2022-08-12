@@ -1,7 +1,7 @@
-{ pkgs, haskell-nix, compiler-nix-name, http2-grpc-native, oracle-proto, shellHook }:
+{ pkgs, haskell-nix, compiler-nix-name, http2-grpc-native, coopHsProto, shellHook }:
 haskell-nix.cabalProject' {
   src = ./.;
-  name = "oracle-service";
+  name = "coop-publisher";
   inherit compiler-nix-name;
   index-state = "2022-01-21T23:44:46Z";
   extraSources = [
@@ -16,7 +16,7 @@ haskell-nix.cabalProject' {
       ];
     }
     {
-      src = oracle-proto;
+      src = coopHsProto;
       subdirs = [ "." ];
     }
   ];
@@ -59,7 +59,7 @@ haskell-nix.cabalProject' {
       #ps.http2-grpc-proto3-wire
       ps.http2-grpc-types
       ps.warp-grpc
-      ps.oracle-proto
+      ps.coop-proto
     ];
 
     tools = {

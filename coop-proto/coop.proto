@@ -2,28 +2,28 @@ syntax = "proto3";
 
 import "google/protobuf/empty.proto";
 
-package cardano.oracle;
+package coop;
 
-service Oracle {
-  // Get a list of all resource types supported by this oracle
+service CoopPublisher {
+  // Get a list of all statement of fact descriptors supported by this publisher
   rpc getCatalog(google.protobuf.Empty) returns (GetCatalogResponse) {}
 
-  // Get signatories that will include their signature in the fact producing transactions
+  // Get signatories that will include their signature in the statement of fact minting transactions
   rpc getSignatories(google.protobuf.Empty) returns (GetSignatoriesResponse) {}
 
-  // Create a transaction with the desired information
-  rpc createResourceTransaction(CreateResourceTransactionRequest) returns (CreateResourceTransactionResponse) {}
+  // Create a transaction with the desired statement of fact
+  rpc createSofTransaction(CreateSofTransactionRequest) returns (CreateSofTransactionResponse) {}
 }
 
 
 message GetCatalogResponse {
-  repeated ResourceDescription catalog = 1;
+  repeated SofDescription catalog = 1;
 }
 
-message ResourceDescription {
-  // Uniform resource name
+message SofDescription {
+  // Uniform resource name for the statement of fact
   string urn = 1;
-  // Resource type
+  // Sof type
   oneof type {
     // Used by MVP version
     RealNumber price = 2;
@@ -32,7 +32,7 @@ message ResourceDescription {
   }
 }
 
-message Resource {
+message Sof {
   // JSON encoded resource
   string value = 1;
 };
@@ -53,20 +53,20 @@ message PubKeyHash {
   string value = 1;
 }
 
-message CreateResourceTransactionRequest {
-  // Which resource to observe
-  string resource_urn = 1;
+message CreateSofTransactionRequest {
+  // Which statement of fact to observe
+  string sof_urn = 1;
   // The PubKeyHash of the user that will submit the transaction
   PubKeyHash submitter = 2;
   // User provided trx output to use as collateral
   UTXORef collateral = 3;
 }
 
-message CreateResourceTransactionResponse {
+message CreateSofTransactionResponse {
   // CBOR encoded transaction to sign and submit
   string transaction = 1;
-  // Resource that is produced by the transaction
-  Resource resource = 2;
+  // Sof that is minted by the transaction
+  Sof sof = 2;
 }
 
 message UTXORef {}

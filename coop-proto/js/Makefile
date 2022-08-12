@@ -1,7 +1,7 @@
-protoc: ../oracle.proto
+protoc: ../coop.proto
 	mkdir generated-pb
-	protoc -I .. oracle.proto --js_out=import_style=commonjs:./generated-pb
-	protoc -I .. oracle.proto --grpc-web_out=import_style=commonjs,mode=grpcwebtext:./generated-pb
+	protoc -I .. coop.proto --js_out=import_style=commonjs:./generated-pb
+	protoc -I .. coop.proto --grpc-web_out=import_style=commonjs,mode=grpcwebtext:./generated-pb
 
 bundle: client.js
 	npm i

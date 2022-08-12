@@ -6,6 +6,7 @@ pkgs.mkShell {
     haskellPackages.proto-lens-protoc
     nodePackages.npm
     nodejs
+    grpcui
   ];
 
   inherit shellHook;

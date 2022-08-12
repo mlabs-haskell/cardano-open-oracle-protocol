@@ -17,8 +17,8 @@ import Network.GRPC.Server as Server (
  )
 import Network.Wai.Handler.Warp qualified as Warp
 import Network.Wai.Handler.WarpTLS (defaultTlsSettings)
+import Proto.Coop (CoopPublisher, CreateSofTransactionRequest, CreateSofTransactionResponse, GetCatalogResponse, GetSignatoriesResponse)
 import Proto.Google.Protobuf.Empty (Empty)
-import Proto.Oracle (CreateResourceTransactionRequest, CreateResourceTransactionResponse, GetCatalogResponse, GetSignatoriesResponse, Oracle)
 
 import Data.ProtoLens (Message (defMessage))
 import Prelude hiding (readFile)
@@ -45,9 +45,9 @@ runServer h p = do
 
 routes :: [ServiceHandler]
 routes =
-  [ Server.unary (RPC :: RPC Oracle "getCatalog") handleGetCatalog
-  , Server.unary (RPC :: RPC Oracle "getSignatories") handleGetSignatories
-  , Server.unary (RPC :: RPC Oracle "createResourceTransaction") handleCreateResourceTransaction
+  [ Server.unary (RPC :: RPC CoopPublisher "getCatalog") handleGetCatalog
+  , Server.unary (RPC :: RPC CoopPublisher "getSignatories") handleGetSignatories
+  , Server.unary (RPC :: RPC CoopPublisher "createSofTransaction") handleCreateSofTransaction
   ]
 
 handleGetCatalog :: Server.UnaryHandler IO Empty GetCatalogResponse
@@ -56,5 +56,5 @@ handleGetCatalog _ _ = let resp = defMessage in pure resp
 handleGetSignatories :: Server.UnaryHandler IO Empty GetSignatoriesResponse
 handleGetSignatories _ _ = pure undefined
 
-handleCreateResourceTransaction :: Server.UnaryHandler IO CreateResourceTransactionRequest CreateResourceTransactionResponse
-handleCreateResourceTransaction _ _ = pure undefined
+handleCreateSofTransaction :: Server.UnaryHandler IO CreateSofTransactionRequest CreateSofTransactionResponse
+handleCreateSofTransaction _ _ = pure undefined

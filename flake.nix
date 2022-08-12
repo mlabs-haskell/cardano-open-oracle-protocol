@@ -67,7 +67,7 @@
         };
         oraclePureFlake = oraclePureProj.flake { };
 
-        protoDevShell = import ./proto/build.nix {
+        coopProtoDevShell = import ./coop-proto/build.nix {
           inherit pkgs;
           inherit (pre-commit-check) shellHook;
         };
@@ -99,21 +99,20 @@
         };
         coopPlutusFlake = coopPlutusProj.flake { };
 
-        oracleHsProto = import ./nix/protobuf-hs.nix {
+        coopHsProto = import ./nix/protobuf-hs.nix {
           inherit pkgs;
-          src = ./proto;
-          proto = "oracle.proto";
-          cabalPackageName = "oracle-proto";
+          src = ./coop-proto;
+          proto = "coop.proto";
+          cabalPackageName = "coop-proto";
         };
 
-        oracleServiceProj = import ./oracle-service/build.nix {
-          inherit pkgs http2-grpc-native;
-          oracle-proto = oracleHsProto;
+        coopPublisherProj = import ./coop-publisher/build.nix {
+          inherit pkgs http2-grpc-native coopHsProto;
           inherit (pkgsWithOverlay) haskell-nix;
           inherit (pre-commit-check) shellHook;
           compiler-nix-name = "ghc8107";
         };
-        oracleServiceFlake = oracleServiceProj.flake { };
+        coopPublisherFlake = coopPublisherProj.flake { };
 
         coopDocsDevShell = import ./coop-docs/build.nix {
           inherit pkgs;
@@ -138,14 +137,14 @@
         inherit pkgs pkgsWithOverlay pkgsForPlutarch;
 
         # Standard flake attributes
-        packages = oraclePureFlake.packages // coopPlutusFlake.packages // oracleServiceFlake.packages // coopPabFlake.packages // coopHsTypesFlake.packages;
+        packages = oraclePureFlake.packages // coopPlutusFlake.packages // coopPublisherFlake.packages // coopPabFlake.packages // coopHsTypesFlake.packages;
 
         devShells = rec {
-          dev-proto = protoDevShell;
+          dev-proto = coopProtoDevShell;
           dev-pure = oraclePureFlake.devShell;
           dev-pre-commit = pre-commit-devShell;
           dev-plutus = coopPlutusFlake.devShell;
-          dev-service = oracleServiceFlake.devShell;
+          dev-service = coopPublisherFlake.devShell;
           dev-docs = coopDocsDevShell;
           dev-pab = coopPabFlake.devShell;
           dev-hs-types = coopHsTypesFlake.devShell;
@@ -155,7 +154,7 @@
         checks = renameAttrs (n: "check-${n}")
           (oraclePureFlake.checks //
             coopPlutusFlake.checks //
-            oracleServiceFlake.checks //
+            coopPublisherFlake.checks //
             coopPabFlake.checks //
             coopHsTypesFlake.checks) //
         { inherit pre-commit-check; } // devShells // packages;

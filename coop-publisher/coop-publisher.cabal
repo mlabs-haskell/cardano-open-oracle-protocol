@@ -1,12 +1,12 @@
 cabal-version: 3.0
-name:          oracle-service
+name:          coop-publisher
 version:       0.1.0.0
 maintainer:    info@mlabs.city
 author:        mlabs-haskell
-synopsis:      Cardano Open Oracle gRPC service
+synopsis:      gRPC CoopPublisher service implementation
 build-type:    Simple
 
-executable oracle-service-cli
+executable coop-publisher-cli
   main-is:            Main.hs
   hs-source-dirs:     app
   default-language:   Haskell2010
@@ -15,10 +15,10 @@ executable oracle-service-cli
   build-depends:
     , base
     , bytestring
+    , coop-proto
     , http2-grpc-proto-lens
     , http2-grpc-types
     , microlens
-    , oracle-proto
     , proto-lens
     , proto-lens-protobuf-types
     , proto-lens-runtime

@@ -1,5 +1,5 @@
 {
-  "name": "orcfax-proto-web-commonjs",
+  "name": "coop-proto-web-commonjs",
   "dependencies": {
     "google-protobuf": "^3.6.1",
     "grpc-web": "^1.2.0"
