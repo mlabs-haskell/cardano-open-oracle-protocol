@@ -1,4 +1,4 @@
-{ pkgs, haskell-nix, compiler-nix-name, plutip, oraclePlutusCli, oracle-hs-types, shellHook }:
+{ pkgs, haskell-nix, compiler-nix-name, plutip, coopPlutusCli, coop-hs-types, shellHook }:
 let
   # FIXME: Use idiomatic cardano-node from bpi input
   cardanoNode = proj.hsPkgs.cardano-node.components.exes.cardano-node;
@@ -13,17 +13,17 @@ let
       {
         packages = {
           # Enable strict builds
-          oracle-pab.configureFlags = [ "-f-dev" ];
+          coop-pab.configureFlags = [ "-f-dev" ];
 
-          # Link oracle-plutus-cli into tests
-          oracle-pab.components.tests.oracle-pab-tests.build-tools = [
-            oraclePlutusCli
+          # Link coop-plutus-cli into tests
+          coop-pab.components.tests.coop-pab-tests.build-tools = [
+            coopPlutusCli
             cardanoNode
             cardanoCli
           ];
 
           # Don't use the new-ledger-namespace
-          oracle-hs-types.configureFlags = [ "-f-new-ledger-namespace" ];
+          coop-hs-types.configureFlags = [ "-f-new-ledger-namespace" ];
         };
       }
     ];
@@ -34,7 +34,7 @@ let
         subdirs = [ "." ];
       }
       {
-        src = oracle-hs-types;
+        src = coop-hs-types;
         subdirs = [ "." ];
       }
     ];
@@ -51,7 +51,7 @@ let
         haskellPackages.fourmolu
         haskellPackages.cabal-fmt
         hlint
-        oraclePlutusCli
+        coopPlutusCli
         cardanoNode
         cardanoCli
       ];
@@ -59,7 +59,7 @@ let
       additional = ps: [
         ps.bot-plutus-interface
         ps.plutip
-        ps.oracle-hs-types
+        ps.coop-hs-types
       ];
 
       tools = {

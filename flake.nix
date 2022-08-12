@@ -121,15 +121,15 @@
           inherit (pre-commit-check) shellHook;
         };
 
-        oraclePabProj = import ./oracle-pab/build.nix {
+        coopPabProj = import ./coop-pab/build.nix {
           inherit pkgs plutip;
           inherit (pkgsWithOverlay) haskell-nix;
           inherit (pre-commit-check) shellHook;
-          oraclePlutusCli = coopPlutusProj.getComponent "coop-plutus:exe:coop-plutus-cli";
+          coopPlutusCli = coopPlutusProj.getComponent "coop-plutus:exe:coop-plutus-cli";
           coop-hs-types = ./coop-hs-types;
           compiler-nix-name = "ghc8107";
         };
-        oraclePabFlake = oraclePabProj.flake { };
+        coopPabFlake = coopPabProj.flake { };
 
         renameAttrs = rnFn: pkgs.lib.attrsets.mapAttrs' (n: value: { name = rnFn n; inherit value; });
       in
@@ -138,7 +138,7 @@
         inherit pkgs pkgsWithOverlay pkgsForPlutarch;
 
         # Standard flake attributes
-        packages = oraclePureFlake.packages // coopPlutusFlake.packages // oracleServiceFlake.packages // oraclePabFlake.packages // coopHsTypesFlake.packages;
+        packages = oraclePureFlake.packages // coopPlutusFlake.packages // oracleServiceFlake.packages // coopPabFlake.packages // coopHsTypesFlake.packages;
 
         devShells = rec {
           dev-proto = protoDevShell;
@@ -147,7 +147,7 @@
           dev-plutus = coopPlutusFlake.devShell;
           dev-service = oracleServiceFlake.devShell;
           dev-docs = coopDocsDevShell;
-          dev-pab = oraclePabFlake.devShell;
+          dev-pab = coopPabFlake.devShell;
           dev-hs-types = coopHsTypesFlake.devShell;
           default = dev-proto;
         };
@@ -156,7 +156,7 @@
           (oraclePureFlake.checks //
             coopPlutusFlake.checks //
             oracleServiceFlake.checks //
-            oraclePabFlake.checks //
+            coopPabFlake.checks //
             coopHsTypesFlake.checks) //
         { inherit pre-commit-check; } // devShells // packages;
       });

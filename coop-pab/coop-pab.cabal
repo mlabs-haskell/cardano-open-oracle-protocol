@@ -1,14 +1,12 @@
-cabal-version:      3.0
-name:               oracle-pab
-version:            0.1.0.0
-license:            MIT
-license-file:       LICENSE
-maintainer:         info@mlabs.city
-author:             mlabs-haskell
+cabal-version: 3.0
+name:          coop-pab
+version:       0.1.0.0
+license:       MIT
+license-file:  LICENSE
+maintainer:    info@mlabs.city
+author:        mlabs-haskell
 description:
-  Cardano Oracle BPI based PAB programs for testing and interacting with the Plutus counterpart
-
-extra-source-files: CHANGELOG.md
+  COOP BPI based PAB programs (Contracts) for testing and interacting with the Plutus counterpart
 
 flag dev
   description: Enable non-strict compilation for development
@@ -96,9 +94,9 @@ library
     , base
     , bot-plutus-interface
     , containers
+    , coop-hs-types
     , directory
     , filepath
-    , oracle-hs-types
     , plutip
     , plutus-contract
     , plutus-ledger
@@ -110,13 +108,13 @@ library
     , text
     , uuid
 
-test-suite oracle-pab-tests
+test-suite coop-pab-tests
   import:         common-language
   build-depends:
     , base
+    , coop-hs-types
+    , coop-pab
     , data-default
-    , oracle-hs-types
-    , oracle-pab
     , plutip
     , plutus-contract
     , plutus-ledger
@@ -128,7 +126,7 @@ test-suite oracle-pab-tests
   ghc-options:    -Wall -threaded -rtsopts
   type:           exitcode-stdio-1.0
 
-executable oracle-pab-cli
+executable coop-pab-cli
   import:         common-language
   main-is:        Main.hs
   hs-source-dirs: app
@@ -138,11 +136,11 @@ executable oracle-pab-cli
     , base
     , bot-plutus-interface
     , containers
+    , coop-hs-types
+    , coop-pab
     , directory
     , filepath
     , optparse-applicative
-    , oracle-hs-types
-    , oracle-pab
     , plutus-contract
     , plutus-ledger-api
     , plutus-pab

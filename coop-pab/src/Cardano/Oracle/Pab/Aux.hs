@@ -22,7 +22,7 @@ loadCoopPlutus mode = do
   tempDir <- getTemporaryDirectory
   let compileMode = if mode == DEPLOY_PROD then "COMPILE_PROD" else "COMPILE_DEBUG"
       coopPlutusFp = tempDir </> "coop-plutus.json"
-  callProcess "oracle-plutus-cli" ["compile", "--mode", compileMode, "--file", coopPlutusFp]
+  callProcess "coop-plutus-cli" ["compile", "--mode", compileMode, "--file", coopPlutusFp]
   mayCoopPlutus :: Maybe CoopPlutus <- decodeFileStrict coopPlutusFp
   maybe (fail "Failed decoding CoopPlutus") return mayCoopPlutus
 
