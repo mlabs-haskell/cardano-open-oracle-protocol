@@ -1,6 +1,6 @@
 module Main where
 
-import Cardano.Oracle.Pure.MerkleTree qualified as MTree
+import Coop.Pure.MerkleTree qualified as MTree
 import Test.QuickCheck (property, quickCheck, withMaxSuccess)
 
 main :: IO ()

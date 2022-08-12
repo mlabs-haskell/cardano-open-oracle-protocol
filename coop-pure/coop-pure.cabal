@@ -13,8 +13,8 @@ executable coop-pure-cli
   main-is:            Main.hs
   hs-source-dirs:     app
   other-modules:
-    Cardano.Oracle.Pure.Datums
-    Cardano.Oracle.Pure.MerkleTree
+    Coop.Pure.Datums
+    Coop.Pure.MerkleTree
 
   default-language:   Haskell2010
   default-extensions:

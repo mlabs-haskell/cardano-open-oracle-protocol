@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Cardano.Oracle.Pure.MerkleTree (proveIn, prop_proof_holds_for_id_in_tree, prop_proof_does_not_hold_for_id_not_in_tree, prop_in_oracle_tree, inLeaf, wrongData, wrongId, sampleOracle) where
+module Coop.Pure.MerkleTree (proveIn, prop_proof_holds_for_id_in_tree, prop_proof_does_not_hold_for_id_not_in_tree, prop_in_oracle_tree, inLeaf, wrongData, wrongId, sampleOracle) where
 
 import Crypto.Hash.SHA256 (hash)
 import Data.Aeson (ToJSON, encode)
