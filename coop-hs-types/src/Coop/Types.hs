@@ -30,9 +30,9 @@ import Plutus.V1.Ledger.Api (Script, LedgerBytes(LedgerBytes), PubKeyHash, Curre
 #endif
 
 data CoopPlutus = CoopPlutus
-  { cp'coopInstanceMp :: Script
-  , cp'sofMp :: Script
-  , cp'sofV :: Script
+  { cp'mkCoopInstanceMp :: Script
+  , cp'mkSofMp :: Script
+  , cp'mkSofV :: Script
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
@@ -60,14 +60,14 @@ data SofDatum = SofDatum
   deriving anyclass (ToJSON, FromJSON)
 
 data SofMpParams = SofMpParams
-  { smp'coopInstanceCs :: CurrencySymbol -- provided by the one shot mp,
+  { smp'coopInstance :: CurrencySymbol -- provided by the one shot mp,
   , smp'sofVAddress :: Address
   }
   deriving stock (Show, Generic, Eq, Typeable)
   deriving anyclass (ToJSON, FromJSON)
 
 newtype SofVParams = SofVParams
-  { svp'coopInstanceCs :: CurrencySymbol -- provided by the one shot mp
+  { svp'coopInstance :: CurrencySymbol -- provided by the one shot mp
   }
   deriving stock (Show, Generic, Eq, Typeable)
   deriving anyclass (ToJSON, FromJSON)

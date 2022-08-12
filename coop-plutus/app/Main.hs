@@ -3,7 +3,7 @@
 {-# HLINT ignore "Use newtype instead of data" #-}
 module Main (main) where
 
-import Cardano.Oracle.Cli.Compile (CompileMode (COMPILE_DEBUG), CompileOpts (CompileOpts), compile)
+import Coop.Cli.Compile (CompileMode (COMPILE_DEBUG), CompileOpts (CompileOpts), compile)
 
 import Control.Applicative ((<**>))
 import Options.Applicative (

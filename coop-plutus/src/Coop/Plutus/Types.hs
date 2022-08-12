@@ -1,13 +1,13 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Cardano.Oracle.Plutus.Types (
-  PResourceMintingParams (..),
-  PResourceValidatorParams (..),
-  PResourceDatum (..),
+module Coop.Plutus.Types (
+  PSofMpParams (..),
+  PSofVParams (..),
+  PSofDatum (..),
 ) where
 
-import Cardano.Oracle.Types (ResourceMintingParams, ResourceValidatorParams)
+import Coop.Types (SofMpParams, SofVParams)
 import Data.Typeable (Typeable)
 import GHC.Generics qualified as GHC
 import Generics.SOP (Generic)
@@ -31,23 +31,23 @@ import Plutarch.TryFrom (PTryFrom (PTryFromExcess, ptryFrom'))
 import Plutarch.Unsafe (punsafeCoerce)
 import Prelude (Applicative (pure), snd, ($), (.))
 
-newtype PResourceDatum s
-  = PResourceDatum
+newtype PSofDatum s
+  = PSofDatum
       ( Term
           s
           ( PDataRecord
-              '[ "submittedBy" ':= PPubKeyHash
-               , "publishedBy" ':= PPubKeyHash
-               , "description" ':= PByteString
-               , "resource" ':= PByteString
+              '[ "sd'submittedBy" ':= PPubKeyHash
+               , "sd'publishedBy" ':= PPubKeyHash
+               , "sd'description" ':= PByteString
+               , "sd'sof" ':= PByteString
                ]
           )
       )
   deriving stock (GHC.Generic)
   deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
 
-instance DerivePlutusType PResourceDatum where type DPTStrat _ = PlutusTypeData
-instance PTryFrom PData (PAsData PResourceDatum)
+instance DerivePlutusType PSofDatum where type DPTStrat _ = PlutusTypeData
+instance PTryFrom PData (PAsData PSofDatum)
 
 -- FIXME: Integrate https://github.com/Plutonomicon/plutarch-plutus/pull/520
 instance PTryFrom PData (PAsData PPubKeyHash) where
@@ -59,22 +59,22 @@ instance PTryFrom PData (PAsData PPubKeyHash) where
 
 newtype Flip f a b = Flip (f b a) deriving stock (GHC.Generic)
 
-newtype PResourceMintingParams s
-  = PResourceMintingParams
+newtype PSofMpParams s
+  = PSofMpParams
       ( Term
           s
           ( PDataRecord
-              '[ "rmp'instanceCs" ':= PCurrencySymbol
-               , "rmp'resourceValidatorAddress" ':= PAddress
+              '[ "smp'coopInstance" ':= PCurrencySymbol
+               , "smp'sofVAddress" ':= PAddress
                ]
           )
       )
   deriving stock (GHC.Generic, Typeable)
   deriving anyclass (Generic, PlutusType, PIsData, PEq, PDataFields)
 
-instance DerivePlutusType PResourceMintingParams where type DPTStrat _ = PlutusTypeData
-instance PUnsafeLiftDecl PResourceMintingParams where type PLifted PResourceMintingParams = ResourceMintingParams
-deriving via (DerivePConstantViaData ResourceMintingParams PResourceMintingParams) instance (PConstantDecl ResourceMintingParams)
+instance DerivePlutusType PSofMpParams where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PSofMpParams where type PLifted PSofMpParams = SofMpParams
+deriving via (DerivePConstantViaData SofMpParams PSofMpParams) instance (PConstantDecl SofMpParams)
 
 instance PTryFrom PData (PAsData PCurrencySymbol) where
   type PTryFromExcess PData (PAsData PCurrencySymbol) = Flip Term PCurrencySymbol
@@ -85,18 +85,18 @@ instance PTryFrom PData (PAsData PCurrencySymbol) where
       pif (len #== 0 #|| len #== 28) (f ()) (ptraceError "a CurrencySymbol must be 28 bytes long or empty")
     pure (punsafeCoerce opq, pcon . PCurrencySymbol $ unwrapped)
 
-newtype PResourceValidatorParams s
-  = PResourceValidatorParams
+newtype PSofVParams s
+  = PSofVParams
       ( Term
           s
           ( PDataRecord
-              '[ "rvp'InstanceCs" ':= PCurrencySymbol
+              '[ "svp'coopInstance" ':= PCurrencySymbol
                ]
           )
       )
   deriving stock (GHC.Generic, Typeable)
   deriving anyclass (Generic, PlutusType, PIsData, PEq, PDataFields)
 
-instance DerivePlutusType PResourceValidatorParams where type DPTStrat _ = PlutusTypeData
-instance PUnsafeLiftDecl PResourceValidatorParams where type PLifted PResourceValidatorParams = ResourceValidatorParams
-deriving via (DerivePConstantViaData ResourceValidatorParams PResourceValidatorParams) instance (PConstantDecl ResourceValidatorParams)
+instance DerivePlutusType PSofVParams where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PSofVParams where type PLifted PSofVParams = SofVParams
+deriving via (DerivePConstantViaData SofVParams PSofVParams) instance (PConstantDecl SofVParams)

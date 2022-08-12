@@ -1,6 +1,6 @@
 {-# LANGUAGE BlockArguments #-}
 
-module Cardano.Oracle.Plutus.Aux (
+module Coop.Plutus.Aux (
   phasCurrency,
   pboolC,
   pmaybeDataC,

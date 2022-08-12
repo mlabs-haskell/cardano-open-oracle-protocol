@@ -86,9 +86,9 @@ common common-language
 library
   import:          common-language
   exposed-modules:
-    Cardano.Oracle.Plutus
-    Cardano.Oracle.Plutus.Aux
-    Cardano.Oracle.Plutus.Types
+    Coop.Plutus
+    Coop.Plutus.Aux
+    Coop.Plutus.Types
 
   hs-source-dirs:  src
   build-depends:
@@ -104,7 +104,7 @@ executable coop-plutus-cli
   import:         common-language
   main-is:        Main.hs
   hs-source-dirs: app
-  other-modules:  Cardano.Oracle.Cli.Compile
+  other-modules:  Coop.Cli.Compile
   build-depends:
     , aeson
     , base
