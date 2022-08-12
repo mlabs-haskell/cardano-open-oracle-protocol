@@ -2,9 +2,9 @@
 
 module Main (main) where
 
-import Cardano.Oracle.Pab (createInstanceCs, deploy, mintSof)
-import Cardano.Oracle.Pab.Aux (DeployMode (DEPLOY_DEBUG), loadCoopPlutus)
-import Cardano.Oracle.Types (CoopPlutus (cp'instanceMintingPolicy))
+import Coop.Pab (createCoopInstance, deploy, mintSof)
+import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), loadCoopPlutus)
+import Coop.Types (CoopPlutus (cp'mkCoopInstanceMp))
 import Data.Bifunctor (Bifunctor (second))
 import Data.Default (def)
 import Data.List.NonEmpty (NonEmpty)
@@ -27,20 +27,20 @@ tests :: CoopPlutus -> TestTree
 tests coopPlutus =
   withConfiguredCluster
     def
-    "oracle-pab-tests"
+    "coop-pab-tests"
     [ assertExecutionWith
         [ShowTrace, ShowBudgets]
-        "create-instance-currency-symbol"
+        "create-coop-instance"
         (initAda (100 : replicate 10 7))
         ( withContract
             ( const $ do
                 _ <- waitNSlots 5
-                _ <- createInstanceCs @String (cp'instanceMintingPolicy coopPlutus)
+                _ <- createCoopInstance @String (cp'mkCoopInstanceMp coopPlutus)
                 waitNSlots 5
             )
         )
         [shouldSucceed, Predicate.not shouldFail]
-    , runAfter "create-instance-currency-symbol" $
+    , runAfter "create-coop-instance" $
         assertExecutionWith
           [ShowTrace, ShowBudgets]
           "deploy"

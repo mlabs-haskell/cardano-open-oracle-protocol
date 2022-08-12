@@ -1,9 +1,9 @@
-module Cardano.Oracle.Pab.Aux (loadCoopPlutus, runBpi, DeployMode (..), minUtxoAdaValue) where
+module Coop.Pab.Aux (loadCoopPlutus, runBpi, DeployMode (..), minUtxoAdaValue) where
 
 import BotPlutusInterface.Contract (runContract)
 import BotPlutusInterface.Types (ContractEnvironment (ContractEnvironment), ContractState (ContractState), PABConfig, ceContractInstanceId, ceContractLogs, ceContractState, ceContractStats, cePABConfig)
-import Cardano.Oracle.Types (CoopPlutus)
 import Control.Concurrent.STM (newTVarIO)
+import Coop.Types (CoopPlutus)
 import Data.Aeson (ToJSON, decodeFileStrict)
 import Data.UUID.V4 qualified as UUID
 import Ledger.Ada (lovelaceValueOf)

@@ -85,8 +85,8 @@ common common-language
 library
   import:          common-language
   exposed-modules:
-    Cardano.Oracle.Pab
-    Cardano.Oracle.Pab.Aux
+    Coop.Pab
+    Coop.Pab.Aux
 
   hs-source-dirs:  src
   build-depends:
@@ -130,7 +130,7 @@ executable coop-pab-cli
   import:         common-language
   main-is:        Main.hs
   hs-source-dirs: app
-  other-modules:  Cardano.Oracle.Cli.Deploy
+  other-modules:  Coop.Cli.Deploy
   build-depends:
     , aeson
     , base

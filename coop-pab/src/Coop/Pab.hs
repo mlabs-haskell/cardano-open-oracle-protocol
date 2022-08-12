@@ -1,16 +1,16 @@
-module Cardano.Oracle.Pab (
-  createInstanceCs,
+module Coop.Pab (
+  createCoopInstance,
   deploy,
   mintSof,
 ) where
 
-import Cardano.Oracle.Pab.Aux (minUtxoAdaValue)
-import Cardano.Oracle.Types (
-  CoopDeployment (CoopDeployment, cd'resourceMintingPolicy, cd'resourceValidator),
-  CoopPlutus (cp'instanceMintingPolicy, cp'resourceMintingPolicy, cp'resourceValidator),
-  ResourceDatum (ResourceDatum),
-  ResourceMintingParams (ResourceMintingParams),
-  ResourceValidatorParams (ResourceValidatorParams),
+import Coop.Pab.Aux (minUtxoAdaValue)
+import Coop.Types (
+  CoopDeployment (CoopDeployment, cd'sofMp, cd'sofV),
+  CoopPlutus (cp'mkCoopInstanceMp, cp'mkSofMp, cp'mkSofV),
+  SofDatum (SofDatum),
+  SofMpParams (SofMpParams),
+  SofVParams (SofVParams),
  )
 import Data.Map (keys)
 import Data.Text (Text)
@@ -39,9 +39,9 @@ import Test.Plutip.Internal.BotPlutusInterface.Setup ()
 import Test.Plutip.Internal.LocalCluster ()
 import Text.Printf (printf)
 
-createInstanceCs :: Script -> Contract w s Text (TxId, CurrencySymbol)
-createInstanceCs instMp' = do
-  let logI m = logInfo @String ("createInstanceCs: " <> m)
+createCoopInstance :: Script -> Contract w s Text (TxId, CurrencySymbol)
+createCoopInstance mkCoopInstanceMp = do
+  let logI m = logInfo @String ("createCoopInstance: " <> m)
   logI "Starting"
   pkh <- ownFirstPaymentPubKeyHash
   utxos <- utxosAt (pubKeyHashAddress pkh Nothing)
@@ -50,13 +50,13 @@ createInstanceCs instMp' = do
       throwError "no utxo found"
     oref : _ -> do
       logI $ "Using oref " <> show oref
-      let instTokenName = TokenName . getTxId . txOutRefId $ oref
-          instMp = MintingPolicy $ applyArguments instMp' [toData instTokenName, toData oref]
-          instCs = scriptCurrencySymbol instMp
-          val = Value.singleton instCs instTokenName 1
+      let coopInstTn = TokenName . getTxId . txOutRefId $ oref
+          coopInstMp = MintingPolicy $ applyArguments mkCoopInstanceMp [toData coopInstTn, toData oref]
+          coopInstCs = scriptCurrencySymbol coopInstMp
+          val = Value.singleton coopInstCs coopInstTn 1
           lookups =
             mconcat
-              [ mintingPolicy instMp
+              [ mintingPolicy coopInstMp
               , unspentOutputs utxos
               ]
           tx =
@@ -68,31 +68,31 @@ createInstanceCs instMp' = do
       tx <- submitTxConstraintsWith @Void lookups tx
       logI $ printf "forged %s" (show val)
       logI "Finished"
-      return (getCardanoTxId tx, instCs)
+      return (getCardanoTxId tx, coopInstCs)
 
 deploy :: CoopPlutus -> Contract w s Text CoopDeployment
 deploy coopPlutus = do
   let logI m = logInfo @String ("deploy: " <> m)
   logI "Starting"
-  (_, cs) <- createInstanceCs (cp'instanceMintingPolicy coopPlutus)
-  let rvp = ResourceValidatorParams cs
-      resV = Validator $ applyArguments (cp'resourceValidator coopPlutus) [toData rvp]
-      rmp = ResourceMintingParams cs (mkValidatorAddress resV)
-      resMp = MintingPolicy $ applyArguments (cp'resourceMintingPolicy coopPlutus) [toData rmp]
+  (_, cs) <- createCoopInstance (cp'mkCoopInstanceMp coopPlutus)
+  let sofVP = SofVParams cs
+      sofV = Validator $ applyArguments (cp'mkSofV coopPlutus) [toData sofVP]
+      sofMpP = SofMpParams cs (mkValidatorAddress sofV)
+      sofMp = MintingPolicy $ applyArguments (cp'mkSofMp coopPlutus) [toData sofMpP]
   logI "Finished"
-  return $ CoopDeployment rmp resMp rvp resV
+  return $ CoopDeployment sofMpP sofMp sofVP sofV
 
 mintSof :: PubKeyHash -> PubKeyHash -> CoopDeployment -> Contract w s Text TxId
 mintSof submitterPkh publisherPkh coopDeployment = do
   let logI m = logInfo @String ("mintSof: " <> m)
   logI "Starting"
-  let sofMp = cd'resourceMintingPolicy coopDeployment
-      sofV = cd'resourceValidator coopDeployment
-      sofTokenName = TokenName . getPubKeyHash $ publisherPkh
-      sofCs = scriptCurrencySymbol sofMp
-      sofVal = Value.singleton sofCs sofTokenName 1
+  let sofMp = cd'sofMp coopDeployment
+      sofV = cd'sofV coopDeployment
       sofVAddr = validatorHash sofV
-      sofDatum = Datum . toBuiltinData $ ResourceDatum submitterPkh publisherPkh "aa" "aa"
+      sofTn = TokenName . getPubKeyHash $ publisherPkh
+      sofCs = scriptCurrencySymbol sofMp
+      sofVal = Value.singleton sofCs sofTn 1
+      sofDatum = Datum . toBuiltinData $ SofDatum submitterPkh publisherPkh "aa" "aa"
       lookups =
         mconcat
           [ mintingPolicy sofMp
