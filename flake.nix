@@ -59,13 +59,13 @@
           inherit (pre-commit-check) shellHook;
         };
 
-        oraclePureProj = import ./oracle-pure/build.nix {
+        coopPureProj = import ./coop-pure/build.nix {
           inherit pkgs;
           inherit (pkgsWithOverlay) haskell-nix;
           inherit (pre-commit-check) shellHook;
           compiler-nix-name = "ghc8107";
         };
-        oraclePureFlake = oraclePureProj.flake { };
+        coopPureFlake = coopPureProj.flake { };
 
         coopProtoDevShell = import ./coop-proto/build.nix {
           inherit pkgs;
@@ -137,11 +137,11 @@
         inherit pkgs pkgsWithOverlay pkgsForPlutarch;
 
         # Standard flake attributes
-        packages = oraclePureFlake.packages // coopPlutusFlake.packages // coopPublisherFlake.packages // coopPabFlake.packages // coopHsTypesFlake.packages;
+        packages = coopPureFlake.packages // coopPlutusFlake.packages // coopPublisherFlake.packages // coopPabFlake.packages // coopHsTypesFlake.packages;
 
         devShells = rec {
           dev-proto = coopProtoDevShell;
-          dev-pure = oraclePureFlake.devShell;
+          dev-pure = coopPureFlake.devShell;
           dev-pre-commit = pre-commit-devShell;
           dev-plutus = coopPlutusFlake.devShell;
           dev-service = coopPublisherFlake.devShell;
@@ -152,7 +152,7 @@
         };
 
         checks = renameAttrs (n: "check-${n}")
-          (oraclePureFlake.checks //
+          (coopPureFlake.checks //
             coopPlutusFlake.checks //
             coopPublisherFlake.checks //
             coopPabFlake.checks //

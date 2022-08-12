@@ -1,5 +1,5 @@
 cabal-version:      3.0
-name:               oracle-pure
+name:               coop-pure
 version:            0.1.0.0
 license:            MIT
 license-file:       LICENSE
@@ -7,11 +7,9 @@ maintainer:         info@mlabs.city
 author:             mlabs-haskell
 homepage:           mlabs.city
 category:           Network
-extra-source-files:
-  CHANGELOG.md
-  README.md
+extra-source-files: README.md
 
-executable oracle-pure-cli
+executable coop-pure-cli
   main-is:            Main.hs
   hs-source-dirs:     app
   other-modules:
