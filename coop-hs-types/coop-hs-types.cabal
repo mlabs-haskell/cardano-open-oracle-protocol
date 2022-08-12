@@ -1,11 +1,11 @@
 cabal-version: 3.0
-name:          oracle-hs-types
+name:          coop-hs-types
 version:       0.1.0.0
 license:       MIT
 license-file:  LICENSE
 maintainer:    info@mlabs.city
 author:        mlabs-haskell
-description:   COOP Haskell types shared across different project parts.
+description:   COOP Haskell types shared across different COOP parts.
 
 flag new-ledger-namespace
   description: Use the new plutus-ledger-api namespace (0a8b1ad)

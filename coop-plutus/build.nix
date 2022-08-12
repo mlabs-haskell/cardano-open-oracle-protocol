@@ -1,4 +1,4 @@
-{ pkgs, haskell-nix, compiler-nix-name, oracle-hs-types, plutarch, shellHook }:
+{ pkgs, haskell-nix, compiler-nix-name, coop-hs-types, plutarch, shellHook }:
 let
   hn-extra-hackage = plutarch.inputs.haskell-nix-extra-hackage;
   myHackage = hn-extra-hackage.mkHackagesFor pkgs.system compiler-nix-name [
@@ -6,21 +6,21 @@ let
     "${plutarch}/plutarch-extra"
     "${plutarch}/plutarch-test"
     "${plutarch.inputs.plutus}/plutus-ledger-api"
-    "${oracle-hs-types}"
+    "${coop-hs-types}"
   ];
 in
 haskell-nix.cabalProject' (plutarch.applyPlutarchDep pkgs rec {
   src = ./.;
-  name = "oracle-plutus";
+  name = "coop-plutus";
   inherit compiler-nix-name;
   inherit (myHackage) extra-hackages extra-hackage-tarballs;
   modules = myHackage.modules ++ [{
     packages = {
       # Enable strict builds
-      oracle-plutus.configureFlags = [ "-f-dev" ];
+      coop-plutus.configureFlags = [ "-f-dev" ];
 
       # Use the new-ledger-namespace
-      oracle-hs-types.configureFlags = [ "-fnew-ledger-namespace" ];
+      coop-hs-types.configureFlags = [ "-fnew-ledger-namespace" ];
     };
   }];
   shell = {
@@ -44,7 +44,7 @@ haskell-nix.cabalProject' (plutarch.applyPlutarchDep pkgs rec {
       ps.plutarch-extra
       ps.plutarch-test
       ps.plutus-ledger-api
-      ps.oracle-hs-types
+      ps.coop-hs-types
     ];
 
     tools = {

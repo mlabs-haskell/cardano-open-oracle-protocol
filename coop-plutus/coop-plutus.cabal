@@ -1,14 +1,11 @@
 cabal-version:      3.0
-name:               oracle-plutus
+name:               coop-plutus
 version:            0.1.0.0
 license:            MIT
 license-file:       LICENSE
 maintainer:         info@mlabs.city
 author:             mlabs-haskell
-description:
-  Cardano Oracle Plutus programs (validators and minting policies)
-
-extra-source-files: CHANGELOG.md
+description:        COOP Plutus programs (validators and minting policies)
 
 flag dev
   description: Enable non-strict compilation for development
@@ -96,14 +93,14 @@ library
   hs-source-dirs:  src
   build-depends:
     , base
+    , coop-hs-types
     , generics-sop
-    , oracle-hs-types
     , plutarch
     , plutarch-extra
     , plutus-ledger-api
     , plutus-tx
 
-executable oracle-plutus-cli
+executable coop-plutus-cli
   import:         common-language
   main-is:        Main.hs
   hs-source-dirs: app
@@ -112,8 +109,8 @@ executable oracle-plutus-cli
     , aeson
     , base
     , bytestring
+    , coop-hs-types
+    , coop-plutus
     , optparse-applicative
-    , oracle-hs-types
-    , oracle-plutus
     , plutarch
     , plutus-ledger-api
