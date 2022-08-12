@@ -115,7 +115,7 @@
         };
         oracleServiceFlake = oracleServiceProj.flake { };
 
-        docsDevShell = import ./docs/build.nix {
+        coopDocsDevShell = import ./coop-docs/build.nix {
           inherit pkgs;
           inherit (pre-commit-hooks.outputs.packages.${system}) markdownlint-cli;
           inherit (pre-commit-check) shellHook;
@@ -146,7 +146,7 @@
           dev-pre-commit = pre-commit-devShell;
           dev-plutus = coopPlutusFlake.devShell;
           dev-service = oracleServiceFlake.devShell;
-          dev-docs = docsDevShell;
+          dev-docs = coopDocsDevShell;
           dev-pab = oraclePabFlake.devShell;
           dev-hs-types = coopHsTypesFlake.devShell;
           default = dev-proto;

@@ -1,11 +1,11 @@
-cabal-version:      3.0
-name:               coop-plutus
-version:            0.1.0.0
-license:            MIT
-license-file:       LICENSE
-maintainer:         info@mlabs.city
-author:             mlabs-haskell
-description:        COOP Plutus programs (validators and minting policies)
+cabal-version: 3.0
+name:          coop-plutus
+version:       0.1.0.0
+license:       MIT
+license-file:  LICENSE
+maintainer:    info@mlabs.city
+author:        mlabs-haskell
+description:   COOP Plutus programs (validators and minting policies)
 
 flag dev
   description: Enable non-strict compilation for development
