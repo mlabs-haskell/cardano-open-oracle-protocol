@@ -24,9 +24,9 @@ import GHC.Generics (Generic)
 import PlutusTx qualified
 
 #ifdef NEW_LEDGER_NAMESPACE
-import PlutusLedgerApi.V1 (Script, LedgerBytes(LedgerBytes), PubKeyHash, CurrencySymbol, Address, BuiltinByteString, fromBuiltin, toBuiltin, Credential, StakingCredential, ValidatorHash, Validator, MintingPolicy)
+import PlutusLedgerApi.V1 (Script, LedgerBytes(LedgerBytes), PubKeyHash, CurrencySymbol, Address, BuiltinByteString, fromBuiltin, toBuiltin, Credential, StakingCredential, ValidatorHash, Validator, MintingPolicy, POSIXTime)
 #else
-import Plutus.V1.Ledger.Api (Script, LedgerBytes(LedgerBytes), PubKeyHash, CurrencySymbol, Address, BuiltinByteString, fromBuiltin, toBuiltin, Credential, StakingCredential, ValidatorHash, Validator, MintingPolicy)
+import Plutus.V1.Ledger.Api (Script, LedgerBytes(LedgerBytes), PubKeyHash, CurrencySymbol, Address, BuiltinByteString, fromBuiltin, toBuiltin, Credential, StakingCredential, ValidatorHash, Validator, MintingPolicy, POSIXTime)
 #endif
 
 data CoopPlutus = CoopPlutus
@@ -55,6 +55,7 @@ data SofDatum = SofDatum
   , sd'publishedBy :: PubKeyHash
   , sd'description :: SofDescription
   , sd'sof :: Sof
+  , sf'gcAfter :: POSIXTime
   }
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
@@ -115,6 +116,9 @@ instance FromJSON ValidatorHash
 
 deriving newtype instance ToJSON LedgerBytes
 deriving newtype instance FromJSON LedgerBytes
+
+instance ToJSON POSIXTime
+instance FromJSON POSIXTime
 
 instance ToJSON BuiltinByteString where
   toJSON = toJSON . fromBuiltin @_ @ByteString
