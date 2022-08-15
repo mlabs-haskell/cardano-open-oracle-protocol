@@ -17,7 +17,7 @@ Cardano's [Vasil hardfork combinator (HFC) event](https://iohk.io/en/blog/posts/
 
 - [Reference inputs (CIP-31)](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0031) – transactions can reference some of their inputs instead of consuming them, keeping those inputs intact for other transactions to consume or reference. Previously, transactions were required to consume their inputs, making those inputs unavailable to other transactions.
 - [Inline datums (CIP-32)](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0032) – transaction outputs will be able to store their datums directly. Previously, transaction outputs could only store hashes of datums, with the actual datums stored in the transaction body's (datum hash 🠖 datum) table. This incurred a significant burden on users, who would have to provide  the datums corresponding to the datum hashes for the inputs used in their transactions. This burden translated into an infrastructure requirement for an off-chain index from datum hashes to datums for all utxos on the blockchain, to allow users to efficiently retrieve the datums they need to provide in their transactions. This burden is eliminated for transaction outputs with inline datums.
-- [Reference scripts (CIP-33)](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0033) – inline scripts may be attachd to transaction outputs, and subsequent transactions can reference those outputs to access their  scripts and use them during validation. Previously, transactions had to include all of their scripts in their transaction bodies, bloating transaction sizes and blockchain space usage. With reference scripts, a dApp can optimize its space usage on-chain by efficiently reusing a set of general and stable scripts across multiple transactions.
+- [Reference scripts (CIP-33)](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0033) – inline scripts may be attached to transaction outputs, and subsequent transactions can reference those outputs to access their  scripts and use them during validation. Previously, transactions had to include all of their scripts in their transaction bodies, bloating transaction sizes and blockchain space usage. With reference scripts, a dApp can optimize its space usage on-chain by efficiently reusing a set of general and stable scripts across multiple transactions.
 
 Reference inputs are fundamentally important in the context of oracles, which are primarily concerned with the dissemination of information. Prior to reference inputs, oracle designs had to contend with exclusive consumption and mitigated the challenges of concurrent use by relying on off-chain coordination, redundant publication, and explicit re-publication of spent outputs. With reference inputs, oracles can publish information on-chain once and have users access that information concurrently and non-exclusively. The blockchain ledger thus evolves from its resource management roots to include information management.
 
@@ -25,7 +25,7 @@ Reference inputs may limit our design flexibility with respect to sharing public
 
 Inline datums and reference scripts are tools that may be useful in pursuit of financial sustainability for the oracle protocol by reducing transaction costs and infrastructure requirements. They are not essential to the oracle design, but should prove valuable in practice.
 
-## Design description
+## Design description (TODO: Align with the latest)
 
 The following interaction lies at the core of this design. It is between a user seeking to submit a dApp transaction referencing a timely fact statement from an oracle feed of interest, and the oracle that is the authoritative source for that oracle feed:
 
@@ -55,7 +55,7 @@ Here is the component architecture of the Cardano Open Oracle Protocol:
 
 [TODO: Insert architecture diagram]
 
-### User inquiry
+### User inquiry (TODO: Revisit this)
 
 We provide the following components for the user inquiry procedure.
 
@@ -74,13 +74,13 @@ Off-chain queries:
 
 - [ ] Fact statement query on whether a fact statement for a given spacetime interval exists among the current utxos for a given oracle feed. If the fact statement is published on-chain, return a utxo reference that can be used to include it as a reference input in a transaction.
 
-### Oracle offer
+### Oracle offer (TODO: Rename and revisit)
 
 We provide the following components for the oracle offer procedure.
 
 Frontend:
 
-- [ ] Interface to request an oracle-signed publish transaction for a user-selected selected fact statement.
+- [ ] Interface to request an oracle-signed publish transaction for a user-selected fact statement.
 
 Backend API:
 
