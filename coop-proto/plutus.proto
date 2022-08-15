@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+import "oracle.proto";
+
+package cardano.oracle.plutus;
+
+message ResourceDatum {
+  oracle.PubKeyHash submittedBy = 1;
+  oracle.PubKeyHash publishedBy = 2;
+
+  oracle.ResourceDescription resource_desc = 3;
+  oracle.Resouce resource = 3;
+
+}

@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+package coop;
+
+service CoopPublisher {
+  // Get a list of all statement of fact descriptors supported by this publisher
+  rpc getCatalog(google.protobuf.Empty) returns (GetCatalogResponse) {}
+
+  // Get signatories that will include their signature in the statement of fact minting transactions
+  rpc getSignatories(google.protobuf.Empty) returns (GetSignatoriesResponse) {}
+
+  // Create a transaction with the desired statement of fact
+  rpc createSofTransaction(CreateSofTransactionRequest) returns (CreateSofTransactionResponse) {}
+}
+
+
+message GetCatalogResponse {
+  repeated SofDescription catalog = 1;
+}
+
+message SofDescription {
+  // Uniform resource name for the statement of fact
+  string urn = 1;
+  // Sof type
+  oneof type {
+    // Used by MVP version
+    RealNumber price = 2;
+    // When Cardano DApp schema lands (aka typez)
+    Typez typez = 3;
+  }
+}
+
+message Sof {
+  // JSON encoded resource
+  string value = 1;
+};
+
+message RealNumber {
+}
+
+message Typez {
+  string typez = 1;
+}
+
+message GetSignatoriesResponse {
+  repeated PubKeyHash signatories = 1;
+}
+
+message PubKeyHash {
+  // Base16 (hex) encoded public key hash
+  string value = 1;
+}
+
+message CreateSofTransactionRequest {
+  // Which statement of fact to observe
+  string sof_urn = 1;
+  // The PubKeyHash of the user that will submit the transaction
+  PubKeyHash submitter = 2;
+  // User provided trx output to use as collateral
+  UTXORef collateral = 3;
+}
+
+message CreateSofTransactionResponse {
+  // CBOR encoded transaction to sign and submit
+  string transaction = 1;
+  // Sof that is minted by the transaction
+  Sof sof = 2;
+}
+
+message UTXORef {}
