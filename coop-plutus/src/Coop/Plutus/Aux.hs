@@ -9,21 +9,25 @@ module Coop.Plutus.Aux (
   pownCurrencySymbol,
   pfindDatum,
   mkOneShotMintingPolicy,
+  pfindMap,
+  pflattenValue,
 ) where
 
 import Control.Monad.Fail (MonadFail (fail))
-import Plutarch (TermCont, popaque, pto)
-import Plutarch.Api.V1 (PCurrencySymbol, PDatum, PDatumHash, PMaybeData (PDJust, PDNothing), PMintingPolicy, PScriptPurpose (PMinting), PTokenName, PTuple, PTxInInfo, PTxOutRef, PValue)
+import Plutarch (PType, TermCont, popaque, pto)
+import Plutarch.Api.V1 (AmountGuarantees (NoGuarantees), KeyGuarantees (Sorted), PCurrencySymbol, PDatum, PDatumHash, PMap (PMap), PMaybeData (PDJust, PDNothing), PMintingPolicy, PScriptPurpose (PMinting), PTokenName, PTuple, PTxInInfo, PTxOutRef, PValue)
 import Plutarch.Api.V1.AssocMap (plookup)
-import Plutarch.Api.V1.Value (AmountGuarantees, KeyGuarantees, pvalueOf)
+import Plutarch.Api.V1.Value (pvalueOf)
 import Plutarch.Api.V1.Value qualified as PValue
 import Plutarch.Bool (PBool (PTrue))
 import Plutarch.DataRepr (
+  PDataRecord,
+  PLabeledType ((:=)),
   pdcons,
  )
 import Plutarch.Extra.TermCont (pletC, pletFieldsC, ptraceC)
-import Plutarch.List (PIsListLike, PListLike (pelimList), pany)
-import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PEq ((#==)), PIsData, PMaybe (PNothing), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pdata, pdnil, pfield, pfix, pfromData, phoistAcyclic, pif, plam, plet, pmatch, ptraceError, ptryFrom, (#), (#$), type (:-->))
+import Plutarch.List (PIsListLike, PList, PListLike (pcons, pelimList, pnil), pany, pfoldl)
+import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PBuiltinPair, PData, PEq ((#==)), PInteger, PIsData, PMaybe (PNothing), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pdata, pdnil, pfield, pfix, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pmatch, psndBuiltin, ptraceError, ptryFrom, (#), (#$), type (:-->))
 import Plutarch.TermCont (TermCont (runTermCont), tcont, unTermCont)
 import Prelude (Applicative (pure), fst, ($), (<$>))
 
@@ -143,3 +147,109 @@ phasSingleToken ::
 phasSingleToken = phoistAcyclic $
   plam $ \cs tn v ->
     1 #== pvalueOf # v # cs # tn
+
+
+-- TODO: Purge once part of a standard library
+type FlattenedValue =
+  ( PDataRecord
+      '[ "currencySymbol" ':= PCurrencySymbol
+       , "tokenName" ':= PTokenName
+       , "amount" ':= PInteger
+       ]
+  )
+
+-- | Converts a given value into a "flatten" list representation.
+pflattenValue ::
+  forall {s :: S}.
+  Term s (PValue 'Sorted 'NoGuarantees :--> PList FlattenedValue)
+pflattenValue = phoistAcyclic $
+  plam $ \v ->
+    let v' = pto v
+     in pfoldWithKey # appendCurrencySymbolTokens # pnil # v'
+  where
+    appendCurrencySymbolTokens ::
+      forall {s :: S}.
+      Term
+        s
+        ( PList FlattenedValue
+            :--> PCurrencySymbol
+            :--> PMap 'Sorted PTokenName PInteger
+            :--> PList FlattenedValue
+        )
+    appendCurrencySymbolTokens = phoistAcyclic $
+      plam $ \acc cs ts ->
+        pfoldWithKey # (appendToken # cs) # acc # ts
+
+    appendToken ::
+      forall {s :: S}.
+      Term
+        s
+        ( PCurrencySymbol
+            :--> PList FlattenedValue
+            :--> PTokenName
+            :--> PInteger
+            :--> PList FlattenedValue
+        )
+    appendToken = phoistAcyclic $
+      plam $ \cs acc tn i ->
+        let flattened =
+              pdcons @"currencySymbol" @PCurrencySymbol
+                # pdata cs
+                #$ pdcons @"tokenName" @PTokenName
+                # pdata tn
+                #$ pdcons @"amount" @PInteger
+                # pdata i
+                #$ pdnil
+         in pcons # flattened # acc
+
+    pfoldWithKey ::
+      forall
+        {s :: S}
+        (k :: PType)
+        (v :: PType)
+        (b :: PType)
+        (w :: KeyGuarantees).
+      (PIsData k, PIsData v) =>
+      Term s ((b :--> k :--> v :--> b) :--> b :--> PMap w k v :--> b)
+    pfoldWithKey = phoistAcyclic $
+      plam $ \f e m ->
+        pfoldlWithKey' # f # e #$ pgetMapList # m
+      where
+        pfoldlWithKey' ::
+          forall {s :: S} (k :: PType) (v :: PType) (b :: PType).
+          (PIsData k, PIsData v) =>
+          Term
+            s
+            ( (b :--> k :--> v :--> b)
+                :--> b
+                :--> PBuiltinList (PBuiltinPair (PAsData k) (PAsData v))
+                :--> b
+            )
+        pfoldlWithKey' = phoistAcyclic $
+          plam $ \f e xs ->
+            pfoldl # (go # f) # e # xs
+          where
+            go ::
+              forall {s :: S} (k :: PType) (v :: PType) (b :: PType).
+              (PIsData k, PIsData v) =>
+              Term
+                s
+                ( (b :--> k :--> v :--> b)
+                    :--> b
+                    :--> (PBuiltinPair (PAsData k) (PAsData v) :--> b)
+                )
+            go = phoistAcyclic $
+              plam $ \f e pair ->
+                f # e # pfromData (pfstBuiltin # pair)
+                  # pfromData (psndBuiltin # pair)
+
+        pgetMapList ::
+          forall {s :: S} (k :: PType) (v :: PType) (w :: KeyGuarantees).
+          Term
+            s
+            ( PMap w k v
+                :--> PBuiltinList (PBuiltinPair (PAsData k) (PAsData v))
+            )
+        pgetMapList = phoistAcyclic $
+          plam $ \m -> pmatch m $ \case
+            PMap aList -> aList

@@ -6,25 +6,79 @@ module Coop.Plutus (
 ) where
 
 import Control.Monad.Fail (MonadFail (fail))
-import Coop.Plutus.Aux (pboolC, pfindDatum, phasCurrency, pmaybeDataC, pownCurrencySymbol, ptryFromData)
+import Coop.Plutus.Aux (pboolC, pfindDatum, pfindMap, pflattenValue, phasCurrency, pmaybeDataC, pownCurrencySymbol, ptryFromData, punit)
 import Coop.Plutus.Types (PSofDatum, PSofMpParams, PSofVParams)
 import Plutarch (popaque, pto)
-import Plutarch.Api.V1 (PCurrencySymbol, PDatum, PDatumHash, PMaybeData, PMintingPolicy, PPubKeyHash, PScriptContext, PTxOut, PValidator)
+import Plutarch.Api.V1 (PCurrencySymbol, PDatum, PDatumHash, PMaybeData (PDJust, PDNothing), PMintingPolicy, PPubKeyHash, PScriptContext, PTxOut, PValidator)
 import Plutarch.Api.V1.Value (PTokenName (PTokenName), pnormalize, pvalueOf)
-import Plutarch.Bool (PBool (PTrue))
+import Plutarch.Bool (PBool (PTrue), pif)
+import Plutarch.Extra.Interval (pbefore)
 import Plutarch.Extra.TermCont (pletC, pletFieldsC, ptraceC)
-import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PEq ((#==)), Term, getField, pcon, pconstant, pdata, pelem, pfield, pfromData, phoistAcyclic, plam, pmap, (#), (#&&), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PEq ((#==)), PUnit, Term, getField, pcon, pconstant, pdata, pdcons, pdnil, pelem, pfield, pfromData, phoistAcyclic, plam, pmap, (#), (#&&), type (:-->))
 import Plutarch.TermCont (unTermCont)
 import Prelude (Applicative (pure), ($))
 
+{- | sofV validates sof garbage collection.
+1. mustValidateIn (sofUtxo.gcAfter, PosInf)
+2. mustBeSignedBy (sofUtxo.submitter)
+3. mustSpendScriptOutput sofUtxo
+4. mustMint (sofMp publisher -1)
+-}
 mkSofV :: ClosedTerm (PAsData PSofVParams :--> PValidator)
-mkSofV = phoistAcyclic $ plam $ \_ _ _ _ -> popaque $ pconstant ()
+mkSofV = phoistAcyclic $
+  plam $ \params sofDatum _ ctx -> unTermCont do
+    ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
+    txInfo <- pletFieldsC @'["datums", "mint", "signatories", "outputs", "validRange"] (getField @"txInfo" ctx')
+
+    -- inputs <- pletC $ getField @"txInfoInputs" (getField @"txInfo" ctx')
+    -- PSpending ownInputRef <- pmatchC (getField @"purpose" ctx')
+    -- ownInput <- pletC $ pfindOwnInput # inputs # (pfield @"_0" # ownInputRef)
+    -- datums <- pletC $ getField @"txInfoData" (getField @"txInfo" ctx')
+    -- PDJust ownInputDatum <- pletC $ pfindDatum # datums # getField @"txOutDatumHash" (getField @"txInfoInResolved" ownInput)
+    ownInputSof <- pletC $ pfromData (ptryFromData @PSofDatum sofDatum)
+
+    submittedBy <- pletC $ pfield @"sd'submittedBy" # ownInputSof
+    _ <- pletC $ pmustBeSignedBy # ctx # submittedBy
+
+    gcAfter <- pletC $ pfromData $ pfield @"sd'gcAfter" # ownInputSof
+    txValidRange <- pletC $ pfromData $ getField @"validRange" txInfo
+    _ <- pletC $ pbefore # gcAfter # txValidRange
+
+    coopInst <- pletC $ pfield @"svp'coopInstance" # pfromData params
+    mints <- pletC (getField @"mint" txInfo)
+    _ <-
+      pletC $
+        pfindMap
+          # plam
+            ( \asset ->
+                pif
+                  (pto (pfield @"tokenName" # asset) #== pto coopInst)
+                  (pcon $ PDNothing pdnil)
+                  (pcon $ PDJust $ pdcons # (pfield @"currencySymbol" # asset) # pdnil)
+            )
+          # (pflattenValue # mints)
+    pure $ popaque $ pconstant ()
+
+pmustBeSignedBy :: ClosedTerm (PScriptContext :--> PPubKeyHash :--> PUnit)
+pmustBeSignedBy = phoistAcyclic $
+  plam $ \ctx pkh -> unTermCont do
+    ptraceC "mustBeSignedBy"
+    ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
+    txInfo <- pletFieldsC @'["datums", "signatories", "outputs"] (getField @"txInfo" ctx')
+    sigs <- pletC $ getField @"signatories" txInfo
+    pboolC
+      (fail "mustBeSignedBy: pkh didn't sign the transaction")
+      ( do
+          ptraceC "mustBeSignedBy: pkh signed the transaction"
+          pure punit
+      )
+      (pelem # pdata pkh # sigs)
 
 -- | Minting policy that validates creation of new sofs.
 mkSofMp :: ClosedTerm (PAsData PSofMpParams :--> PMintingPolicy)
 mkSofMp = phoistAcyclic $
   plam $ \params _ ctx -> unTermCont do
-    _ <- pletC $ parseOutputs # pfromData params # ctx
+    _ <- pletC $ sofMpParseOutputs # pfromData params # ctx
     pure $ popaque $ pconstant ()
 
 {- | Parse and validate transaction outputs that hold sofs.
@@ -39,54 +93,55 @@ mkSofMp = phoistAcyclic $
  We don't enforce rewards at the minting policy, this is left open for the publisher to include and the submitter to accept.
  TODO: Switch to using Plutus V2
 -}
-parseOutputs :: Term s (PSofMpParams :--> PScriptContext :--> PBuiltinList PBool)
-parseOutputs = phoistAcyclic $
+sofMpParseOutputs :: Term s (PSofMpParams :--> PScriptContext :--> PBuiltinList PBool)
+sofMpParseOutputs = phoistAcyclic $
   plam $ \params ctx -> unTermCont $ do
-    ptraceC "parseOutputs"
+    ptraceC "sofMpParseOutputs"
     ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
     txInfo <- pletFieldsC @'["datums", "signatories", "outputs"] (getField @"txInfo" ctx')
     ownCs <- pletC $ pownCurrencySymbol # getField @"purpose" ctx'
     findDatum' <- pletC $ pfindDatum # getField @"datums" txInfo
     sigs <- pletC $ getField @"signatories" txInfo
     txOuts <- pletC $ getField @"outputs" txInfo
-    parseOutput' <- pletC $ parseOutput # params # ownCs # sigs # findDatum'
-    pure $ pmap # parseOutput' # txOuts
+    sofMpParseOutput' <- pletC $ sofMpParseOutput # params # ownCs # sigs # findDatum'
+    pure $ pmap # sofMpParseOutput' # txOuts
 
-parseOutput :: Term s (PSofMpParams :--> PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybeData PDatum) :--> PTxOut :--> PBool)
-parseOutput = phoistAcyclic $
+sofMpParseOutput :: Term s (PSofMpParams :--> PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybeData PDatum) :--> PTxOut :--> PBool)
+sofMpParseOutput = phoistAcyclic $
   plam $ \params ownCs sigs findDatum txOut -> unTermCont do
-    ptraceC "parseOutput"
+    ptraceC "sofMpParseOutput"
     txOut' <- pletFieldsC @'["value"] txOut
     outVal <- pletC $ pnormalize # getField @"value" txOut'
 
     hasOwnCs <- pletC $ phasCurrency # ownCs # outVal
     pboolC
       ( do
-          ptraceC "parseOutput: own token not in the output, skipping"
+          ptraceC "sofMpParseOutput: own token not in the output, skipping"
           pure $ pcon PTrue
       )
       ( do
-          ptraceC "parseOutput: found own token in the output, continuing"
-          pure $ parseOutputWithSof # params # ownCs # sigs # findDatum # txOut
+          ptraceC "sofMpParseOutput: found own token in the output, continuing"
+          pure $ sofMpParseOutputWithSof # params # ownCs # sigs # findDatum # txOut
       )
       hasOwnCs
 
-parseOutputWithSof :: Term s (PSofMpParams :--> PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybeData PDatum) :--> PTxOut :--> PBool)
-parseOutputWithSof = phoistAcyclic $
+sofMpParseOutputWithSof :: Term s (PSofMpParams :--> PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybeData PDatum) :--> PTxOut :--> PBool)
+sofMpParseOutputWithSof = phoistAcyclic $
   plam $ \params ownCs sigs findDatum txOut -> unTermCont do
-    ptraceC "parseOutputWithSof"
+    ptraceC "sofMpParseOutputWithSof"
     txOut' <- pletFieldsC @'["value", "address", "datumHash"] txOut
     outVal <- pletC $ pnormalize # getField @"value" txOut'
     outAddr <- pletC $ getField @"address" txOut'
 
+    -- TODO: Migrate to inline datums
     outDatumHash <-
       pmaybeDataC
-        (fail "parseOutputWithSof: no datum present in the output")
+        (fail "sofMpParseOutputWithSof: no datum present in the output")
         pure
         (getField @"datumHash" txOut')
     datum <-
       pmaybeDataC
-        (fail "parseOutputWithSof: no datum with a given hash present in the transaction datums")
+        (fail "sofMpParseOutputWithSof: no datum with a given hash present in the transaction datums")
         pure
         (findDatum # outDatumHash)
 
@@ -98,32 +153,32 @@ parseOutputWithSof = phoistAcyclic $
 
     hasSinglePublisherToken <-
       pboolC
-        (fail "parseOutputWithSof: invalid sof minting asset")
+        (fail "sofMpParseOutputWithSof: invalid sof minting asset")
         ( do
-            ptraceC "parseOutputWithSof: valid sof minting asset"
+            ptraceC "sofMpParseOutputWithSof: valid sof minting asset"
             pure $ pcon PTrue
         )
         (quantity #== 1)
 
     publisherIsSignatory <-
       pboolC
-        (fail "parseOutputWithSof: publisher didn't sign the transaction")
+        (fail "sofMpParseOutputWithSof: publisher didn't sign the transaction")
         ( do
-            ptraceC "parseOutputWithSof: publisher signed the transaction"
+            ptraceC "sofMpParseOutputWithSof: publisher signed the transaction"
             pure $ pcon PTrue
         )
         (pelem # pdata publishedBy # sigs)
 
     sentToSofV <-
       pboolC
-        (fail "parseOutputWithSof: output not sent to sofValidator")
+        (fail "sofMpParseOutputWithSof: output not sent to sofValidator")
         ( do
-            ptraceC "parseOutputWithSof: output sent to sofValidator"
+            ptraceC "sofMpParseOutputWithSof: output sent to sofValidator"
             pure $ pcon PTrue
         )
         (outAddr #== pfield @"smp'sofVAddress" # params)
 
     pboolC
-      (fail "parseOutputWithSof: failed")
+      (fail "sofMpParseOutputWithSof: failed")
       (pure $ pcon PTrue)
       (hasSinglePublisherToken #&& publisherIsSignatory #&& sentToSofV)

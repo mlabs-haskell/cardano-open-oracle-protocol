@@ -1768,11 +1768,11 @@
         "secp256k1-haskell": "secp256k1-haskell"
       },
       "locked": {
-        "lastModified": 1658833185,
-        "narHash": "sha256-kOpzTnWkZge3+nCrb8jxGNACZDOq7pVz9NYKFZuxfz8=",
+        "lastModified": 1659381657,
+        "narHash": "sha256-W0EWY0DV2idbIeqtJnShVHQ83exME8TK2GYQGbVpz8A=",
         "owner": "Plutonomicon",
         "repo": "plutarch-plutus",
-        "rev": "e23f2d9ecad8482e9971bd6ec1c772f9693014ce",
+        "rev": "45b7c77a9ee9bd6c7dc25ddebcc3d12c58c4c3a2",
         "type": "github"
       },
       "original": {
