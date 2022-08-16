@@ -148,7 +148,6 @@ phasSingleToken = phoistAcyclic $
   plam $ \cs tn v ->
     1 #== pvalueOf # v # cs # tn
 
-
 -- TODO: Purge once part of a standard library
 type FlattenedValue =
   ( PDataRecord
