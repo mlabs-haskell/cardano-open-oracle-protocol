@@ -17,7 +17,7 @@ import Data.Text (Text)
 import Data.Void (Void)
 import Ledger (applyArguments, getCardanoTxId, scriptCurrencySymbol, validatorHash)
 import Ledger.Address (PaymentPubKeyHash (PaymentPubKeyHash), pubKeyHashAddress)
-import Plutus.Contract (Contract, ownFirstPaymentPubKeyHash, submitTxConstraintsWith, throwError, utxosAt)
+import Plutus.Contract (Contract, currentTime, ownFirstPaymentPubKeyHash, submitTxConstraintsWith, throwError, utxosAt)
 import Plutus.Contract.Constraints (mintingPolicy, mustBeSignedBy, mustMintValue, mustPayToOtherScript, mustPayToPubKey, mustSpendPubKeyOutput, otherData, otherScript, unspentOutputs)
 import Plutus.Contract.Logging (logInfo)
 import Plutus.Script.Utils.V1.Address (mkValidatorAddress)
@@ -86,13 +86,14 @@ mintSof :: PubKeyHash -> PubKeyHash -> CoopDeployment -> Contract w s Text TxId
 mintSof submitterPkh publisherPkh coopDeployment = do
   let logI m = logInfo @String ("mintSof: " <> m)
   logI "Starting"
+  now <- currentTime
   let sofMp = cd'sofMp coopDeployment
       sofV = cd'sofV coopDeployment
       sofVAddr = validatorHash sofV
       sofTn = TokenName . getPubKeyHash $ publisherPkh
       sofCs = scriptCurrencySymbol sofMp
       sofVal = Value.singleton sofCs sofTn 1
-      sofDatum = Datum . toBuiltinData $ SofDatum submitterPkh publisherPkh "aa" "aa"
+      sofDatum = Datum . toBuiltinData $ SofDatum submitterPkh publisherPkh "aa" "aa" now
       lookups =
         mconcat
           [ mintingPolicy sofMp

@@ -3,68 +3,111 @@
 module Coop.Plutus (
   mkSofMp,
   mkSofV,
+  pmustValidateAfter,
 ) where
 
 import Control.Monad.Fail (MonadFail (fail))
 import Coop.Plutus.Aux (pboolC, pfindDatum, pfindMap, pflattenValue, phasCurrency, pmaybeDataC, pownCurrencySymbol, ptryFromData, punit)
 import Coop.Plutus.Types (PSofDatum, PSofMpParams, PSofVParams)
 import Plutarch (popaque, pto)
-import Plutarch.Api.V1 (PCurrencySymbol, PDatum, PDatumHash, PMaybeData (PDJust, PDNothing), PMintingPolicy, PPubKeyHash, PScriptContext, PTxOut, PValidator)
+import Plutarch.Api.V1 (PCurrencySymbol, PDatum, PDatumHash, PMaybeData (PDJust, PDNothing), PMintingPolicy, PPOSIXTime, PPubKeyHash, PScriptContext, PTxOut, PValidator)
 import Plutarch.Api.V1.Value (PTokenName (PTokenName), pnormalize, pvalueOf)
 import Plutarch.Bool (PBool (PTrue), pif)
 import Plutarch.Extra.Interval (pbefore)
 import Plutarch.Extra.TermCont (pletC, pletFieldsC, ptraceC)
-import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PEq ((#==)), PUnit, Term, getField, pcon, pconstant, pdata, pdcons, pdnil, pelem, pfield, pfromData, phoistAcyclic, plam, pmap, (#), (#&&), type (:-->))
+import Plutarch.Num (PNum (pnegate))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PEq ((#==)), PInteger, PUnit, Term, getField, pcon, pconstant, pdata, pdcons, pdnil, pelem, pfield, pfromData, phoistAcyclic, plam, pmap, (#), (#&&), type (:-->))
 import Plutarch.TermCont (unTermCont)
 import Prelude (Applicative (pure), ($))
 
 {- | sofV validates sof garbage collection.
-1. mustValidateIn (sofUtxo.gcAfter, PosInf)
-2. mustBeSignedBy (sofUtxo.submitter)
-3. mustSpendScriptOutput sofUtxo
-4. mustMint (sofMp publisher -1)
+- mustBeSignedBy (sofUtxo.submitter)
+- mustValidateAfter sofUtxo.gcAfter
+- optional mustSpendScriptOutput sofUtxo
+- mustMint (sofMp publisher -1)
 -}
 mkSofV :: ClosedTerm (PAsData PSofVParams :--> PValidator)
 mkSofV = phoistAcyclic $
   plam $ \params sofDatum _ ctx -> unTermCont do
-    ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
-    txInfo <- pletFieldsC @'["datums", "mint", "signatories", "outputs", "validRange"] (getField @"txInfo" ctx')
-
-    -- inputs <- pletC $ getField @"txInfoInputs" (getField @"txInfo" ctx')
-    -- PSpending ownInputRef <- pmatchC (getField @"purpose" ctx')
-    -- ownInput <- pletC $ pfindOwnInput # inputs # (pfield @"_0" # ownInputRef)
-    -- datums <- pletC $ getField @"txInfoData" (getField @"txInfo" ctx')
-    -- PDJust ownInputDatum <- pletC $ pfindDatum # datums # getField @"txOutDatumHash" (getField @"txInfoInResolved" ownInput)
     ownInputSof <- pletC $ pfromData (ptryFromData @PSofDatum sofDatum)
 
-    submittedBy <- pletC $ pfield @"sd'submittedBy" # ownInputSof
-    _ <- pletC $ pmustBeSignedBy # ctx # submittedBy
+    _ <- pletC $ pmustBeSignedBy # ctx # (pfield @"sd'submittedBy" # ownInputSof)
 
-    gcAfter <- pletC $ pfromData $ pfield @"sd'gcAfter" # ownInputSof
-    txValidRange <- pletC $ pfromData $ getField @"validRange" txInfo
-    _ <- pletC $ pbefore # gcAfter # txValidRange
+    _ <- pletC $ pmustValidateAfter # ctx # pfromData (pfield @"sd'gcAfter" # ownInputSof)
 
     coopInst <- pletC $ pfield @"svp'coopInstance" # pfromData params
-    mints <- pletC (getField @"mint" txInfo)
+    sofMp <- pletC $ sofVFindSofMp # ctx # coopInst
     _ <-
+      pletC $
+        pmustMint # ctx
+          # sofMp
+          # pcon (PTokenName $ pto (pfromData (pfield @"sd'publishedBy" # ownInputSof)))
+          # (pnegate # 1)
+
+    pure $ popaque $ pconstant ()
+
+sofVFindSofMp :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PCurrencySymbol)
+sofVFindSofMp = phoistAcyclic $
+  plam $ \ctx coopInst -> unTermCont do
+    ptraceC "sofVFindSofMp"
+    ctx' <- pletFieldsC @'["txInfo"] ctx
+    txInfo <- pletFieldsC @'["mint"] (getField @"txInfo" ctx')
+    maySofMp <-
       pletC $
         pfindMap
           # plam
             ( \asset ->
                 pif
-                  (pto (pfield @"tokenName" # asset) #== pto coopInst)
+                  (pto (pfromData (pfield @"tokenName" # asset)) #== pto coopInst)
                   (pcon $ PDNothing pdnil)
                   (pcon $ PDJust $ pdcons # (pfield @"currencySymbol" # asset) # pdnil)
             )
-          # (pflattenValue # mints)
-    pure $ popaque $ pconstant ()
+          # (pflattenValue # getField @"mint" txInfo)
+    pmaybeDataC
+      (fail "sofVFindSofMp: couldn't deduce SofMp")
+      ( \sofMp -> do
+          ptraceC "sofVFindSofMp: found SofMp"
+          pure sofMp
+      )
+      maySofMp
+
+pmustMint :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PUnit)
+pmustMint = phoistAcyclic $
+  plam $ \ctx cs tn q -> unTermCont do
+    ptraceC "mustMint"
+    ctx' <- pletFieldsC @'["txInfo"] ctx
+    txInfo <- pletFieldsC @'["mint"] (getField @"txInfo" ctx')
+    mint <- pletC $ getField @"mint" txInfo
+    pboolC
+      (fail "pmustMint: didn't mint the specified quantity")
+      ( do
+          ptraceC "pmustMint: minted specified quantity"
+          pure punit
+      )
+      (pvalueOf # mint # cs # tn #== q)
+
+pmustValidateAfter :: ClosedTerm (PScriptContext :--> PPOSIXTime :--> PUnit)
+pmustValidateAfter = phoistAcyclic $
+  plam $ \ctx after -> unTermCont do
+    ptraceC "mustValidateAfter"
+    ctx' <- pletFieldsC @'["txInfo"] ctx
+    txInfo <- pletFieldsC @'["validRange"] (getField @"txInfo" ctx')
+
+    txValidRange <- pletC $ pfromData $ getField @"validRange" txInfo
+    pboolC
+      (fail "pmustValidateAfter: transaction validation range is not after 'after'")
+      ( do
+          ptraceC "pmustValidateAfter: transaction validation range is after 'after'"
+          pure punit
+      )
+      (pbefore # after # txValidRange)
 
 pmustBeSignedBy :: ClosedTerm (PScriptContext :--> PPubKeyHash :--> PUnit)
 pmustBeSignedBy = phoistAcyclic $
   plam $ \ctx pkh -> unTermCont do
     ptraceC "mustBeSignedBy"
-    ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
-    txInfo <- pletFieldsC @'["datums", "signatories", "outputs"] (getField @"txInfo" ctx')
+    ctx' <- pletFieldsC @'["txInfo"] ctx
+    txInfo <- pletFieldsC @'["signatories"] (getField @"txInfo" ctx')
     sigs <- pletC $ getField @"signatories" txInfo
     pboolC
       (fail "mustBeSignedBy: pkh didn't sign the transaction")
