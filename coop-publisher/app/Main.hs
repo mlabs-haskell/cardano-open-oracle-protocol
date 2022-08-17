@@ -17,7 +17,7 @@ import Network.GRPC.Server as Server (
  )
 import Network.Wai.Handler.Warp qualified as Warp
 import Network.Wai.Handler.WarpTLS (defaultTlsSettings)
-import Proto.Coop (CoopPublisher, CreateSofTransactionRequest, CreateSofTransactionResponse, GetCatalogResponse, GetSignatoriesResponse)
+import Proto.Coop (CoopPublisher, CreateFsTransactionRequest, CreateFsTransactionResponse, GetCatalogResponse, GetSignatoriesResponse)
 import Proto.Google.Protobuf.Empty (Empty)
 
 import Data.ProtoLens (Message (defMessage))
@@ -47,7 +47,7 @@ routes :: [ServiceHandler]
 routes =
   [ Server.unary (RPC :: RPC CoopPublisher "getCatalog") handleGetCatalog
   , Server.unary (RPC :: RPC CoopPublisher "getSignatories") handleGetSignatories
-  , Server.unary (RPC :: RPC CoopPublisher "createSofTransaction") handleCreateSofTransaction
+  , Server.unary (RPC :: RPC CoopPublisher "createFsTransaction") handleCreateFsTransaction
   ]
 
 handleGetCatalog :: Server.UnaryHandler IO Empty GetCatalogResponse
@@ -56,5 +56,5 @@ handleGetCatalog _ _ = let resp = defMessage in pure resp
 handleGetSignatories :: Server.UnaryHandler IO Empty GetSignatoriesResponse
 handleGetSignatories _ _ = pure undefined
 
-handleCreateSofTransaction :: Server.UnaryHandler IO CreateSofTransactionRequest CreateSofTransactionResponse
-handleCreateSofTransaction _ _ = pure undefined
+handleCreateFsTransaction :: Server.UnaryHandler IO CreateFsTransactionRequest CreateFsTransactionResponse
+handleCreateFsTransaction _ _ = pure undefined
