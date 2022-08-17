@@ -2,12 +2,12 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Coop.Plutus.Types (
-  PSofMpParams (..),
-  PSofVParams (..),
-  PSofDatum (..),
+  PFsMpParams (..),
+  PFsVParams (..),
+  PFsDatum (..),
 ) where
 
-import Coop.Types (SofMpParams, SofVParams)
+import Coop.Types (FsMpParams, FsVParams)
 import Data.Typeable (Typeable)
 import GHC.Generics qualified as GHC
 import Generics.SOP (Generic)
@@ -31,23 +31,24 @@ import Plutarch.TryFrom (PTryFrom (PTryFromExcess, ptryFrom'))
 import Plutarch.Unsafe (punsafeCoerce)
 import Prelude (Applicative (pure), snd, ($), (.))
 
-newtype PSofDatum s
-  = PSofDatum
+-- TODO: Add Plutarch type plumbage for FactStatement
+newtype PFsDatum s
+  = PFsDatum
       ( Term
           s
           ( PDataRecord
-              '[ "sd'submittedBy" ':= PPubKeyHash
-               , "sd'publishedBy" ':= PPubKeyHash
-               , "sd'description" ':= PByteString
-               , "sd'sof" ':= PByteString
+              '[ "fd'submittedBy" ':= PPubKeyHash
+               , "fd'publishedBy" ':= PPubKeyHash
+               , "fd'description" ':= PByteString
+               , "fd'factStatement" ':= PByteString
                ]
           )
       )
   deriving stock (GHC.Generic)
   deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
 
-instance DerivePlutusType PSofDatum where type DPTStrat _ = PlutusTypeData
-instance PTryFrom PData (PAsData PSofDatum)
+instance DerivePlutusType PFsDatum where type DPTStrat _ = PlutusTypeData
+instance PTryFrom PData (PAsData PFsDatum)
 
 -- FIXME: Integrate https://github.com/Plutonomicon/plutarch-plutus/pull/520
 instance PTryFrom PData (PAsData PPubKeyHash) where
@@ -59,22 +60,22 @@ instance PTryFrom PData (PAsData PPubKeyHash) where
 
 newtype Flip f a b = Flip (f b a) deriving stock (GHC.Generic)
 
-newtype PSofMpParams s
-  = PSofMpParams
+newtype PFsMpParams s
+  = PFsMpParams
       ( Term
           s
           ( PDataRecord
-              '[ "smp'coopInstance" ':= PCurrencySymbol
-               , "smp'sofVAddress" ':= PAddress
+              '[ "fmp'coopInstance" ':= PCurrencySymbol
+               , "fmp'fsVAddress" ':= PAddress
                ]
           )
       )
   deriving stock (GHC.Generic, Typeable)
   deriving anyclass (Generic, PlutusType, PIsData, PEq, PDataFields)
 
-instance DerivePlutusType PSofMpParams where type DPTStrat _ = PlutusTypeData
-instance PUnsafeLiftDecl PSofMpParams where type PLifted PSofMpParams = SofMpParams
-deriving via (DerivePConstantViaData SofMpParams PSofMpParams) instance (PConstantDecl SofMpParams)
+instance DerivePlutusType PFsMpParams where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PFsMpParams where type PLifted PFsMpParams = FsMpParams
+deriving via (DerivePConstantViaData FsMpParams PFsMpParams) instance (PConstantDecl FsMpParams)
 
 instance PTryFrom PData (PAsData PCurrencySymbol) where
   type PTryFromExcess PData (PAsData PCurrencySymbol) = Flip Term PCurrencySymbol
@@ -85,18 +86,18 @@ instance PTryFrom PData (PAsData PCurrencySymbol) where
       pif (len #== 0 #|| len #== 28) (f ()) (ptraceError "a CurrencySymbol must be 28 bytes long or empty")
     pure (punsafeCoerce opq, pcon . PCurrencySymbol $ unwrapped)
 
-newtype PSofVParams s
-  = PSofVParams
+newtype PFsVParams s
+  = PFsVParams
       ( Term
           s
           ( PDataRecord
-              '[ "svp'coopInstance" ':= PCurrencySymbol
+              '[ "fvp'coopInstance" ':= PCurrencySymbol
                ]
           )
       )
   deriving stock (GHC.Generic, Typeable)
   deriving anyclass (Generic, PlutusType, PIsData, PEq, PDataFields)
 
-instance DerivePlutusType PSofVParams where type DPTStrat _ = PlutusTypeData
-instance PUnsafeLiftDecl PSofVParams where type PLifted PSofVParams = SofVParams
-deriving via (DerivePConstantViaData SofVParams PSofVParams) instance (PConstantDecl SofVParams)
+instance DerivePlutusType PFsVParams where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PFsVParams where type PLifted PFsVParams = FsVParams
+deriving via (DerivePConstantViaData FsVParams PFsVParams) instance (PConstantDecl FsVParams)

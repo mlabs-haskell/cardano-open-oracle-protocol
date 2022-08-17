@@ -2,9 +2,9 @@
 
 module Coop.Cli.Compile (CompileOpts (..), CompileMode (..), compile) where
 
-import Coop.Plutus (mkSofMp, mkSofV)
+import Coop.Plutus (mkFsMp, mkFsV)
 import Coop.Plutus.Aux (mkOneShotMintingPolicy)
-import Coop.Types (CoopPlutus (CoopPlutus, cp'mkCoopInstanceMp, cp'mkSofMp, cp'mkSofV))
+import Coop.Types (CoopPlutus (CoopPlutus, cp'mkCoopInstanceMp, cp'mkFsMp, cp'mkFsV))
 import Data.Aeson (encode)
 import Data.ByteString.Lazy (writeFile)
 import Plutarch (Config (Config), TracingMode (DoTracing, NoTracing))
@@ -24,14 +24,14 @@ compile opts = do
         COMPILE_PROD -> Config NoTracing
         COMPILE_DEBUG -> Config DoTracing
   instMp <- either (\err -> fail $ "Failed compiling mkCoopInstanceMp with " <> show err) pure (Plutarch.compile cfg mkOneShotMintingPolicy)
-  resMp <- either (\err -> fail $ "Failed compiling mkSofMp with " <> show err) pure (Plutarch.compile cfg mkSofMp)
-  resV <- either (\err -> fail $ "Failed compiling mkSofV with " <> show err) pure (Plutarch.compile cfg mkSofV)
+  resMp <- either (\err -> fail $ "Failed compiling mkFsMp with " <> show err) pure (Plutarch.compile cfg mkFsMp)
+  resV <- either (\err -> fail $ "Failed compiling mkFsV with " <> show err) pure (Plutarch.compile cfg mkFsV)
 
   let cs =
         CoopPlutus
           { cp'mkCoopInstanceMp = instMp
-          , cp'mkSofMp = resMp
-          , cp'mkSofV = resV
+          , cp'mkFsMp = resMp
+          , cp'mkFsV = resV
           }
   Data.ByteString.Lazy.writeFile (co'File opts) (encode cs)
   return ()

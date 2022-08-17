@@ -1,16 +1,16 @@
 module Coop.Pab (
   createCoopInstance,
   deploy,
-  mintSof,
+  mintFs,
 ) where
 
 import Coop.Pab.Aux (minUtxoAdaValue)
 import Coop.Types (
-  CoopDeployment (CoopDeployment, cd'sofMp, cd'sofV),
-  CoopPlutus (cp'mkCoopInstanceMp, cp'mkSofMp, cp'mkSofV),
-  SofDatum (SofDatum),
-  SofMpParams (SofMpParams),
-  SofVParams (SofVParams),
+  CoopDeployment (CoopDeployment, cd'fsMp, cd'fsV),
+  CoopPlutus (cp'mkCoopInstanceMp, cp'mkFsMp, cp'mkFsV),
+  FsDatum (FsDatum),
+  FsMpParams (FsMpParams),
+  FsVParams (FsVParams),
  )
 import Data.Map (keys)
 import Data.Text (Text)
@@ -75,36 +75,36 @@ deploy coopPlutus = do
   let logI m = logInfo @String ("deploy: " <> m)
   logI "Starting"
   (_, cs) <- createCoopInstance (cp'mkCoopInstanceMp coopPlutus)
-  let sofVP = SofVParams cs
-      sofV = Validator $ applyArguments (cp'mkSofV coopPlutus) [toData sofVP]
-      sofMpP = SofMpParams cs (mkValidatorAddress sofV)
-      sofMp = MintingPolicy $ applyArguments (cp'mkSofMp coopPlutus) [toData sofMpP]
+  let fsVP = FsVParams cs
+      fsV = Validator $ applyArguments (cp'mkFsV coopPlutus) [toData fsVP]
+      fsMpP = FsMpParams cs (mkValidatorAddress fsV)
+      fsMp = MintingPolicy $ applyArguments (cp'mkFsMp coopPlutus) [toData fsMpP]
   logI "Finished"
-  return $ CoopDeployment sofMpP sofMp sofVP sofV
+  return $ CoopDeployment fsMpP fsMp fsVP fsV
 
-mintSof :: PubKeyHash -> PubKeyHash -> CoopDeployment -> Contract w s Text TxId
-mintSof submitterPkh publisherPkh coopDeployment = do
-  let logI m = logInfo @String ("mintSof: " <> m)
+mintFs :: PubKeyHash -> PubKeyHash -> CoopDeployment -> Contract w s Text TxId
+mintFs submitterPkh publisherPkh coopDeployment = do
+  let logI m = logInfo @String ("mintFs: " <> m)
   logI "Starting"
-  let sofMp = cd'sofMp coopDeployment
-      sofV = cd'sofV coopDeployment
-      sofVAddr = validatorHash sofV
-      sofTn = TokenName . getPubKeyHash $ publisherPkh
-      sofCs = scriptCurrencySymbol sofMp
-      sofVal = Value.singleton sofCs sofTn 1
-      sofDatum = Datum . toBuiltinData $ SofDatum submitterPkh publisherPkh "aa" "aa"
+  let fsMp = cd'fsMp coopDeployment
+      fsV = cd'fsV coopDeployment
+      fsVAddr = validatorHash fsV
+      fsTn = TokenName . getPubKeyHash $ publisherPkh
+      fsCs = scriptCurrencySymbol fsMp
+      fsVal = Value.singleton fsCs fsTn 1
+      fsDatum = Datum . toBuiltinData $ FsDatum submitterPkh publisherPkh "aa" "aa"
       lookups =
         mconcat
-          [ mintingPolicy sofMp
-          , otherScript sofV
-          , otherData sofDatum
+          [ mintingPolicy fsMp
+          , otherScript fsV
+          , otherData fsDatum
           ]
       tx =
         mconcat
-          [ mustMintValue sofVal
+          [ mustMintValue fsVal
           , mustBeSignedBy (PaymentPubKeyHash publisherPkh)
           , mustBeSignedBy (PaymentPubKeyHash submitterPkh)
-          , mustPayToOtherScript sofVAddr sofDatum (sofVal <> minUtxoAdaValue)
+          , mustPayToOtherScript fsVAddr fsDatum (fsVal <> minUtxoAdaValue)
           ]
   tx <- submitTxConstraintsWith @Void lookups tx
   logI "Finished"

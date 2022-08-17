@@ -4,11 +4,11 @@
 module Coop.Types (
   CoopPlutus (..),
   CoopDeployment (..),
-  SofMpParams (..),
-  SofVParams (..),
-  SofDescription (),
-  Sof (),
-  SofDatum (..),
+  FsMpParams (..),
+  FsVParams (..),
+  FsDescription (),
+  FactStatement (),
+  FsDatum (..),
 ) where
 
 import Codec.Serialise (deserialise, serialise)
@@ -31,43 +31,43 @@ import Plutus.V1.Ledger.Api (Script, LedgerBytes(LedgerBytes), PubKeyHash, Curre
 
 data CoopPlutus = CoopPlutus
   { cp'mkCoopInstanceMp :: Script
-  , cp'mkSofMp :: Script
-  , cp'mkSofV :: Script
+  , cp'mkFsMp :: Script
+  , cp'mkFsV :: Script
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
 data CoopDeployment = CoopDeployment
-  { cd'sofMpParams :: SofMpParams
-  , cd'sofMp :: MintingPolicy
-  , cd'sofVParams :: SofVParams
-  , cd'sofV :: Validator
+  { cd'fsMpParams :: FsMpParams
+  , cd'fsMp :: MintingPolicy
+  , cd'fsVParams :: FsVParams
+  , cd'fsV :: Validator
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
 -- Plutus types
-type SofDescription = LedgerBytes
-type Sof = LedgerBytes
+type FsDescription = LedgerBytes
+type FactStatement = LedgerBytes
 
-data SofDatum = SofDatum
-  { sd'submittedBy :: PubKeyHash
-  , sd'publishedBy :: PubKeyHash
-  , sd'description :: SofDescription
-  , sd'sof :: Sof
+data FsDatum = FsDatum
+  { fd'submittedBy :: PubKeyHash
+  , fd'publishedBy :: PubKeyHash
+  , fd'description :: FsDescription
+  , fd'fs :: FactStatement
   }
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
 
-data SofMpParams = SofMpParams
-  { smp'coopInstance :: CurrencySymbol -- provided by the one shot mp,
-  , smp'sofVAddress :: Address
+data FsMpParams = FsMpParams
+  { fmp'coopInstance :: CurrencySymbol -- provided by the one shot mp,
+  , fmp'fsVAddress :: Address
   }
   deriving stock (Show, Generic, Eq, Typeable)
   deriving anyclass (ToJSON, FromJSON)
 
-newtype SofVParams = SofVParams
-  { svp'coopInstance :: CurrencySymbol -- provided by the one shot mp
+newtype FsVParams = FsVParams
+  { fvp'coopInstance :: CurrencySymbol -- provided by the one shot mp
   }
   deriving stock (Show, Generic, Eq, Typeable)
   deriving anyclass (ToJSON, FromJSON)
@@ -122,6 +122,6 @@ instance ToJSON BuiltinByteString where
 instance FromJSON BuiltinByteString where
   parseJSON v = toBuiltin <$> parseJSON @ByteString v
 
-PlutusTx.unstableMakeIsData ''SofMpParams
-PlutusTx.unstableMakeIsData ''SofVParams
-PlutusTx.unstableMakeIsData ''SofDatum
+PlutusTx.unstableMakeIsData ''FsMpParams
+PlutusTx.unstableMakeIsData ''FsVParams
+PlutusTx.unstableMakeIsData ''FsDatum
