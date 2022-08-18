@@ -2,7 +2,7 @@
 
 module Main (main) where
 
-import Coop.Pab (createCoopInstance, deploy, mintSof)
+import Coop.Pab (createCoopInstance, deploy, mintFs)
 import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), loadCoopPlutus)
 import Coop.Types (CoopPlutus (cp'mkCoopInstanceMp))
 import Data.Bifunctor (Bifunctor (second))
@@ -56,7 +56,7 @@ tests coopPlutus =
     , runAfter "deploy" $
         assertExecutionWith
           [ShowTrace, ShowBudgets]
-          "publish-sof"
+          "publish-fs"
           (initAda (100 : replicate 10 7) <> initAda (100 : replicate 10 7))
           ( withContract
               ( \(submitterPPkh : _) -> do
@@ -64,9 +64,9 @@ tests coopPlutus =
                   coopDeployment <- deploy @String coopPlutus
                   _ <- waitNSlots 5
                   publisherPpkh <- ownFirstPaymentPubKeyHash
-                  logInfo @String ("publish-sof with: submitter = " <> show submitterPPkh <> " publisher = " <> show publisherPpkh)
+                  logInfo @String ("publish-fs with: submitter = " <> show submitterPPkh <> " publisher = " <> show publisherPpkh)
                   _ <-
-                    mintSof
+                    mintFs
                       (unPaymentPubKeyHash submitterPPkh)
                       (unPaymentPubKeyHash publisherPpkh)
                       coopDeployment

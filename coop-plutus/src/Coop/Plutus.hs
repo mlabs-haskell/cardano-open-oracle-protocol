@@ -1,14 +1,13 @@
 {-# LANGUAGE BlockArguments #-}
 
 module Coop.Plutus (
-  mkSofMp,
-  mkSofV,
-  pmustValidateAfter,
+  mkFsMp,
+  mkFsV,
 ) where
 
 import Control.Monad.Fail (MonadFail (fail))
 import Coop.Plutus.Aux (pboolC, pfindDatum, pfindMap, pflattenValue, phasCurrency, pmaybeDataC, pownCurrencySymbol, ptryFromData, punit)
-import Coop.Plutus.Types (PSofDatum, PSofMpParams, PSofVParams)
+import Coop.Plutus.Types (PFsDatum, PFsMpParams, PFsVParams)
 import Plutarch (popaque, pto)
 import Plutarch.Api.V1 (PCurrencySymbol, PDatum, PDatumHash, PMaybeData (PDJust, PDNothing), PMintingPolicy, PPOSIXTime, PPubKeyHash, PScriptContext, PTxOut, PValidator)
 import Plutarch.Api.V1.Value (PTokenName (PTokenName), pnormalize, pvalueOf)
@@ -20,39 +19,39 @@ import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PEq ((#==)), PIntege
 import Plutarch.TermCont (unTermCont)
 import Prelude (Applicative (pure), ($))
 
-{- | sofV validates sof garbage collection.
-- mustBeSignedBy (sofUtxo.submitter)
-- mustValidateAfter sofUtxo.gcAfter
-- optional mustSpendScriptOutput sofUtxo
-- mustMint (sofMp publisher -1)
+{- | fsV validates fs garbage collection.
+- mustBeSignedBy (fsUtxo.submitter)
+- mustValidateAfter fsUtxo.gcAfter
+- optional mustSpendScriptOutput fsUtxo
+- mustMint (fsMp publisher -1)
 -}
-mkSofV :: ClosedTerm (PAsData PSofVParams :--> PValidator)
-mkSofV = phoistAcyclic $
-  plam $ \params sofDatum _ ctx -> unTermCont do
-    ownInputSof <- pletC $ pfromData (ptryFromData @PSofDatum sofDatum)
+mkFsV :: ClosedTerm (PAsData PFsVParams :--> PValidator)
+mkFsV = phoistAcyclic $
+  plam $ \params fsDatum _ ctx -> unTermCont do
+    ownInputFs <- pletC $ pfromData (ptryFromData @PFsDatum fsDatum)
 
-    _ <- pletC $ pmustBeSignedBy # ctx # (pfield @"sd'submittedBy" # ownInputSof)
+    _ <- pletC $ pmustBeSignedBy # ctx # (pfield @"fd'submittedBy" # ownInputFs)
 
-    _ <- pletC $ pmustValidateAfter # ctx # pfromData (pfield @"sd'gcAfter" # ownInputSof)
+    _ <- pletC $ pmustValidateAfter # ctx # pfromData (pfield @"fd'gcAfter" # ownInputFs)
 
-    coopInst <- pletC $ pfield @"svp'coopInstance" # pfromData params
-    sofMp <- pletC $ sofVFindSofMp # ctx # coopInst
+    coopInst <- pletC $ pfield @"fvp'coopInstance" # pfromData params
+    fsMp <- pletC $ fsVFindFsMp # ctx # coopInst
     _ <-
       pletC $
         pmustMint # ctx
-          # sofMp
-          # pcon (PTokenName $ pto (pfromData (pfield @"sd'publishedBy" # ownInputSof)))
+          # fsMp
+          # pcon (PTokenName $ pto (pfromData (pfield @"fd'publishedBy" # ownInputFs)))
           # (pnegate # 1)
 
     pure $ popaque $ pconstant ()
 
-sofVFindSofMp :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PCurrencySymbol)
-sofVFindSofMp = phoistAcyclic $
+fsVFindFsMp :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PCurrencySymbol)
+fsVFindFsMp = phoistAcyclic $
   plam $ \ctx coopInst -> unTermCont do
-    ptraceC "sofVFindSofMp"
+    ptraceC "fsVFindFsMp"
     ctx' <- pletFieldsC @'["txInfo"] ctx
     txInfo <- pletFieldsC @'["mint"] (getField @"txInfo" ctx')
-    maySofMp <-
+    mayFsMp <-
       pletC $
         pfindMap
           # plam
@@ -64,12 +63,12 @@ sofVFindSofMp = phoistAcyclic $
             )
           # (pflattenValue # getField @"mint" txInfo)
     pmaybeDataC
-      (fail "sofVFindSofMp: couldn't deduce SofMp")
-      ( \sofMp -> do
-          ptraceC "sofVFindSofMp: found SofMp"
-          pure sofMp
+      (fail "fsVFindFsMp: couldn't deduce FsMp")
+      ( \fsMp -> do
+          ptraceC "fsVFindFsMp: found FsMp"
+          pure fsMp
       )
-      maySofMp
+      mayFsMp
 
 pmustMint :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PUnit)
 pmustMint = phoistAcyclic $
@@ -117,61 +116,61 @@ pmustBeSignedBy = phoistAcyclic $
       )
       (pelem # pdata pkh # sigs)
 
--- | Minting policy that validates creation of new sofs.
-mkSofMp :: ClosedTerm (PAsData PSofMpParams :--> PMintingPolicy)
-mkSofMp = phoistAcyclic $
+-- | Minting policy that validates creation of new fss.
+mkFsMp :: ClosedTerm (PAsData PFsMpParams :--> PMintingPolicy)
+mkFsMp = phoistAcyclic $
   plam $ \params _ ctx -> unTermCont do
-    _ <- pletC $ sofMpParseOutputs # pfromData params # ctx
+    _ <- pletC $ fsMpParseOutputs # pfromData params # ctx
     pure $ popaque $ pconstant ()
 
-{- | Parse and validate transaction outputs that hold sofs.
+{- | Parse and validate transaction outputs that hold Fact Statements.
  We rely on the level 1 ledger rule to verify that what was minted, was sent out.
- So for each of the sof output we check:
+ So for each of the fs output we check:
   - does it hold own currency symbol?
     - no -> skip processing of the current output (we don't err and so enable richer transactions)
     - yes
-      - TODO: does it send the output to sofValidator? yes -> continue; no -> err
-      - is the transaction signed by the publisher specified in the SofDatum? yes -> continue; no -> err
+      - TODO: does it send the output to fsValidator? yes -> continue; no -> err
+      - is the transaction signed by the publisher specified in the FsDatum? yes -> continue; no -> err
       - is there a single token of own currency symbol and publisher as the token name? yes -> continue; no -> err
  We don't enforce rewards at the minting policy, this is left open for the publisher to include and the submitter to accept.
  TODO: Switch to using Plutus V2
 -}
-sofMpParseOutputs :: Term s (PSofMpParams :--> PScriptContext :--> PBuiltinList PBool)
-sofMpParseOutputs = phoistAcyclic $
+fsMpParseOutputs :: Term s (PFsMpParams :--> PScriptContext :--> PBuiltinList PBool)
+fsMpParseOutputs = phoistAcyclic $
   plam $ \params ctx -> unTermCont $ do
-    ptraceC "sofMpParseOutputs"
+    ptraceC "fsMpParseOutputs"
     ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
     txInfo <- pletFieldsC @'["datums", "signatories", "outputs"] (getField @"txInfo" ctx')
     ownCs <- pletC $ pownCurrencySymbol # getField @"purpose" ctx'
     findDatum' <- pletC $ pfindDatum # getField @"datums" txInfo
     sigs <- pletC $ getField @"signatories" txInfo
     txOuts <- pletC $ getField @"outputs" txInfo
-    sofMpParseOutput' <- pletC $ sofMpParseOutput # params # ownCs # sigs # findDatum'
-    pure $ pmap # sofMpParseOutput' # txOuts
+    fsMpParseOutput' <- pletC $ fsMpParseOutput # params # ownCs # sigs # findDatum'
+    pure $ pmap # fsMpParseOutput' # txOuts
 
-sofMpParseOutput :: Term s (PSofMpParams :--> PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybeData PDatum) :--> PTxOut :--> PBool)
-sofMpParseOutput = phoistAcyclic $
+fsMpParseOutput :: Term s (PFsMpParams :--> PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybeData PDatum) :--> PTxOut :--> PBool)
+fsMpParseOutput = phoistAcyclic $
   plam $ \params ownCs sigs findDatum txOut -> unTermCont do
-    ptraceC "sofMpParseOutput"
+    ptraceC "fsMpParseOutput"
     txOut' <- pletFieldsC @'["value"] txOut
     outVal <- pletC $ pnormalize # getField @"value" txOut'
 
     hasOwnCs <- pletC $ phasCurrency # ownCs # outVal
     pboolC
       ( do
-          ptraceC "sofMpParseOutput: own token not in the output, skipping"
+          ptraceC "fsMpParseOutput: own token not in the output, skipping"
           pure $ pcon PTrue
       )
       ( do
-          ptraceC "sofMpParseOutput: found own token in the output, continuing"
-          pure $ sofMpParseOutputWithSof # params # ownCs # sigs # findDatum # txOut
+          ptraceC "fsMpParseOutput: found own token in the output, continuing"
+          pure $ fsMpParseOutputWithFs # params # ownCs # sigs # findDatum # txOut
       )
       hasOwnCs
 
-sofMpParseOutputWithSof :: Term s (PSofMpParams :--> PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybeData PDatum) :--> PTxOut :--> PBool)
-sofMpParseOutputWithSof = phoistAcyclic $
+fsMpParseOutputWithFs :: Term s (PFsMpParams :--> PCurrencySymbol :--> PBuiltinList (PAsData PPubKeyHash) :--> (PDatumHash :--> PMaybeData PDatum) :--> PTxOut :--> PBool)
+fsMpParseOutputWithFs = phoistAcyclic $
   plam $ \params ownCs sigs findDatum txOut -> unTermCont do
-    ptraceC "sofMpParseOutputWithSof"
+    ptraceC "fsMpParseOutputWithFs"
     txOut' <- pletFieldsC @'["value", "address", "datumHash"] txOut
     outVal <- pletC $ pnormalize # getField @"value" txOut'
     outAddr <- pletC $ getField @"address" txOut'
@@ -179,49 +178,49 @@ sofMpParseOutputWithSof = phoistAcyclic $
     -- TODO: Migrate to inline datums
     outDatumHash <-
       pmaybeDataC
-        (fail "sofMpParseOutputWithSof: no datum present in the output")
+        (fail "fsMpParseOutputWithFs: no datum present in the output")
         pure
         (getField @"datumHash" txOut')
     datum <-
       pmaybeDataC
-        (fail "sofMpParseOutputWithSof: no datum with a given hash present in the transaction datums")
+        (fail "fsMpParseOutputWithFs: no datum with a given hash present in the transaction datums")
         pure
         (findDatum # outDatumHash)
 
-    resDat <- pletC $ pfromData (ptryFromData @PSofDatum (pto datum))
-    publishedBy <- pletC $ pfield @"sd'publishedBy" # resDat
+    resDat <- pletC $ pfromData (ptryFromData @PFsDatum (pto datum))
+    publishedBy <- pletC $ pfield @"fd'publishedBy" # resDat
     let publishedByBytes = pto publishedBy
     publishedByTokenName <- pletC $ pcon $ PTokenName publishedByBytes
     quantity <- pletC $ pvalueOf # outVal # ownCs # publishedByTokenName
 
     hasSinglePublisherToken <-
       pboolC
-        (fail "sofMpParseOutputWithSof: invalid sof minting asset")
+        (fail "fsMpParseOutputWithFs: invalid fs minting asset")
         ( do
-            ptraceC "sofMpParseOutputWithSof: valid sof minting asset"
+            ptraceC "fsMpParseOutputWithFs: valid fs minting asset"
             pure $ pcon PTrue
         )
         (quantity #== 1)
 
     publisherIsSignatory <-
       pboolC
-        (fail "sofMpParseOutputWithSof: publisher didn't sign the transaction")
+        (fail "fsMpParseOutputWithFs: publisher didn't sign the transaction")
         ( do
-            ptraceC "sofMpParseOutputWithSof: publisher signed the transaction"
+            ptraceC "fsMpParseOutputWithFs: publisher signed the transaction"
             pure $ pcon PTrue
         )
         (pelem # pdata publishedBy # sigs)
 
-    sentToSofV <-
+    sentToFsV <-
       pboolC
-        (fail "sofMpParseOutputWithSof: output not sent to sofValidator")
+        (fail "fsMpParseOutputWithFs: output not sent to fsValidator")
         ( do
-            ptraceC "sofMpParseOutputWithSof: output sent to sofValidator"
+            ptraceC "fsMpParseOutputWithFs: output sent to fsValidator"
             pure $ pcon PTrue
         )
-        (outAddr #== pfield @"smp'sofVAddress" # params)
+        (outAddr #== pfield @"fmp'fsVAddress" # params)
 
     pboolC
-      (fail "sofMpParseOutputWithSof: failed")
+      (fail "fsMpParseOutputWithFs: failed")
       (pure $ pcon PTrue)
-      (hasSinglePublisherToken #&& publisherIsSignatory #&& sentToSofV)
+      (hasSinglePublisherToken #&& publisherIsSignatory #&& sentToFsV)

@@ -2,12 +2,12 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Coop.Plutus.Types (
-  PSofMpParams (..),
-  PSofVParams (..),
-  PSofDatum (..),
+  PFsMpParams (..),
+  PFsVParams (..),
+  PFsDatum (..),
 ) where
 
-import Coop.Types (SofMpParams, SofVParams)
+import Coop.Types (FsMpParams, FsVParams)
 import Data.Typeable (Typeable)
 import GHC.Generics qualified as GHC
 import Generics.SOP (Generic)
@@ -27,58 +27,55 @@ import Plutarch.DataRepr (
 import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
 import Plutarch.Prelude (PAsData, PData, PDataRecord, PEq, PIsData, PLabeledType ((:=)), PTryFrom, PlutusType, Term)
 
-newtype PSofDatum s
-  = PSofDatum
+-- TODO: Add Plutarch type plumbage for FactStatement
+newtype PFsDatum s
+  = PFsDatum
       ( Term
           s
           ( PDataRecord
-              '[ "sd'submittedBy" ':= PPubKeyHash
-               , "sd'publishedBy" ':= PPubKeyHash
-               , "sd'description" ':= PByteString
-               , "sd'sof" ':= PByteString
-               , "sd'gcAfter" ':= PPOSIXTime
+              '[ "fd'submittedBy" ':= PPubKeyHash
+               , "fd'publishedBy" ':= PPubKeyHash
+               , "fd'description" ':= PByteString
+               , "fd'factStatement" ':= PByteString
+               , "fd'gcAfter" ':= PPOSIXTime
                ]
           )
       )
   deriving stock (GHC.Generic)
   deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
 
-instance DerivePlutusType PSofDatum where type DPTStrat _ = PlutusTypeData
-instance PTryFrom PData (PAsData PSofDatum)
+instance DerivePlutusType PFsDatum where type DPTStrat _ = PlutusTypeData
+instance PTryFrom PData (PAsData PFsDatum)
 
--- FIXME: Integrate https://github.com/Plutonomicon/plutarch-plutus/pull/520
-
-newtype Flip f a b = Flip (f b a) deriving stock (GHC.Generic)
-
-newtype PSofMpParams s
-  = PSofMpParams
+newtype PFsMpParams s
+  = PFsMpParams
       ( Term
           s
           ( PDataRecord
-              '[ "smp'coopInstance" ':= PCurrencySymbol
-               , "smp'sofVAddress" ':= PAddress
+              '[ "fmp'coopInstance" ':= PCurrencySymbol
+               , "fmp'fsVAddress" ':= PAddress
                ]
           )
       )
   deriving stock (GHC.Generic, Typeable)
   deriving anyclass (Generic, PlutusType, PIsData, PEq, PDataFields)
 
-instance DerivePlutusType PSofMpParams where type DPTStrat _ = PlutusTypeData
-instance PUnsafeLiftDecl PSofMpParams where type PLifted PSofMpParams = SofMpParams
-deriving via (DerivePConstantViaData SofMpParams PSofMpParams) instance (PConstantDecl SofMpParams)
+instance DerivePlutusType PFsMpParams where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PFsMpParams where type PLifted PFsMpParams = FsMpParams
+deriving via (DerivePConstantViaData FsMpParams PFsMpParams) instance (PConstantDecl FsMpParams)
 
-newtype PSofVParams s
-  = PSofVParams
+newtype PFsVParams s
+  = PFsVParams
       ( Term
           s
           ( PDataRecord
-              '[ "svp'coopInstance" ':= PCurrencySymbol
+              '[ "fvp'coopInstance" ':= PCurrencySymbol
                ]
           )
       )
   deriving stock (GHC.Generic, Typeable)
   deriving anyclass (Generic, PlutusType, PIsData, PEq, PDataFields)
 
-instance DerivePlutusType PSofVParams where type DPTStrat _ = PlutusTypeData
-instance PUnsafeLiftDecl PSofVParams where type PLifted PSofVParams = SofVParams
-deriving via (DerivePConstantViaData SofVParams PSofVParams) instance (PConstantDecl SofVParams)
+instance DerivePlutusType PFsVParams where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PFsVParams where type PLifted PFsVParams = FsVParams
+deriving via (DerivePConstantViaData FsVParams PFsVParams) instance (PConstantDecl FsVParams)
