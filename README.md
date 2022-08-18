@@ -24,4 +24,4 @@ This project was graciously funded from the Cardano Treasury in [Catalyst Fund
 ## Documentation
 
 The protocol is described in further detail in design document:
-[docs/00-design](docs/00-design.md).
+[coop-docs/00-design](coop-docs/00-design.md).

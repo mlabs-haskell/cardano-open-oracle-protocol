@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+package coop;
+
+service CoopPublisher {
+  // Get a list of all Fact Statement descriptors supported by this publisher
+  rpc getCatalog(google.protobuf.Empty) returns (GetCatalogResponse) {}
+
+  // Get signatories that will include their signature in the Fact Statement minting transactions
+  rpc getSignatories(google.protobuf.Empty) returns (GetSignatoriesResponse) {}
+
+  // Create a transaction with the desired Fact Statement
+  rpc createFsTransaction(CreateFsTransactionRequest) returns (CreateFsTransactionResponse) {}
+}
+
+
+message GetCatalogResponse {
+  repeated FsDescription catalog = 1;
+}
+
+message FsDescription {
+  // Uniform resource name for the Fact Statement
+  string urn = 1;
+  // Fs type
+  oneof type {
+    // Used by MVP version
+    RealNumber price = 2;
+    // When Cardano DApp schema lands (aka typez)
+    Typez typez = 3;
+  }
+}
+
+message FactStatement {
+  // JSON encoded Fact Statement
+  string value = 1;
+};
+
+message RealNumber {
+}
+
+message Typez {
+  string typez = 1;
+}
+
+message GetSignatoriesResponse {
+  repeated PubKeyHash signatories = 1;
+}
+
+message PubKeyHash {
+  // Base16 (hex) encoded public key hash
+  string value = 1;
+}
+
+message CreateFsTransactionRequest {
+  // Which Fact Statement to observe
+  string fs_urn = 1;
+  // The PubKeyHash of the user that will submit the transaction
+  PubKeyHash submitter = 2;
+  // User provided trx output to use as collateral
+  UTXORef collateral = 3;
+}
+
+message CreateFsTransactionResponse {
+  // CBOR encoded transaction to sign and submit
+  string transaction = 1;
+  // Fs that is minted by the transaction
+  FactStatement factStatement = 2;
+}
+
+message UTXORef {}
