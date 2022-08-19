@@ -55,6 +55,7 @@ data FsDatum = FsDatum
   , fd'publishedBy :: PubKeyHash
   , fd'description :: FsDescription
   , fd'fs :: FactStatement
+  , fs'gcAFter :: POSIXTime
   }
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)

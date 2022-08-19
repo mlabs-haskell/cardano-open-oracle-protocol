@@ -70,7 +70,7 @@ pownCurrencySymbol = phoistAcyclic $
 pfindDatum :: Term s (PBuiltinList (PAsData (PTuple PDatumHash PDatum)) :--> PDatumHash :--> PMaybeData PDatum)
 pfindDatum = phoistAcyclic $
   plam $ \datums dh -> unTermCont do
-    ptraceC "findDatum"
+    ptraceC "pfindDatum"
     pure $
       pfindMap
         # plam

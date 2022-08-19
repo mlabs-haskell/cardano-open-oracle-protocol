@@ -92,7 +92,7 @@ mintFs submitterPkh publisherPkh coopDeployment = do
       fsTn = TokenName . getPubKeyHash $ publisherPkh
       fsCs = scriptCurrencySymbol fsMp
       fsVal = Value.singleton fsCs fsTn 1
-      fsDatum = Datum . toBuiltinData $ FsDatum submitterPkh publisherPkh "aa" "aa"
+      fsDatum = Datum . toBuiltinData $ FsDatum submitterPkh publisherPkh "aa" "aa" 0
       lookups =
         mconcat
           [ mintingPolicy fsMp
