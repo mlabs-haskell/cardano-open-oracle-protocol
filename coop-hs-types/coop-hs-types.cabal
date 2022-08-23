@@ -92,7 +92,10 @@ common common-language
 
 library
   import:          common-language
-  exposed-modules: Coop.Types
+  exposed-modules:
+    Coop.PlutusOrphans
+    Coop.Types
+
   hs-source-dirs:  src
   build-depends:
     , aeson
