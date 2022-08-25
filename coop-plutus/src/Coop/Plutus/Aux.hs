@@ -11,12 +11,19 @@ module Coop.Plutus.Aux (
   mkOneShotMintingPolicy,
   pfindMap,
   pflattenValue,
+  pdatumFromTxOut,
+  pmustMint,
+  pmustValidateAfter,
+  pmustBeSignedBy,
+  pgetTokensByCurrency,
+  pdjust,
+  pdnothing,
 ) where
 
 import Control.Monad.Fail (MonadFail (fail))
 import Plutarch (PType, TermCont, popaque, pto)
-import Plutarch.Api.V1 (AmountGuarantees (NoGuarantees), KeyGuarantees (Sorted), PCurrencySymbol, PDatum, PDatumHash, PMap (PMap), PMaybeData (PDJust, PDNothing), PMintingPolicy, PScriptPurpose (PMinting), PTokenName, PTuple, PTxInInfo, PTxOutRef, PValue)
-import Plutarch.Api.V1.AssocMap (plookup)
+import Plutarch.Api.V1 (AmountGuarantees (NoGuarantees), KeyGuarantees (Sorted), PCurrencySymbol, PDatum, PDatumHash, PMap (PMap), PMaybeData (PDJust, PDNothing), PMintingPolicy, PPOSIXTime, PPubKeyHash, PScriptContext, PScriptPurpose (PMinting), PTokenName, PTuple, PTxInInfo, PTxOut, PTxOutRef, PValue)
+import Plutarch.Api.V1.AssocMap (pempty, plookup)
 import Plutarch.Api.V1.Value (pvalueOf)
 import Plutarch.Api.V1.Value qualified as PValue
 import Plutarch.Bool (PBool (PTrue))
@@ -25,9 +32,10 @@ import Plutarch.DataRepr (
   PLabeledType ((:=)),
   pdcons,
  )
+import Plutarch.Extra.Interval (pbefore)
 import Plutarch.Extra.TermCont (pletC, pletFieldsC, ptraceC)
 import Plutarch.List (PIsListLike, PList, PListLike (pcons, pelimList, pnil), pany, pfoldl)
-import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PBuiltinPair, PData, PEq ((#==)), PInteger, PIsData, PMaybe (PNothing), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pdata, pdnil, pfield, pfix, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pmatch, psndBuiltin, ptraceError, ptryFrom, (#), (#$), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PBuiltinPair, PData, PEq ((#==)), PInteger, PIsData, PMaybe (PJust, PNothing), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pdata, pdnil, pelem, pfield, pfix, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pmatch, psndBuiltin, ptraceError, ptryFrom, (#), (#$), type (:-->))
 import Plutarch.TermCont (TermCont (runTermCont), tcont, unTermCont)
 import Prelude (Applicative (pure), fst, ($), (<$>))
 
@@ -42,6 +50,16 @@ phasCurrency = phoistAcyclic $
       ( \case
           PNothing -> pcon PFalse
           _ -> pcon PTrue
+      )
+
+pgetTokensByCurrency :: forall (s :: S). Term s (PCurrencySymbol :--> PValue 'PValue.Sorted 'PValue.NonZero :--> PMap 'Sorted PTokenName PInteger)
+pgetTokensByCurrency = phoistAcyclic $
+  plam $ \cs val ->
+    pmatch
+      (plookup # cs # pto val)
+      ( \case
+          PNothing -> pempty
+          PJust tokens -> tokens
       )
 
 pboolC :: TermCont @r s a -> TermCont @r s a -> Term s PBool -> TermCont @r s a
@@ -252,3 +270,75 @@ pflattenValue = phoistAcyclic $
         pgetMapList = phoistAcyclic $
           plam $ \m -> pmatch m $ \case
             PMap aList -> aList
+
+pdatumFromTxOut :: forall a (s :: S). (PIsData a, PTryFrom PData (PAsData a)) => Term s (PScriptContext :--> PTxOut :--> a)
+pdatumFromTxOut = phoistAcyclic $
+  plam $ \ctx txOut -> unTermCont do
+    -- TODO: Migrate to inline datums
+    ctx' <- pletFieldsC @'["txInfo"] ctx
+    txInfo <- pletFieldsC @'["datums"] (getField @"txInfo" ctx')
+
+    outDatumHash <-
+      pmaybeDataC
+        (fail "pDatumFromTxOut: no datum present in the output")
+        pure
+        (pfield @"datumHash" # txOut)
+    datum <-
+      pmaybeDataC
+        (fail "pDatumFromTxOut: no datum with a given hash present in the transaction datums")
+        pure
+        (pfindDatum # getField @"datums" txInfo # outDatumHash)
+
+    pure $ pfromData (ptryFromData @a (pto datum))
+
+pmustMint :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PUnit)
+pmustMint = phoistAcyclic $
+  plam $ \ctx cs tn q -> unTermCont do
+    ptraceC "mustMint"
+    ctx' <- pletFieldsC @'["txInfo"] ctx
+    txInfo <- pletFieldsC @'["mint"] (getField @"txInfo" ctx')
+    mint <- pletC $ getField @"mint" txInfo
+    pboolC
+      (fail "pmustMint: didn't mint the specified quantity")
+      ( do
+          ptraceC "pmustMint: minted specified quantity"
+          pure punit
+      )
+      (pvalueOf # mint # cs # tn #== q)
+
+pmustValidateAfter :: ClosedTerm (PScriptContext :--> PPOSIXTime :--> PUnit)
+pmustValidateAfter = phoistAcyclic $
+  plam $ \ctx after -> unTermCont do
+    ptraceC "mustValidateAfter"
+    ctx' <- pletFieldsC @'["txInfo"] ctx
+    txInfo <- pletFieldsC @'["validRange"] (getField @"txInfo" ctx')
+
+    txValidRange <- pletC $ pfromData $ getField @"validRange" txInfo
+    pboolC
+      (fail "pmustValidateAfter: transaction validation range is not after 'after'")
+      ( do
+          ptraceC "pmustValidateAfter: transaction validation range is after 'after'"
+          pure punit
+      )
+      (pbefore # after # txValidRange)
+
+pmustBeSignedBy :: ClosedTerm (PScriptContext :--> PPubKeyHash :--> PUnit)
+pmustBeSignedBy = phoistAcyclic $
+  plam $ \ctx pkh -> unTermCont do
+    ptraceC "mustBeSignedBy"
+    ctx' <- pletFieldsC @'["txInfo"] ctx
+    txInfo <- pletFieldsC @'["signatories"] (getField @"txInfo" ctx')
+    sigs <- pletC $ getField @"signatories" txInfo
+    pboolC
+      (fail "mustBeSignedBy: pkh didn't sign the transaction")
+      ( do
+          ptraceC "mustBeSignedBy: pkh signed the transaction"
+          pure punit
+      )
+      (pelem # pdata pkh # sigs)
+
+pdnothing :: Term s (PMaybeData a)
+pdnothing = pcon $ PDNothing pdnil
+
+pdjust :: PIsData a => Term s a -> Term s (PMaybeData a)
+pdjust x = pcon $ PDJust $ pdcons # pdata x # pdnil

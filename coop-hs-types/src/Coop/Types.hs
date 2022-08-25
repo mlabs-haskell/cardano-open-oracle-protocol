@@ -46,6 +46,7 @@ type FactStatement = LedgerBytes
 
 data FsDatum = FsDatum
   { fd'fs :: FactStatement
+  , fd'id :: LedgerBytes
   , fd'description :: FsDescription
   , fs'gcAfter :: POSIXTime
   }
@@ -56,6 +57,7 @@ data FsMpParams = FsMpParams
   { fmp'coopInstance :: CurrencySymbol -- provided by the one shot mp,
   , fmp'fsVAddress :: Address
   , fmp'authTokenCs :: CurrencySymbol
+  , fmp'certTokenCs :: CurrencySymbol
   }
   deriving stock (Show, Generic, Eq, Typeable)
   deriving anyclass (ToJSON, FromJSON)
