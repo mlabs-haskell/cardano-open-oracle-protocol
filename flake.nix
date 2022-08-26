@@ -22,6 +22,8 @@
       flake = false;
     };
 
+    nixpkgs-pure.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+
     plutarch.url = "github:Plutonomicon/plutarch-plutus/staging";
 
     iohk-nix.follows = "plutip/iohk-nix";
@@ -29,6 +31,7 @@
   outputs =
     { self
     , nixpkgs
+    , nixpkgs-pure
     , flake-utils
     , haskell-nix
     , pre-commit-hooks
@@ -54,7 +57,10 @@
           ];
         };
 
-        pre-commit-check = pre-commit-hooks.lib.${system}.run (import ./pre-commit-check.nix);
+        fourmolu =
+          (import nixpkgs-pure { inherit system; }).haskell.packages.ghc924.fourmolu_0_6_0_0;
+
+        pre-commit-check = pre-commit-hooks.lib.${system}.run (import ./pre-commit-check.nix { inherit fourmolu; });
         pre-commit-devShell = pkgs.mkShell {
           inherit (pre-commit-check) shellHook;
         };
@@ -90,8 +96,9 @@
         };
 
         coopPlutusProj = import ./coop-plutus/build.nix {
-          inherit plutarch;
+          inherit plutarch fourmolu;
           pkgs = pkgsForPlutarch;
+          purePkgs = import nixpkgs-pure { inherit system; };
           inherit (pkgsForPlutarch) haskell-nix;
           inherit (pre-commit-check) shellHook;
           coop-hs-types = ./coop-hs-types;

@@ -1507,6 +1507,22 @@
         "type": "github"
       }
     },
+    "nixpkgs-pure": {
+      "locked": {
+        "lastModified": 1661336769,
+        "narHash": "sha256-5Sf9tMd1Jdm+lTBGspbQ4kEoYCDKpUhEVAZHRcm6mGU=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "03428dbaaa23d6bf458770907b0927b377c873a8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nixpkgs-regression": {
       "locked": {
         "lastModified": 1643052045,
@@ -1979,6 +1995,7 @@
           "plutip",
           "nixpkgs"
         ],
+        "nixpkgs-pure": "nixpkgs-pure",
         "plutarch": "plutarch",
         "plutip": "plutip",
         "pre-commit-hooks": "pre-commit-hooks"

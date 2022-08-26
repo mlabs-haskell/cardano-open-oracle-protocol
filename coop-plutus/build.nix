@@ -1,4 +1,4 @@
-{ pkgs, haskell-nix, compiler-nix-name, coop-hs-types, plutarch, shellHook }:
+{ pkgs, fourmolu, haskell-nix, compiler-nix-name, coop-hs-types, plutarch, shellHook }:
 let
   hn-extra-hackage = plutarch.inputs.haskell-nix-extra-hackage;
   myHackage = hn-extra-hackage.mkHackagesFor pkgs.system compiler-nix-name [
@@ -33,10 +33,10 @@ haskell-nix.cabalProject' (plutarch.applyPlutarchDep pkgs rec {
       # Code quality
       ## Haskell/Cabal
       haskellPackages.apply-refact
-      haskellPackages.fourmolu
       haskellPackages.cabal-fmt
       hlint
       (plutarch.hlsFor compiler-nix-name pkgs.system)
+      fourmolu
     ];
 
     additional = ps: [

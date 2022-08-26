@@ -94,8 +94,8 @@ pfindDatum = phoistAcyclic $
         # plam
           ( \pair -> unTermCont do
               pair' <- pletFieldsC @'["_0", "_1"] $ pfromData pair
-              dh' <- pletC $ pair' . _0
-              datum <- pletC $ pair' . _1
+              dh' <- pletC $ pair'._0
+              datum <- pletC $ pair'._1
               pure $
                 pif
                   (dh' #== dh)
@@ -135,10 +135,10 @@ mkOneShotMintingPolicy = phoistAcyclic $
   plam $ \tn txOutRef _ ctx -> unTermCont do
     ptraceC "mkOneShotMintingPolicy"
     ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
-    txInfo <- pletFieldsC @'["inputs", "mint"] ctx' . txInfo
-    inputs <- pletC txInfo . inputs
-    mint <- pletC txInfo . mint
-    cs <- pletC $ pownCurrencySymbol # ctx' . purpose
+    txInfo <- pletFieldsC @'["inputs", "mint"] ctx'.txInfo
+    inputs <- pletC txInfo.inputs
+    mint <- pletC txInfo.mint
+    cs <- pletC $ pownCurrencySymbol # ctx'.purpose
 
     pboolC
       (fail "mkOneShotMintingPolicy: Doesn't consume utxo")
@@ -276,7 +276,7 @@ pdatumFromTxOut = phoistAcyclic $
   plam $ \ctx txOut -> unTermCont do
     -- TODO: Migrate to inline datums
     ctx' <- pletFieldsC @'["txInfo"] ctx
-    txInfo <- pletFieldsC @'["datums"] ctx' . txInfo
+    txInfo <- pletFieldsC @'["datums"] ctx'.txInfo
 
     outDatumHash <-
       pmaybeDataC
@@ -287,7 +287,7 @@ pdatumFromTxOut = phoistAcyclic $
       pmaybeDataC
         (fail "pDatumFromTxOut: no datum with a given hash present in the transaction datums")
         pure
-        (pfindDatum # txInfo . datums # outDatumHash)
+        (pfindDatum # txInfo.datums # outDatumHash)
 
     pure $ pfromData (ptryFromData @a (pto datum))
 
@@ -296,8 +296,8 @@ pmustMint = phoistAcyclic $
   plam $ \ctx cs tn q -> unTermCont do
     ptraceC "mustMint"
     ctx' <- pletFieldsC @'["txInfo"] ctx
-    txInfo <- pletFieldsC @'["mint"] ctx' . txInfo
-    mint <- pletC $ txInfo . mint
+    txInfo <- pletFieldsC @'["mint"] ctx'.txInfo
+    mint <- pletC $ txInfo.mint
     pboolC
       (fail "pmustMint: didn't mint the specified quantity")
       ( do
@@ -311,9 +311,9 @@ pmustValidateAfter = phoistAcyclic $
   plam $ \ctx after -> unTermCont do
     ptraceC "mustValidateAfter"
     ctx' <- pletFieldsC @'["txInfo"] ctx
-    txInfo <- pletFieldsC @'["validRange"] ctx' . txInfo
+    txInfo <- pletFieldsC @'["validRange"] ctx'.txInfo
 
-    txValidRange <- pletC txInfo . validRange
+    txValidRange <- pletC txInfo.validRange
     pboolC
       (fail "pmustValidateAfter: transaction validation range is not after 'after'")
       ( do
@@ -327,8 +327,8 @@ pmustBeSignedBy = phoistAcyclic $
   plam $ \ctx pkh -> unTermCont do
     ptraceC "mustBeSignedBy"
     ctx' <- pletFieldsC @'["txInfo"] ctx
-    txInfo <- pletFieldsC @'["signatories"] ctx' . txInfo
-    sigs <- pletC txInfo . signatories
+    txInfo <- pletFieldsC @'["signatories"] ctx'.txInfo
+    sigs <- pletC txInfo.signatories
     pboolC
       (fail "mustBeSignedBy: pkh didn't sign the transaction")
       ( do
