@@ -9,6 +9,7 @@ module Coop.Types (
   FactStatement (),
   FsDatum (..),
   CertDatum (..),
+  AuthParams (..),
 ) where
 
 import Coop.PlutusOrphans ()
@@ -18,9 +19,9 @@ import GHC.Generics (Generic)
 import PlutusTx qualified
 
 #ifdef NEW_LEDGER_NAMESPACE
-import PlutusLedgerApi.V1 (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, POSIXTimeRange)
+import PlutusLedgerApi.V1 (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, POSIXTimeRange, PubKeyHash)
 #else
-import Plutus.V1.Ledger.Api (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, POSIXTimeRange)
+import Plutus.V1.Ledger.Api (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, POSIXTimeRange, PubKeyHash)
 #endif
 
 data CoopPlutus = CoopPlutus
@@ -49,6 +50,8 @@ data FsDatum = FsDatum
   , fd'id :: LedgerBytes
   , fd'description :: FsDescription
   , fs'gcAfter :: POSIXTime
+  , fs'submitter :: PubKeyHash
+  , fs'fsCs :: CurrencySymbol
   }
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
@@ -56,8 +59,7 @@ data FsDatum = FsDatum
 data FsMpParams = FsMpParams
   { fmp'coopInstance :: CurrencySymbol -- provided by the one shot mp,
   , fmp'fsVAddress :: Address
-  , fmp'authTokenCs :: CurrencySymbol
-  , fmp'certTokenCs :: CurrencySymbol
+  , fmp'authParams :: AuthParams
   }
   deriving stock (Show, Generic, Eq, Typeable)
   deriving anyclass (ToJSON, FromJSON)
@@ -69,6 +71,12 @@ newtype FsVParams = FsVParams
   deriving anyclass (ToJSON, FromJSON)
 
 -- Authentication Tokens and Certificates
+data AuthParams = AuthParams
+  { ap'authTokenCs :: CurrencySymbol
+  , ap'certTokenCs :: CurrencySymbol
+  }
+  deriving stock (Show, Generic, Eq)
+  deriving anyclass (ToJSON, FromJSON)
 
 data CertDatum = CertDatum
   { cd'id :: LedgerBytes
@@ -77,7 +85,8 @@ data CertDatum = CertDatum
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
 
+PlutusTx.unstableMakeIsData ''CertDatum
+PlutusTx.unstableMakeIsData ''AuthParams
 PlutusTx.unstableMakeIsData ''FsMpParams
 PlutusTx.unstableMakeIsData ''FsVParams
 PlutusTx.unstableMakeIsData ''FsDatum
-PlutusTx.unstableMakeIsData ''CertDatum

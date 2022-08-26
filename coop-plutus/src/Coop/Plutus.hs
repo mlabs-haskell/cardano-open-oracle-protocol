@@ -6,16 +6,17 @@ module Coop.Plutus (
 ) where
 
 import Control.Monad.Fail (MonadFail (fail))
-import Coop.Plutus.Aux (pboolC, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pflattenValue, phasCurrency, pmaybeDataC, pmustBeSignedBy, pmustMint, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
-import Coop.Plutus.Types (PCertDatum, PFsDatum, PFsMpParams, PFsVParams)
-import Plutarch (popaque, pto)
-import Plutarch.Api.V1 (PCurrencySymbol, PMaybeData (PDJust, PDNothing), PMintingPolicy, PScriptContext, PTxInInfo, PTxOut, PValidator, ptuple)
-import Plutarch.Api.V1.Value (PTokenName (PTokenName), pnormalize, pvalueOf)
+import Coop.Plutus.Aux (pboolC, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pgetTokensByCurrency, phasCurrency, pmaybeDataC, pmustBeSignedBy, pmustMint, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
+import Coop.Plutus.Types (PAuthParams, PCertDatum, PFsDatum, PFsMpParams, PFsVParams)
+import Plutarch (popaque)
+import Plutarch.Api.V1 (AmountGuarantees (NonZero), KeyGuarantees (Sorted), PCurrencySymbol, PMaybeData, PMintingPolicy, PScriptContext, PTxInInfo, PTxOut, PValidator, PValue, ptuple)
+import Plutarch.Api.V1.AssocMap (psingleton)
+import Plutarch.Api.V1.Value (PTokenName (PTokenName), pnormalize)
 import Plutarch.Bool (pif)
 import Plutarch.Extra.Interval (pcontains)
 import Plutarch.Extra.TermCont (pletC, pletFieldsC, ptraceC)
 import Plutarch.Num (PNum (pnegate))
-import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PByteString, PEq ((#==)), PListLike (pcons, pnil), PUnit, Term, getField, pcon, pconstant, pdata, pdcons, pdnil, pfield, pfoldl, pfromData, phoistAcyclic, plam, plet, (#), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PEq ((#==)), PListLike (pcons, pnil), PUnit, Term, getField, pcon, pconsBS, pconstant, pdata, pfield, pfoldl, pfromData, phoistAcyclic, plam, plet, psha3_256, (#), type (:-->))
 import Plutarch.TermCont (unTermCont)
 import Prelude (Applicative (pure), ($))
 
@@ -27,229 +28,39 @@ import Prelude (Applicative (pure), ($))
 -}
 mkFsV :: ClosedTerm (PAsData PFsVParams :--> PValidator)
 mkFsV = phoistAcyclic $
-  plam $ \params fsDatum _ ctx -> unTermCont do
-    fsDatum' <- pletC $ pfromData (ptryFromData @PFsDatum fsDatum)
+  plam $ \_ fsDatum _ ctx -> unTermCont do
+    ptraceC "@FsV"
 
-    _ <- pletC $ pmustBeSignedBy # ctx # (pfield @"fd'submitter" # fsDatum')
+    fsDatum' <- pletFieldsC @'["fd'submitter", "fd'gcAfter", "fd'fsCs", "fd'id"] $ pfromData (ptryFromData @PFsDatum fsDatum)
 
-    _ <- pletC $ pmustValidateAfter # ctx # pfromData (pfield @"fd'gcAfter" # fsDatum')
+    _ <- pletC $ pmustBeSignedBy # ctx # fsDatum'.fd'submitter
+    ptraceC "@FsV: Submitter signed"
 
-    coopInst <- pletC $ pfield @"fvp'coopInstance" # pfromData params
-    fsMp <- pletC $ fsVFindFsMp # ctx # coopInst
-    _ <-
-      pletC $
-        pmustMint # ctx
-          # fsMp
-          # pcon (PTokenName $ pfield @"fd'id" # fsDatum')
-          # (pnegate # 1)
+    _ <- pletC $ pmustValidateAfter # ctx # fsDatum'.fd'gcAfter
+    ptraceC "@FsV: Can collect"
+
+    fsCs <- pletC $ fsDatum'.fd'fsCs
+    fsTn <- pletC $ pcon (PTokenName $ fsDatum'.fd'id)
+    _ <- pletC $ pmustMint # ctx # fsCs # fsTn # (pnegate # 1)
+    ptraceC "@FsV: $FS burned"
 
     pure $ popaque $ pconstant ()
 
-fsVFindFsMp :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PCurrencySymbol)
-fsVFindFsMp = phoistAcyclic $
-  plam $ \ctx coopInst -> unTermCont do
-    ptraceC "fsVFindFsMp"
-    ctx' <- pletFieldsC @'["txInfo"] ctx
-    txInfo <- pletFieldsC @'["mint"] (getField @"txInfo" ctx')
-    mayFsMp <-
-      pletC $
-        pfindMap
-          # plam
-            ( \asset ->
-                pif
-                  (pto (pfromData (pfield @"tokenName" # asset)) #== pto coopInst)
-                  (pcon $ PDNothing pdnil)
-                  (pcon $ PDJust $ pdcons # (pfield @"currencySymbol" # asset) # pdnil)
-            )
-          # (pflattenValue # getField @"mint" txInfo)
-    pmaybeDataC
-      (fail "fsVFindFsMp: couldn't deduce FsMp")
-      ( \fsMp -> do
-          ptraceC "fsVFindFsMp: found FsMp"
-          pure fsMp
-      )
-      mayFsMp
+-- TODO: Add FS_MINT and FS_BURN Redeemers
 
 -- | Minting policy that validates creation of new fss.
 mkFsMp :: ClosedTerm (PAsData PFsMpParams :--> PMintingPolicy)
 mkFsMp = phoistAcyclic $
   plam $ \params _ ctx -> unTermCont do
-    validCerts <- pletC $ fsMpParseRefs # pfromData params # ctx
-    validAuthInputs <- pletC $ fsMpParseInputs # pfromData params # ctx # validCerts
+    ptraceC "FsMp"
+
+    validAuthInputs <- pletC $ caValidateAuthInputs # (pfield @"fmp'authParams" # params) # ctx
+    ptraceC "FsMp: Validated authentication inputs"
+
     _ <- pletC $ fsMpParseOutputs # pfromData params # ctx # validAuthInputs
+    ptraceC "FsMp: Validated Fact Statement outputs"
+
     pure $ popaque $ pconstant ()
-
-fsMpParseInputs ::
-  Term
-    s
-    ( PFsMpParams
-        :--> PScriptContext
-        :--> PBuiltinList PCertDatum
-        :--> PBuiltinList PTxInInfo
-    )
-fsMpParseInputs = phoistAcyclic $
-  plam $ \params ctx certs -> unTermCont $ do
-    ptraceC "fsMpParseInputs"
-    txInfo <- pletFieldsC @'["inputs"] (pfield @"txInfo" # ctx)
-    txInputs <- pletC $ getField @"inputs" txInfo
-    pure $ pfoldl # (fsMpParseInput # params # ctx # certs) # pnil # txInputs
-
-fsMpParseInput ::
-  Term
-    s
-    ( PFsMpParams
-        :--> PScriptContext
-        :--> PBuiltinList PCertDatum
-        :--> PBuiltinList PTxInInfo
-        :--> PTxInInfo
-        :--> PBuiltinList PTxInInfo
-    )
-fsMpParseInput = phoistAcyclic $
-  plam $ \params ctx certs acc txIn -> unTermCont do
-    ptraceC "fsMpParseInput"
-    txInOut <- pletC $ pfield @"resolved" # txIn
-    txInOutVal <- pletC $ pnormalize # (pfield @"value" # txInOut)
-
-    authTokenCs <- pletC $ pfield @"fmp'authTokenCs" # params
-    hasAuthCs <- pletC $ phasCurrency # authTokenCs # txInOutVal
-    pboolC
-      ( do
-          ptraceC "fsMpParseInput: auth token not in the input, skipping"
-          pure acc
-      )
-      ( do
-          ptraceC "fsMpParseInput: auth token in the output, continuing"
-          pure $ fsMpParseInputWithAuth # ctx # authTokenCs # certs # acc # txIn
-      )
-      hasAuthCs
-
-{- | Handles a transaction input that holds an $AUTH token.
-
-- check that there's exactly one $AUTH token that's associated with a valid Certificate
-- check that the $AUTH token is burned
-
-The TxInInfo is emitted only if it's been validated and burned.
--}
-fsMpParseInputWithAuth ::
-  Term
-    s
-    ( PScriptContext
-        :--> PCurrencySymbol
-        :--> PBuiltinList PCertDatum
-        :--> PBuiltinList PTxInInfo
-        :--> PTxInInfo
-        :--> PBuiltinList PTxInInfo
-    )
-fsMpParseInputWithAuth = phoistAcyclic $
-  plam $ \ctx authTokenCs certs acc txIn -> unTermCont do
-    ptraceC "fsMpParseInputWithAuth"
-    txInOut <- pletC $ pfield @"resolved" # txIn
-    txInOutVal <- pletC $ pnormalize # (pfield @"value" # txInOut)
-
-    mayAuthTn <-
-      pletC $
-        pfindMap
-          # plam
-            ( \certDat ->
-                plet
-                  (pcon (PTokenName $ pfield @"cert'id" # certDat))
-                  ( \authTn ->
-                      pif
-                        (pvalueOf # txInOutVal # authTokenCs # authTn #== 1)
-                        pdnothing
-                        (pdjust authTn)
-                  )
-            )
-          # certs
-
-    pmaybeDataC
-      ( do
-          ptraceC "fsMpParseInputWithAuth: couldn't validate the auth token, skipping"
-          pure acc
-      )
-      ( \authTn -> do
-          ptraceC "fsMpParseInputWithAuth: auth token validated, skipping"
-          _ <- pletC $ pmustMint # ctx # authTokenCs # authTn # (pnegate # 1)
-          pure $ pcons # txIn # acc
-      )
-      mayAuthTn
-
-fsMpParseRefs ::
-  Term
-    s
-    ( PFsMpParams
-        :--> PScriptContext
-        :--> PBuiltinList PCertDatum
-    )
-fsMpParseRefs = phoistAcyclic $
-  plam $ \params ctx -> unTermCont $ do
-    -- TODO: Migrate to reference inputs
-    ptraceC "fsMpParseRefs"
-    txInfo <- pletFieldsC @'["inputs"] (pfield @"txInfo" # ctx)
-    txInputs <- pletC $ getField @"inputs" txInfo
-    pure $ pfoldl # (fsMpParseRef # params # ctx) # pnil # txInputs
-
-fsMpParseRef ::
-  Term
-    s
-    ( PFsMpParams
-        :--> PScriptContext
-        :--> PBuiltinList PCertDatum
-        :--> PTxInInfo
-        :--> PBuiltinList PCertDatum
-    )
-fsMpParseRef = phoistAcyclic $
-  plam $ \params ctx acc txIn -> unTermCont do
-    ptraceC "fsMpParseRef"
-    txInOut <- pletC $ pfield @"resolved" # txIn
-    txInOutVal <- pletC $ pnormalize # (pfield @"value" # txInOut)
-
-    pboolC
-      ( do
-          ptraceC "fsMpParseRef: cert token not in the input...skipping"
-          pure acc
-      )
-      ( do
-          ptraceC "fsMpParseRef: cert token in the input...continuing"
-          pure $ fsMpParseRefWithCert # params # ctx # acc # txIn
-      )
-      (phasCurrency # (pfield @"fmp'certTokenCs" # params) # txInOutVal)
-
-{- | Handles a transaction input that holds an $CERT token.
-
-- check that the transaction's validator range is contained withing the Certificate's validity range
-
-The CertDatum is emitted only if it's been validated.
--}
-fsMpParseRefWithCert ::
-  Term
-    s
-    ( PFsMpParams
-        :--> PScriptContext
-        :--> PBuiltinList PCertDatum
-        :--> PTxInInfo
-        :--> PBuiltinList PCertDatum
-    )
-fsMpParseRefWithCert = phoistAcyclic $
-  plam $ \_ ctx acc txIn -> unTermCont do
-    ptraceC "fsMpParseRefWithCert"
-    txInOut <- pletC $ pfield @"resolved" # txIn
-
-    certDat <- pletC $ (pdatumFromTxOut @PCertDatum) # ctx # txInOut
-    certValidity <- pletC $ pfield @"cert'validity" # certDat
-    ctx' <- pletFieldsC @'["txInfo"] ctx
-    txInfo <- pletFieldsC @'["validRange"] (getField @"txInfo" ctx')
-    txValidRange <- pletC $ pfromData $ getField @"validRange" txInfo
-    pboolC
-      ( do
-          ptraceC "fsMpParseRefWithCert: cert is invalid"
-          pure acc
-      )
-      ( do
-          ptraceC "fsMpParseRefWithCert: cert is valid"
-          pure $ pcons # certDat # acc
-      )
-      (pcontains # certValidity # txValidRange)
 
 {- | Parse and validate transaction outputs that hold Fact Statements.
  TODO: Switch to using Plutus V2
@@ -259,9 +70,9 @@ fsMpParseOutputs = phoistAcyclic $
   plam $ \params ctx validAuthInputs -> unTermCont $ do
     ptraceC "fsMpParseOutputs"
     ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
-    txInfo <- pletFieldsC @'["datums", "outputs"] (getField @"txInfo" ctx')
-    ownCs <- pletC $ pownCurrencySymbol # getField @"purpose" ctx'
-    txOuts <- pletC $ getField @"outputs" txInfo
+    txInfo <- pletFieldsC @'["outputs"] (ctx'.txInfo)
+    ownCs <- pletC $ pownCurrencySymbol # ctx'.purpose
+    txOuts <- pletC $ txInfo.outputs
     fsMpParseOutput' <- pletC $ fsMpParseOutput # params # ctx # ownCs
     _ <- pletC $ pfoldl # fsMpParseOutput' # validAuthInputs # txOuts
     pure punit
@@ -280,7 +91,7 @@ fsMpParseOutput = phoistAcyclic $
   plam $ \params ctx ownCs validAuthInputs txOut -> unTermCont do
     ptraceC "fsMpParseOutput"
     txOut' <- pletFieldsC @'["value"] txOut
-    outVal <- pletC $ pnormalize # getField @"value" txOut'
+    outVal <- pletC $ pnormalize # txOut'.value
 
     hasOwnCs <- pletC $ phasCurrency # ownCs # outVal
     pboolC
@@ -299,7 +110,7 @@ fsMpParseOutput = phoistAcyclic $
 - check that 1 $FS is minted and associated with a valid $AUTH
 - check that 1 $FS is sent to FsV
 
-The CertDatum is emitted only if it's been validated.
+The TxInInfo is emitted only if it's been validated. However, if any check fails the failure is raised.
 -}
 fsMpParseOutputWithFs ::
   Term
@@ -314,20 +125,26 @@ fsMpParseOutputWithFs ::
 fsMpParseOutputWithFs = phoistAcyclic $
   plam $ \params ctx ownCs validAuthInputs txOut -> unTermCont do
     ptraceC "fsMpParseOutputWithFs"
-    txOut' <- pletFieldsC @'["value", "address", "datumHash"] txOut
+    txOut' <- pletFieldsC @'["value", "address"] txOut
     outVal <- pletC $ pnormalize # txOut'.value
     outAddr <- pletC $ txOut'.address
 
+    pboolC
+      (fail "fsMpParseOutputWithFs: output not sent to fsV")
+      (ptraceC "fsMpParseOutputWithFs: output sent to fsV")
+      (outAddr #== (pfield @"fmp'fsVAddress" # params))
+
+    ownTokens <- pletC $ pgetTokensByCurrency # ownCs # outVal
     foundAndRest <-
       pletC $
         pfoldl
           # plam
             ( \foundAndRest authInput ->
                 plet
-                  (pcon (PTokenName $ ptxIdFromTxInInfo # authInput))
+                  (ptokenNameFromTxInInfo # authInput)
                   ( \fsTn ->
                       pif
-                        (pvalueOf # outVal # ownCs # fsTn #== 1)
+                        (ownTokens #== (psingleton # fsTn # 1)) -- NOTE: Only outputs a single $FS token!
                         (ptuple # pdata pdnothing # pdata (pcons # authInput # (pfield @"_1" # foundAndRest)))
                         (ptuple # pdata (pdjust fsTn) # pdata (pfield @"_1" # foundAndRest))
                   )
@@ -341,27 +158,219 @@ fsMpParseOutputWithFs = phoistAcyclic $
     mayFsTn <- pletC $ pfield @"_0" # foundAndRest
     restAuthInputs <- pletC $ pfield @"_1" # foundAndRest
 
-    pboolC
-      ( do
-          fail "fsMpParseOutputWithFs: output not sent to fsV"
-          pure punit
-      )
-      ( do
-          ptraceC "fsMpParseOutputWithFs: output sent to fsV"
-          pure punit
-      )
-      (outAddr #== pfield @"fmp'fsVAddress" # params)
-
     pmaybeDataC
-      ( do
-          fail "fsMpParseOutputWithFs: Correct $FS not found"
-          pure validAuthInputs
-      )
-      ( \_ -> do
-          ptraceC "fsMpParseOutputWithFs: Correct $FS found"
-          pure restAuthInputs
+      (fail "fsMpParseOutputWithFs: invalid $FS not found")
+      ( \fsTn -> do
+          ptraceC "fsMpParseOutputWithFs: $FS validated"
+          _ <- pletC $ pmustMint # ctx # ownCs # fsTn # 1
+          ptraceC "fsMpParseOutputWithFs: $FS minted"
       )
       mayFsTn
 
-ptxIdFromTxInInfo :: Term s (PTxInInfo :--> PByteString)
-ptxIdFromTxInInfo = phoistAcyclic $ plam \inInfo -> pfield @"_0" # (pfield @"id" # (pfield @"outRef" # inInfo))
+    pure restAuthInputs
+
+{- | ptokenNameFromTxInInfo creates a unique TokenName from the given transaction input
+
+TokenName $ sha3_256 (refId `concat` num)
+-}
+ptokenNameFromTxInInfo :: Term s (PTxInInfo :--> PTokenName)
+ptokenNameFromTxInInfo = phoistAcyclic $
+  plam $ \inInfo -> unTermCont do
+    txId <- pletC $ pfield @"_0" # (pfield @"id" # (pfield @"outRef" # inInfo))
+    txIdx <- pletC $ pfield @"idx" # (pfield @"outRef" # inInfo)
+    pure $ pcon $ PTokenName $ psha3_256 # (pconsBS # txIdx # txId)
+
+-- | CoopMp authentication
+caValidateAuthInputs ::
+  Term
+    s
+    ( PAuthParams
+        :--> PScriptContext
+        :--> PBuiltinList PTxInInfo
+    )
+caValidateAuthInputs = phoistAcyclic $
+  plam $ \params ctx -> unTermCont $ do
+    validCerts <- pletC $ caParseRefs # params # ctx
+    pure $ caParseInputs # params # ctx # validCerts
+
+caParseInputs ::
+  Term
+    s
+    ( PAuthParams
+        :--> PScriptContext
+        :--> PBuiltinList PCertDatum
+        :--> PBuiltinList PTxInInfo
+    )
+caParseInputs = phoistAcyclic $
+  plam $ \params ctx certs -> unTermCont $ do
+    ptraceC "caParseInputs"
+    txInfo <- pletFieldsC @'["inputs"] (pfield @"txInfo" # ctx)
+    txInputs <- pletC $ getField @"inputs" txInfo
+    pure $ pfoldl # (caParseInput # params # ctx # certs) # pnil # txInputs
+
+caParseInput ::
+  Term
+    s
+    ( PAuthParams
+        :--> PScriptContext
+        :--> PBuiltinList PCertDatum
+        :--> PBuiltinList PTxInInfo
+        :--> PTxInInfo
+        :--> PBuiltinList PTxInInfo
+    )
+caParseInput = phoistAcyclic $
+  plam $ \params ctx certs acc txIn -> unTermCont do
+    ptraceC "caParseInput"
+    txInOut <- pletC $ pfield @"resolved" # txIn
+    txInOutVal <- pletC $ pnormalize # (pfield @"value" # txInOut)
+
+    authTokenCs <- pletC $ pfield @"ap'authTokenCs" # params
+    hasAuthCs <- pletC $ phasCurrency # authTokenCs # txInOutVal
+    pboolC
+      ( do
+          ptraceC "caParseInput: auth token not in the input, skipping"
+          pure acc
+      )
+      ( do
+          ptraceC "caParseInput: auth token in the output, continuing"
+          pure $ caParseInputWithAuth # ctx # authTokenCs # certs # acc # txIn
+      )
+      hasAuthCs
+
+{- | Handles a transaction input that holds an $AUTH token.
+
+- check that there's exactly one $AUTH token that's associated with a valid Certificate
+- check that the $AUTH token is burned
+
+The TxInInfo is emitted only if it's been validated and burned.
+The function fails hard if any of the checks fails.
+-}
+caParseInputWithAuth ::
+  Term
+    s
+    ( PScriptContext
+        :--> PCurrencySymbol
+        :--> PBuiltinList PCertDatum
+        :--> PBuiltinList PTxInInfo
+        :--> PTxInInfo
+        :--> PBuiltinList PTxInInfo
+    )
+caParseInputWithAuth = phoistAcyclic $
+  plam $ \ctx authTokenCs certs acc txIn -> unTermCont do
+    ptraceC "caParseInputWithAuth"
+    txInOut <- pletC $ pfield @"resolved" # txIn
+    txInVal <- pletC $ pnormalize # (pfield @"value" # txInOut)
+
+    authTokens <- pletC $ pgetTokensByCurrency # authTokenCs # txInVal
+
+    mayAuthTn <-
+      pletC $
+        pfindMap
+          # plam
+            ( \certDat ->
+                plet
+                  (pcon (PTokenName $ pfield @"cert'id" # certDat))
+                  ( \authTn ->
+                      pif
+                        (authTokens #== (psingleton # authTn # 1)) -- NOTE: Only contains a single $AUTH token!
+                        pdnothing
+                        (pdjust authTn)
+                  )
+            )
+          # certs
+
+    pmaybeDataC
+      (fail "caParseInputWithAuth: couldn't validate the auth token, skipping")
+      ( \authTn -> do
+          ptraceC "caParseInputWithAuth: auth token validated, continuing"
+          _ <- pletC $ pmustMint # ctx # authTokenCs # authTn # (pnegate # 1)
+          ptraceC "caParseInputWithAuth: auth token burned, continuing"
+      )
+      mayAuthTn
+
+    pure $ pcons # txIn # acc
+
+caParseRefs ::
+  Term
+    s
+    ( PAuthParams
+        :--> PScriptContext
+        :--> PBuiltinList PCertDatum
+    )
+caParseRefs = phoistAcyclic $
+  plam $ \params ctx -> unTermCont $ do
+    -- TODO: Migrate to reference inputs
+    ptraceC "caParseRefs"
+    txInfo <- pletFieldsC @'["inputs"] (pfield @"txInfo" # ctx)
+    txInputs <- pletC $ getField @"inputs" txInfo
+    pure $ pfoldl # (caParseRef # params # ctx) # pnil # txInputs
+
+caParseRef ::
+  Term
+    s
+    ( PAuthParams
+        :--> PScriptContext
+        :--> PBuiltinList PCertDatum
+        :--> PTxInInfo
+        :--> PBuiltinList PCertDatum
+    )
+caParseRef = phoistAcyclic $
+  plam $ \params ctx acc txIn -> unTermCont do
+    ptraceC "caParseRef"
+    txInOut <- pletC $ pfield @"resolved" # txIn
+    txInVal <- pletC $ pnormalize # (pfield @"value" # txInOut)
+    certTokenCs <- pletC $ pfield @"ap'certTokenCs" # params
+
+    pboolC
+      ( do
+          ptraceC "caParseRef: cert token not in the input, skipping"
+          pure acc
+      )
+      ( do
+          ptraceC "caParseRef: cert token in the input, continuing"
+          pure $ caParseRefWithCert # ctx # certTokenCs # txInVal # acc # txIn
+      )
+      (phasCurrency # certTokenCs # txInVal)
+
+{- | Handles a transaction input that holds an $CERT token.
+
+- check that the transaction's validator range is contained withing the Certificate's validity range
+- check that the Certificate ref input has 1 $CERT token with appropriate ID (TokenName)
+
+The CertDatum is emitted only if it's been validated.
+The function fails hard if any of the checks fails.
+-}
+caParseRefWithCert ::
+  Term
+    s
+    ( PScriptContext
+        :--> PCurrencySymbol
+        :--> PValue 'Sorted 'NonZero
+        :--> PBuiltinList PCertDatum
+        :--> PTxInInfo
+        :--> PBuiltinList PCertDatum
+    )
+caParseRefWithCert = phoistAcyclic $
+  plam $ \ctx certTokenCs txInVal acc txIn -> unTermCont do
+    ptraceC "caParseRefWithCert"
+    txInOut <- pletC $ pfield @"resolved" # txIn
+
+    certDat <- pletC $ (pdatumFromTxOut @PCertDatum) # ctx # txInOut
+    certValidity <- pletC $ pfield @"cert'validity" # certDat
+    certId <- pletC $ pfield @"cert'id" # certDat
+
+    certTokens <- pletC $ pgetTokensByCurrency # certTokenCs # txInVal
+    pboolC
+      (fail "caParseRefWithCert: cert mismatched id")
+      (ptraceC "caParseRefWithCert: cert has a matching id")
+      (certTokens #== (psingleton # pcon (PTokenName certId) # 1))
+
+    ctx' <- pletFieldsC @'["txInfo"] ctx
+    txInfo <- pletFieldsC @'["validRange"] (getField @"txInfo" ctx')
+    txValidRange <- pletC $ pfromData $ getField @"validRange" txInfo
+    pboolC
+      (fail "caParseRefWithCert: cert is invalid")
+      (ptraceC "caParseRefWithCert: cert is valid")
+      (pcontains # certValidity # txValidRange)
+
+    pure $ pcons # certDat # acc

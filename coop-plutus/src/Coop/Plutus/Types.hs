@@ -1,3 +1,5 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -6,9 +8,10 @@ module Coop.Plutus.Types (
   PFsVParams (..),
   PFsDatum (..),
   PCertDatum (..),
+  PAuthParams (..),
 ) where
 
-import Coop.Types (CertDatum, FsMpParams, FsVParams)
+import Coop.Types (AuthParams, CertDatum, FsDatum, FsMpParams, FsVParams)
 import Data.Typeable (Typeable)
 import GHC.Generics qualified as GHC
 import Generics.SOP (Generic)
@@ -44,13 +47,16 @@ newtype PFsDatum s
                , "fd'description" ':= PByteString
                , "fd'gcAfter" ':= PPOSIXTime
                , "fd'submitter" ':= PPubKeyHash
+               , "fd'fsCs" ':= PCurrencySymbol
                ]
           )
       )
-  deriving stock (GHC.Generic)
+  deriving stock (GHC.Generic, Typeable)
   deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
 
 instance DerivePlutusType PFsDatum where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PFsDatum where type PLifted PFsDatum = FsDatum
+deriving via (DerivePConstantViaData FsDatum PFsDatum) instance (PConstantDecl FsDatum)
 instance PTryFrom PData (PAsData PFsDatum)
 
 newtype PFsMpParams s
@@ -60,8 +66,7 @@ newtype PFsMpParams s
           ( PDataRecord
               '[ "fmp'coopInstance" ':= PCurrencySymbol
                , "fmp'fsVAddress" ':= PAddress
-               , "fmp'authTokenCs" ':= PCurrencySymbol
-               , "fmp'certTokenCs" ':= PCurrencySymbol
+               , "fmp'authParams" ':= PAuthParams
                ]
           )
       )
@@ -71,6 +76,7 @@ newtype PFsMpParams s
 instance DerivePlutusType PFsMpParams where type DPTStrat _ = PlutusTypeData
 instance PUnsafeLiftDecl PFsMpParams where type PLifted PFsMpParams = FsMpParams
 deriving via (DerivePConstantViaData FsMpParams PFsMpParams) instance (PConstantDecl FsMpParams)
+instance PTryFrom PData (PAsData PFsMpParams)
 
 newtype PFsVParams s
   = PFsVParams
@@ -87,6 +93,25 @@ newtype PFsVParams s
 instance DerivePlutusType PFsVParams where type DPTStrat _ = PlutusTypeData
 instance PUnsafeLiftDecl PFsVParams where type PLifted PFsVParams = FsVParams
 deriving via (DerivePConstantViaData FsVParams PFsVParams) instance (PConstantDecl FsVParams)
+instance PTryFrom PData (PAsData PFsVParams)
+
+newtype PAuthParams s
+  = PAuthParams
+      ( Term
+          s
+          ( PDataRecord
+              '[ "ap'authTokenCs" ':= PCurrencySymbol
+               , "ap'certTokenCs" ':= PCurrencySymbol
+               ]
+          )
+      )
+  deriving stock (GHC.Generic, Typeable)
+  deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
+
+instance DerivePlutusType PAuthParams where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PAuthParams where type PLifted PAuthParams = AuthParams
+deriving via (DerivePConstantViaData AuthParams PAuthParams) instance (PConstantDecl AuthParams)
+instance PTryFrom PData (PAsData PAuthParams)
 
 newtype PCertDatum (s :: S)
   = PCertDatum
@@ -102,9 +127,9 @@ newtype PCertDatum (s :: S)
   deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
 
 instance DerivePlutusType PCertDatum where type DPTStrat _ = PlutusTypeData
-instance PTryFrom PData (PAsData PCertDatum)
 instance PUnsafeLiftDecl PCertDatum where type PLifted PCertDatum = CertDatum
 deriving via (DerivePConstantViaData CertDatum PCertDatum) instance (PConstantDecl CertDatum)
+instance PTryFrom PData (PAsData PCertDatum)
 
 -- FIXME: Purge this when Plutarch supports it
 instance PTryFrom PData (PAsData PBool)
