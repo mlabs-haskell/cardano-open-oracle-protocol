@@ -13,8 +13,7 @@ module Coop.Plutus.Types (
 
 import Coop.Types (AuthParams, CertDatum, FsDatum, FsMpParams, FsVParams)
 import Data.Typeable (Typeable)
-import GHC.Generics qualified as GHC
-import Generics.SOP (Generic)
+import GHC.Generics (Generic)
 import Plutarch (DerivePlutusType (DPTStrat))
 import Plutarch.Api.V1 (
   PAddress,
@@ -51,8 +50,8 @@ newtype PFsDatum s
                ]
           )
       )
-  deriving stock (GHC.Generic, Typeable)
-  deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
+  deriving stock (Generic, Typeable)
+  deriving anyclass (PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
 
 instance DerivePlutusType PFsDatum where type DPTStrat _ = PlutusTypeData
 instance PUnsafeLiftDecl PFsDatum where type PLifted PFsDatum = FsDatum
@@ -70,8 +69,8 @@ newtype PFsMpParams s
                ]
           )
       )
-  deriving stock (GHC.Generic, Typeable)
-  deriving anyclass (Generic, PlutusType, PIsData, PEq, PDataFields)
+  deriving stock (Generic, Typeable)
+  deriving anyclass (PlutusType, PIsData, PEq, PDataFields)
 
 instance DerivePlutusType PFsMpParams where type DPTStrat _ = PlutusTypeData
 instance PUnsafeLiftDecl PFsMpParams where type PLifted PFsMpParams = FsMpParams
@@ -87,8 +86,8 @@ newtype PFsVParams s
                ]
           )
       )
-  deriving stock (GHC.Generic, Typeable)
-  deriving anyclass (Generic, PlutusType, PIsData, PEq, PDataFields)
+  deriving stock (Generic, Typeable)
+  deriving anyclass (PlutusType, PIsData, PEq, PDataFields)
 
 instance DerivePlutusType PFsVParams where type DPTStrat _ = PlutusTypeData
 instance PUnsafeLiftDecl PFsVParams where type PLifted PFsVParams = FsVParams
@@ -105,8 +104,8 @@ newtype PAuthParams s
                ]
           )
       )
-  deriving stock (GHC.Generic, Typeable)
-  deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
+  deriving stock (Generic, Typeable)
+  deriving anyclass (PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
 
 instance DerivePlutusType PAuthParams where type DPTStrat _ = PlutusTypeData
 instance PUnsafeLiftDecl PAuthParams where type PLifted PAuthParams = AuthParams
@@ -123,8 +122,8 @@ newtype PCertDatum (s :: S)
                ]
           )
       )
-  deriving stock (GHC.Generic)
-  deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
+  deriving stock (Generic)
+  deriving anyclass (PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
 
 instance DerivePlutusType PCertDatum where type DPTStrat _ = PlutusTypeData
 instance PUnsafeLiftDecl PCertDatum where type PLifted PCertDatum = CertDatum

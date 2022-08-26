@@ -16,7 +16,7 @@ import Plutarch.Bool (pif)
 import Plutarch.Extra.Interval (pcontains)
 import Plutarch.Extra.TermCont (pletC, pletFieldsC, ptraceC)
 import Plutarch.Num (PNum (pnegate))
-import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PEq ((#==)), PListLike (pcons, pnil), PUnit, Term, getField, pcon, pconsBS, pconstant, pdata, pfield, pfoldl, pfromData, phoistAcyclic, plam, plet, psha3_256, (#), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PEq ((#==)), PListLike (pcons, pnil), PUnit, Term, pcon, pconsBS, pconstant, pdata, pfield, pfoldl, pfromData, phoistAcyclic, plam, plet, psha3_256, (#), type (:-->))
 import Plutarch.TermCont (unTermCont)
 import Prelude (Applicative (pure), ($))
 
@@ -33,14 +33,14 @@ mkFsV = phoistAcyclic $
 
     fsDatum' <- pletFieldsC @'["fd'submitter", "fd'gcAfter", "fd'fsCs", "fd'id"] $ pfromData (ptryFromData @PFsDatum fsDatum)
 
-    _ <- pletC $ pmustBeSignedBy # ctx # fsDatum'.fd'submitter
+    _ <- pletC $ pmustBeSignedBy # ctx # fsDatum' . fd'submitter
     ptraceC "@FsV: Submitter signed"
 
-    _ <- pletC $ pmustValidateAfter # ctx # fsDatum'.fd'gcAfter
+    _ <- pletC $ pmustValidateAfter # ctx # fsDatum' . fd'gcAfter
     ptraceC "@FsV: Can collect"
 
-    fsCs <- pletC $ fsDatum'.fd'fsCs
-    fsTn <- pletC $ pcon (PTokenName $ fsDatum'.fd'id)
+    fsCs <- pletC $ fsDatum' . fd'fsCs
+    fsTn <- pletC $ pcon (PTokenName $ fsDatum' . fd'id)
     _ <- pletC $ pmustMint # ctx # fsCs # fsTn # (pnegate # 1)
     ptraceC "@FsV: $FS burned"
 
@@ -70,9 +70,9 @@ fsMpParseOutputs = phoistAcyclic $
   plam $ \params ctx validAuthInputs -> unTermCont $ do
     ptraceC "fsMpParseOutputs"
     ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
-    txInfo <- pletFieldsC @'["outputs"] (ctx'.txInfo)
-    ownCs <- pletC $ pownCurrencySymbol # ctx'.purpose
-    txOuts <- pletC $ txInfo.outputs
+    txInfo <- pletFieldsC @'["outputs"] (ctx' . txInfo)
+    ownCs <- pletC $ pownCurrencySymbol # ctx' . purpose
+    txOuts <- pletC $ txInfo . outputs
     fsMpParseOutput' <- pletC $ fsMpParseOutput # params # ctx # ownCs
     _ <- pletC $ pfoldl # fsMpParseOutput' # validAuthInputs # txOuts
     pure punit
@@ -91,7 +91,7 @@ fsMpParseOutput = phoistAcyclic $
   plam $ \params ctx ownCs validAuthInputs txOut -> unTermCont do
     ptraceC "fsMpParseOutput"
     txOut' <- pletFieldsC @'["value"] txOut
-    outVal <- pletC $ pnormalize # txOut'.value
+    outVal <- pletC $ pnormalize # txOut' . value
 
     hasOwnCs <- pletC $ phasCurrency # ownCs # outVal
     pboolC
@@ -126,8 +126,8 @@ fsMpParseOutputWithFs = phoistAcyclic $
   plam $ \params ctx ownCs validAuthInputs txOut -> unTermCont do
     ptraceC "fsMpParseOutputWithFs"
     txOut' <- pletFieldsC @'["value", "address"] txOut
-    outVal <- pletC $ pnormalize # txOut'.value
-    outAddr <- pletC $ txOut'.address
+    outVal <- pletC $ pnormalize # txOut' . value
+    outAddr <- pletC $ txOut' . address
 
     pboolC
       (fail "fsMpParseOutputWithFs: output not sent to fsV")
@@ -146,7 +146,7 @@ fsMpParseOutputWithFs = phoistAcyclic $
                       pif
                         (ownTokens #== (psingleton # fsTn # 1)) -- NOTE: Only outputs a single $FS token!
                         (ptuple # pdata pdnothing # pdata (pcons # authInput # (pfield @"_1" # foundAndRest)))
-                        (ptuple # pdata (pdjust fsTn) # pdata (pfield @"_1" # foundAndRest))
+                        (ptuple # pdata (pdjust $ pdata fsTn) # pdata (pfield @"_1" # foundAndRest))
                   )
             )
           # ( ptuple
@@ -205,7 +205,7 @@ caParseInputs = phoistAcyclic $
   plam $ \params ctx certs -> unTermCont $ do
     ptraceC "caParseInputs"
     txInfo <- pletFieldsC @'["inputs"] (pfield @"txInfo" # ctx)
-    txInputs <- pletC $ getField @"inputs" txInfo
+    txInputs <- pletC $ txInfo . inputs
     pure $ pfoldl # (caParseInput # params # ctx # certs) # pnil # txInputs
 
 caParseInput ::
@@ -274,7 +274,7 @@ caParseInputWithAuth = phoistAcyclic $
                       pif
                         (authTokens #== (psingleton # authTn # 1)) -- NOTE: Only contains a single $AUTH token!
                         pdnothing
-                        (pdjust authTn)
+                        (pdjust $ pdata authTn)
                   )
             )
           # certs
@@ -302,7 +302,7 @@ caParseRefs = phoistAcyclic $
     -- TODO: Migrate to reference inputs
     ptraceC "caParseRefs"
     txInfo <- pletFieldsC @'["inputs"] (pfield @"txInfo" # ctx)
-    txInputs <- pletC $ getField @"inputs" txInfo
+    txInputs <- pletC txInfo . inputs
     pure $ pfoldl # (caParseRef # params # ctx) # pnil # txInputs
 
 caParseRef ::
@@ -366,8 +366,8 @@ caParseRefWithCert = phoistAcyclic $
       (certTokens #== (psingleton # pcon (PTokenName certId) # 1))
 
     ctx' <- pletFieldsC @'["txInfo"] ctx
-    txInfo <- pletFieldsC @'["validRange"] (getField @"txInfo" ctx')
-    txValidRange <- pletC $ pfromData $ getField @"validRange" txInfo
+    txInfo <- pletFieldsC @'["validRange"] ctx' . txInfo
+    txValidRange <- pletC $ pfromData txInfo . validRange
     pboolC
       (fail "caParseRefWithCert: cert is invalid")
       (ptraceC "caParseRefWithCert: cert is valid")

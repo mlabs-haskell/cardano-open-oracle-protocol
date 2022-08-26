@@ -35,7 +35,7 @@ import Plutarch.DataRepr (
 import Plutarch.Extra.Interval (pbefore)
 import Plutarch.Extra.TermCont (pletC, pletFieldsC, ptraceC)
 import Plutarch.List (PIsListLike, PList, PListLike (pcons, pelimList, pnil), pany, pfoldl)
-import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PBuiltinPair, PData, PEq ((#==)), PInteger, PIsData, PMaybe (PJust, PNothing), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pdata, pdnil, pelem, pfield, pfix, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pmatch, psndBuiltin, ptraceError, ptryFrom, (#), (#$), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PBuiltinPair, PData, PEq ((#==)), PInteger, PIsData, PMaybe (PJust, PNothing), PTryFrom, PUnit, S, Term, pcon, pconstant, pdata, pdnil, pelem, pfield, pfix, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pmatch, psndBuiltin, ptraceError, ptryFrom, (#), (#$), type (:-->))
 import Plutarch.TermCont (TermCont (runTermCont), tcont, unTermCont)
 import Prelude (Applicative (pure), fst, ($), (<$>))
 
@@ -94,8 +94,8 @@ pfindDatum = phoistAcyclic $
         # plam
           ( \pair -> unTermCont do
               pair' <- pletFieldsC @'["_0", "_1"] $ pfromData pair
-              dh' <- pletC $ getField @"_0" pair'
-              datum <- pletC $ getField @"_1" pair'
+              dh' <- pletC $ pair' . _0
+              datum <- pletC $ pair' . _1
               pure $
                 pif
                   (dh' #== dh)
@@ -135,10 +135,10 @@ mkOneShotMintingPolicy = phoistAcyclic $
   plam $ \tn txOutRef _ ctx -> unTermCont do
     ptraceC "mkOneShotMintingPolicy"
     ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
-    txInfo <- pletFieldsC @'["inputs", "mint"] (getField @"txInfo" ctx')
-    inputs <- pletC $ pfromData $ getField @"inputs" txInfo
-    mint <- pletC $ pfromData $ getField @"mint" txInfo
-    cs <- pletC $ pownCurrencySymbol # getField @"purpose" ctx'
+    txInfo <- pletFieldsC @'["inputs", "mint"] ctx' . txInfo
+    inputs <- pletC txInfo . inputs
+    mint <- pletC txInfo . mint
+    cs <- pletC $ pownCurrencySymbol # ctx' . purpose
 
     pboolC
       (fail "mkOneShotMintingPolicy: Doesn't consume utxo")
@@ -276,7 +276,7 @@ pdatumFromTxOut = phoistAcyclic $
   plam $ \ctx txOut -> unTermCont do
     -- TODO: Migrate to inline datums
     ctx' <- pletFieldsC @'["txInfo"] ctx
-    txInfo <- pletFieldsC @'["datums"] (getField @"txInfo" ctx')
+    txInfo <- pletFieldsC @'["datums"] ctx' . txInfo
 
     outDatumHash <-
       pmaybeDataC
@@ -287,7 +287,7 @@ pdatumFromTxOut = phoistAcyclic $
       pmaybeDataC
         (fail "pDatumFromTxOut: no datum with a given hash present in the transaction datums")
         pure
-        (pfindDatum # getField @"datums" txInfo # outDatumHash)
+        (pfindDatum # txInfo . datums # outDatumHash)
 
     pure $ pfromData (ptryFromData @a (pto datum))
 
@@ -296,8 +296,8 @@ pmustMint = phoistAcyclic $
   plam $ \ctx cs tn q -> unTermCont do
     ptraceC "mustMint"
     ctx' <- pletFieldsC @'["txInfo"] ctx
-    txInfo <- pletFieldsC @'["mint"] (getField @"txInfo" ctx')
-    mint <- pletC $ getField @"mint" txInfo
+    txInfo <- pletFieldsC @'["mint"] ctx' . txInfo
+    mint <- pletC $ txInfo . mint
     pboolC
       (fail "pmustMint: didn't mint the specified quantity")
       ( do
@@ -311,9 +311,9 @@ pmustValidateAfter = phoistAcyclic $
   plam $ \ctx after -> unTermCont do
     ptraceC "mustValidateAfter"
     ctx' <- pletFieldsC @'["txInfo"] ctx
-    txInfo <- pletFieldsC @'["validRange"] (getField @"txInfo" ctx')
+    txInfo <- pletFieldsC @'["validRange"] ctx' . txInfo
 
-    txValidRange <- pletC $ pfromData $ getField @"validRange" txInfo
+    txValidRange <- pletC txInfo . validRange
     pboolC
       (fail "pmustValidateAfter: transaction validation range is not after 'after'")
       ( do
@@ -327,8 +327,8 @@ pmustBeSignedBy = phoistAcyclic $
   plam $ \ctx pkh -> unTermCont do
     ptraceC "mustBeSignedBy"
     ctx' <- pletFieldsC @'["txInfo"] ctx
-    txInfo <- pletFieldsC @'["signatories"] (getField @"txInfo" ctx')
-    sigs <- pletC $ getField @"signatories" txInfo
+    txInfo <- pletFieldsC @'["signatories"] ctx' . txInfo
+    sigs <- pletC txInfo . signatories
     pboolC
       (fail "mustBeSignedBy: pkh didn't sign the transaction")
       ( do
@@ -340,5 +340,5 @@ pmustBeSignedBy = phoistAcyclic $
 pdnothing :: Term s (PMaybeData a)
 pdnothing = pcon $ PDNothing pdnil
 
-pdjust :: PIsData a => Term s a -> Term s (PMaybeData a)
-pdjust x = pcon $ PDJust $ pdcons # pdata x # pdnil
+pdjust :: PIsData a => Term s (PAsData a) -> Term s (PMaybeData a)
+pdjust x = pcon $ PDJust $ pdcons # x # pdnil
