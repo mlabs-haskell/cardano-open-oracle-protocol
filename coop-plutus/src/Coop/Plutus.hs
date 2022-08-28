@@ -3,6 +3,8 @@
 module Coop.Plutus (
   mkFsMp,
   mkFsV,
+  mkAuthMp,
+  certV,
 ) where
 
 import Control.Monad.Fail (MonadFail (fail))
@@ -28,19 +30,19 @@ import Prelude (Applicative (pure), Monad ((>>=)), ($))
 -}
 mkFsV :: ClosedTerm (PAsData PFsVParams :--> PValidator)
 mkFsV = phoistAcyclic $
-  plam $ \_ fsDatum _ ctx -> unTermCont do
+  plam $ \_ datum _ ctx -> unTermCont do
     ptraceC "@FsV"
 
-    fsDatum' <- pletFieldsC @'["fd'submitter", "fd'gcAfter", "fd'fsCs", "fd'id"] $ pfromData (ptryFromData @PFsDatum fsDatum)
+    fsDatum <- pletFieldsC @'["fd'submitter", "fd'gcAfter", "fd'fsCs", "fd'id"] $ pfromData (ptryFromData @PFsDatum datum)
 
-    _ <- pletC $ pmustBeSignedBy # ctx # fsDatum'.fd'submitter
+    _ <- pletC $ pmustBeSignedBy # ctx # fsDatum.fd'submitter
     ptraceC "@FsV: Submitter signed"
 
-    _ <- pletC $ pmustValidateAfter # ctx # fsDatum'.fd'gcAfter
+    _ <- pletC $ pmustValidateAfter # ctx # fsDatum.fd'gcAfter
     ptraceC "@FsV: Can collect"
 
-    fsCs <- pletC $ fsDatum'.fd'fsCs
-    fsTn <- pletC $ pcon (PTokenName $ fsDatum'.fd'id)
+    fsCs <- pletC $ fsDatum.fd'fsCs
+    fsTn <- pletC $ pcon (PTokenName $ fsDatum.fd'id)
     _ <- pletC $ pmustMint # ctx # fsCs # fsTn # (pnegate # 1)
     ptraceC "@FsV: $FS burned"
 
@@ -412,3 +414,51 @@ caParseRefWithCert = phoistAcyclic $
       (pcontains # certValidity # txValidRange)
 
     pure $ pcons # certDat # acc
+
+{- | Authentication scripts
+
+Authentication works with 3 different tokens, namely $AA, $AUTH and $CERT.
+
+\$AA is the Authentication Authority token that is owned by the 'admin' and is where the security of the entire system relies on.
+
+\$AUTH is the Authentication Grant token that is minted only if authorized by the $AA holder. These tokens can be minted in batches and sent to an operational (ie. hot) wallet.
+
+\$CERT is a Certificate token that is associated with $AUTH tokens via AUTH ID and it's sole purpose is to hold some information about $AUTH that the vertifying scripts can MUST use a reference input to validate $AUTH inputs.
+-}
+certV :: ClosedTerm PValidator
+certV = phoistAcyclic $
+  plam $ \datum _ ctx -> unTermCont do
+    ptraceC "@CertV"
+
+    certDatum <-
+      pletFieldsC
+        @'[ "cert'id"
+          , "cert'validity"
+          , "cert'redeemerAc"
+          , "cert'cs"
+          ]
+        $ pfromData (ptryFromData @PCertDatum datum)
+
+    -- _ <- pletC $ pmustValidateAfter # ctx # (pfield @"to" # certDatum.cert'validity)
+    ptraceC "@FsV: Can collect"
+
+    redeemerCs <- pletC $ pfield @"_0" # certDatum.cert'redeemerAc
+    redeemerTn <- pletC $ pfield @"_1" # certDatum.cert'redeemerAc
+
+    _ <- pletC $ pmustMint # ctx # redeemerCs # redeemerTn # 1
+    ptraceC "@CertV: $CERT spent"
+
+    certCs <- pletC $ certDatum.cert'cs
+    certTn <- pletC $ pcon (PTokenName $ certDatum.cert'id)
+    _ <- pletC $ pmustMint # ctx # certCs # certTn # (pnegate # 1)
+    ptraceC "@CertV: $CERT burned"
+
+    pure $ popaque $ pconstant ()
+
+-- | Minting policy that validates minting and burning of $FS tokens
+mkAuthMp :: ClosedTerm (PAsData PFsMpParams :--> PMintingPolicy)
+mkAuthMp = phoistAcyclic $
+  plam $ \_ _ _ -> unTermCont do
+    ptraceC "FsMp"
+
+    pure $ popaque $ pconstant ()

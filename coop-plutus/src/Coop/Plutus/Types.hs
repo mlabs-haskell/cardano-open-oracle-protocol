@@ -24,6 +24,8 @@ import Plutarch.Api.V1 (
   PPOSIXTime,
   PPOSIXTimeRange,
   PPubKeyHash,
+  PTokenName,
+  PTuple,
   PUpperBound,
  )
 import Plutarch.ByteString (PByteString)
@@ -130,6 +132,8 @@ newtype PCertDatum (s :: S)
           ( PDataRecord
               '[ "cert'id" ':= PByteString
                , "cert'validity" ':= PPOSIXTimeRange
+               , "cert'redeemerAc" ':= PTuple PCurrencySymbol PTokenName
+               , "cert'cs" ':= PCurrencySymbol
                ]
           )
       )

@@ -11,6 +11,7 @@ module Coop.Types (
   FsDatum (..),
   CertDatum (..),
   AuthParams (..),
+  AuthMpParams (..),
 ) where
 
 import Coop.PlutusOrphans ()
@@ -20,9 +21,9 @@ import GHC.Generics (Generic)
 import PlutusTx qualified
 
 #ifdef NEW_LEDGER_NAMESPACE
-import PlutusLedgerApi.V1 (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, POSIXTimeRange, PubKeyHash)
+import PlutusLedgerApi.V1 (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, POSIXTimeRange, PubKeyHash, TokenName)
 #else
-import Plutus.V1.Ledger.Api (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, POSIXTimeRange, PubKeyHash)
+import Plutus.V1.Ledger.Api (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, POSIXTimeRange, PubKeyHash, TokenName)
 #endif
 
 data CoopPlutus = CoopPlutus
@@ -42,8 +43,9 @@ data CoopDeployment = CoopDeployment
   deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
--- Plutus types
+-- | Plutus types
 type FsDescription = LedgerBytes
+
 type FactStatement = LedgerBytes
 
 data FsDatum = FsDatum
@@ -75,7 +77,7 @@ newtype FsVParams = FsVParams
   deriving stock (Show, Generic, Eq, Typeable)
   deriving anyclass (ToJSON, FromJSON)
 
--- Authentication Tokens and Certificates
+-- | Authentication Tokens and Certificates
 data AuthParams = AuthParams
   { ap'authTokenCs :: CurrencySymbol
   , ap'certTokenCs :: CurrencySymbol
@@ -84,14 +86,24 @@ data AuthParams = AuthParams
   deriving anyclass (ToJSON, FromJSON)
 
 data CertDatum = CertDatum
-  { cd'id :: LedgerBytes
-  , cd'validity :: POSIXTimeRange
+  { cert'id :: LedgerBytes
+  , cert'validity :: POSIXTimeRange
+  , cert'redeemerAc :: (CurrencySymbol, TokenName)
+  , cert'cs :: CurrencySymbol
+  }
+  deriving stock (Show, Generic, Eq)
+  deriving anyclass (ToJSON, FromJSON)
+
+data AuthMpParams = AuthMpParams
+  { amp'authAuthorityTokenCs :: CurrencySymbol
+  , amp'certVAddress :: Address
   }
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
 
 PlutusTx.unstableMakeIsData ''CertDatum
 PlutusTx.unstableMakeIsData ''AuthParams
+PlutusTx.unstableMakeIsData ''AuthMpParams
 PlutusTx.unstableMakeIsData ''FsMpParams
 PlutusTx.unstableMakeIsData ''FsVParams
 PlutusTx.unstableMakeIsData ''FsDatum
