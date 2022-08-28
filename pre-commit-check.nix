@@ -1,4 +1,4 @@
-{
+{ fourmolu }: {
   src = ./.;
   settings = {
     # FIXME: https://github.com/cachix/pre-commit-hooks.nix/issues/155
@@ -40,6 +40,7 @@
       "NamedFieldPuns"
       "NamedWildCards"
       "NumericUnderscores"
+      "OverloadedRecordDot"
       "OverloadedStrings"
       "PartialTypeSignatures"
       "PatternGuards"
@@ -70,5 +71,5 @@
     markdownlint.enable = true;
   };
 
-  tools = { };
+  tools = { inherit fourmolu; };
 }

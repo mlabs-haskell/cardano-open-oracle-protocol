@@ -25,6 +25,8 @@
     plutarch.url = "github:Plutonomicon/plutarch-plutus/staging";
 
     iohk-nix.follows = "plutip/iohk-nix";
+
+    nixpkgsFourmolu.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   };
   outputs =
     { self
@@ -36,6 +38,7 @@
     , plutarch
     , iohk-nix
     , plutip
+    , nixpkgsFourmolu
     }:
     flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" ]
       (system:
@@ -53,8 +56,11 @@
             (import "${iohk-nix}/overlays/crypto")
           ];
         };
-
-        pre-commit-check = pre-commit-hooks.lib.${system}.run (import ./pre-commit-check.nix);
+        pkgsFourmolu = import nixpkgsFourmolu {
+          inherit system;
+        };
+        fourmolu = pkgsFourmolu.haskell.packages.ghc924.fourmolu_0_6_0_0;
+        pre-commit-check = pre-commit-hooks.lib.${system}.run (import ./pre-commit-check.nix { inherit fourmolu; });
         pre-commit-devShell = pkgs.mkShell {
           inherit (pre-commit-check) shellHook;
         };

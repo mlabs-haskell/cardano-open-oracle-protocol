@@ -4,6 +4,7 @@ module Coop.Types (
   CoopPlutus (..),
   CoopDeployment (..),
   FsMpParams (..),
+  FsMpRedeemer (..),
   FsVParams (..),
   FsDescription (),
   FactStatement (),
@@ -64,6 +65,10 @@ data FsMpParams = FsMpParams
   deriving stock (Show, Generic, Eq, Typeable)
   deriving anyclass (ToJSON, FromJSON)
 
+data FsMpRedeemer = FsMpBurn | FsMpMint
+  deriving stock (Show, Generic, Eq, Typeable)
+  deriving anyclass (ToJSON, FromJSON)
+
 newtype FsVParams = FsVParams
   { fvp'coopInstance :: CurrencySymbol -- provided by the one shot mp
   }
@@ -90,3 +95,4 @@ PlutusTx.unstableMakeIsData ''AuthParams
 PlutusTx.unstableMakeIsData ''FsMpParams
 PlutusTx.unstableMakeIsData ''FsVParams
 PlutusTx.unstableMakeIsData ''FsDatum
+PlutusTx.unstableMakeIsData ''FsMpRedeemer

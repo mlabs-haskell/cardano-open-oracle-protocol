@@ -1,17 +1,16 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Coop.Plutus.Types (
   PFsMpParams (..),
+  PFsMpRedeemer (..),
   PFsVParams (..),
   PFsDatum (..),
   PCertDatum (..),
   PAuthParams (..),
 ) where
 
-import Coop.Types (AuthParams, CertDatum, FsDatum, FsMpParams, FsVParams)
+import Coop.Types (AuthParams, CertDatum, FsDatum, FsMpParams, FsMpRedeemer, FsVParams)
 import Data.Typeable (Typeable)
 import GHC.Generics qualified as GHC
 import Generics.SOP (Generic)
@@ -58,6 +57,17 @@ instance DerivePlutusType PFsDatum where type DPTStrat _ = PlutusTypeData
 instance PUnsafeLiftDecl PFsDatum where type PLifted PFsDatum = FsDatum
 deriving via (DerivePConstantViaData FsDatum PFsDatum) instance (PConstantDecl FsDatum)
 instance PTryFrom PData (PAsData PFsDatum)
+
+data PFsMpRedeemer s
+  = PFsMpBurn (Term s (PDataRecord '[]))
+  | PFsMpMint (Term s (PDataRecord '[]))
+  deriving stock (GHC.Generic, Typeable)
+  deriving anyclass (Generic, PlutusType, PIsData, PEq)
+
+instance DerivePlutusType PFsMpRedeemer where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PFsMpRedeemer where type PLifted PFsMpRedeemer = FsMpRedeemer
+deriving via (DerivePConstantViaData FsMpRedeemer PFsMpRedeemer) instance (PConstantDecl FsMpRedeemer)
+instance PTryFrom PData (PAsData PFsMpRedeemer)
 
 newtype PFsMpParams s
   = PFsMpParams

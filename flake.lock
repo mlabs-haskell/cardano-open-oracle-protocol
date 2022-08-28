@@ -1569,6 +1569,22 @@
         "type": "github"
       }
     },
+    "nixpkgsFourmolu": {
+      "locked": {
+        "lastModified": 1661353537,
+        "narHash": "sha256-1E2IGPajOsrkR49mM5h55OtYnU0dGyre6gl60NXKITE=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "0e304ff0d9db453a4b230e9386418fd974d5804a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nixpkgs_2": {
       "locked": {
         "lastModified": 1653117584,
@@ -1979,6 +1995,7 @@
           "plutip",
           "nixpkgs"
         ],
+        "nixpkgsFourmolu": "nixpkgsFourmolu",
         "plutarch": "plutarch",
         "plutip": "plutip",
         "pre-commit-hooks": "pre-commit-hooks"
