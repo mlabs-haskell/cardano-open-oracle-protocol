@@ -8,9 +8,10 @@ module Coop.Plutus.Types (
   PFsDatum (..),
   PCertDatum (..),
   PAuthParams (..),
+  PAuthMpParams (..),
 ) where
 
-import Coop.Types (AuthParams, CertDatum, FsDatum, FsMpParams, FsMpRedeemer, FsVParams)
+import Coop.Types (AuthMpParams, AuthParams, CertDatum, FsDatum, FsMpParams, FsMpRedeemer, FsVParams)
 import Data.Typeable (Typeable)
 import GHC.Generics qualified as GHC
 import Generics.SOP (Generic)
@@ -35,7 +36,7 @@ import Plutarch.DataRepr (
   PlutusTypeData,
  )
 import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
-import Plutarch.Prelude (PAsData, PBool, PData, PDataRecord, PEq, PIsData, PLabeledType ((:=)), PTryFrom, PlutusType, S, Term)
+import Plutarch.Prelude (PAsData, PBool, PData, PDataRecord, PEq, PInteger, PIsData, PLabeledType ((:=)), PTryFrom, PlutusType, S, Term)
 
 -- TODO: Add Plutarch type plumbage for FactStatement
 newtype PFsDatum s
@@ -144,6 +145,25 @@ instance DerivePlutusType PCertDatum where type DPTStrat _ = PlutusTypeData
 instance PUnsafeLiftDecl PCertDatum where type PLifted PCertDatum = CertDatum
 deriving via (DerivePConstantViaData CertDatum PCertDatum) instance (PConstantDecl CertDatum)
 instance PTryFrom PData (PAsData PCertDatum)
+
+newtype PAuthMpParams (s :: S)
+  = PAuthMpParams
+      ( Term
+          s
+          ( PDataRecord
+              '[ "amp'authAuthorityAc" ':= PTuple PCurrencySymbol PTokenName
+               , "amp'authAuthorityQ" ':= PInteger
+               , "amp'certVAddress" ':= PAddress
+               ]
+          )
+      )
+  deriving stock (GHC.Generic)
+  deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
+
+instance DerivePlutusType PAuthMpParams where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PAuthMpParams where type PLifted PAuthMpParams = AuthMpParams
+deriving via (DerivePConstantViaData AuthMpParams PAuthMpParams) instance (PConstantDecl AuthMpParams)
+instance PTryFrom PData (PAsData PAuthMpParams)
 
 -- FIXME: Purge this when Plutarch supports it
 instance PTryFrom PData (PAsData PBool)

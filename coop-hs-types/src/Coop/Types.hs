@@ -95,7 +95,8 @@ data CertDatum = CertDatum
   deriving anyclass (ToJSON, FromJSON)
 
 data AuthMpParams = AuthMpParams
-  { amp'authAuthorityTokenCs :: CurrencySymbol
+  { amp'authAuthorityAc :: (CurrencySymbol, TokenName)
+  , amp'authAuthorityQ :: Integer
   , amp'certVAddress :: Address
   }
   deriving stock (Show, Generic, Eq)

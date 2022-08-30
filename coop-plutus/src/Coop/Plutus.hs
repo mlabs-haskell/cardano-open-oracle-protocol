@@ -8,43 +8,53 @@ module Coop.Plutus (
 ) where
 
 import Control.Monad.Fail (MonadFail (fail))
-import Coop.Plutus.Aux (pboolC, pcurrencyTokens, pdatumFromTxOut, pdjust, pdnothing, pfindMap, phasCurrency, pmaybeDataC, pmustBeSignedBy, pmustMint, pmustMintCurrency, pmustSpendFromAddress, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit, pvalueOfCurrency)
-import Coop.Plutus.Types (PAuthParams, PCertDatum, PFsDatum, PFsMpParams, PFsMpRedeemer (PFsMpBurn, PFsMpMint), PFsVParams)
+import Coop.Plutus.Aux (pboolC, pcurrencyTokens, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfindOwnInput', pfoldTxInputs, phasCurrency, pmaybeDataC, pmustBeSignedBy, pmustMint, pmustPayTo, pmustSpend, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
+import Coop.Plutus.Types (PAuthMpParams, PAuthParams, PCertDatum, PFsDatum, PFsMpParams, PFsMpRedeemer (PFsMpBurn, PFsMpMint), PFsVParams)
 import Plutarch (POpaque, popaque)
-import Plutarch.Api.V1 (AmountGuarantees (NonZero), KeyGuarantees (Sorted), PCurrencySymbol, PMaybeData, PMintingPolicy, PScriptContext, PTxInInfo, PTxOut, PValidator, PValue, ptuple)
-import Plutarch.Api.V1.AssocMap (psingleton)
-import Plutarch.Api.V1.Value (PTokenName (PTokenName), pnormalize)
+import Plutarch.Api.V1 (AmountGuarantees (NonZero), KeyGuarantees (Sorted), PCurrencySymbol, PMap (PMap), PMaybeData, PMintingPolicy, PScriptContext, PTxInInfo, PTxOut, PValidator, PValue, ptuple)
+import Plutarch.Api.V1.AssocMap (plookup, psingleton)
+import Plutarch.Api.V1.Value (PTokenName (PTokenName), pnoAdaValue, pnormalize, pvalueOf)
+import Plutarch.Api.V1.Value qualified as PValue
 import Plutarch.Bool (pif)
 import Plutarch.Extra.Interval (pcontains)
 import Plutarch.Extra.TermCont (pletC, pletFieldsC, pmatchC, ptraceC)
+import Plutarch.List (pmap)
 import Plutarch.Num (PNum (pnegate))
-import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PEq ((#==)), PListLike (pcons, pnil), PUnit, Term, getField, pcon, pconsBS, pconstant, pdata, pfield, pfoldl, pfromData, phoistAcyclic, plam, plet, psha3_256, (#), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PEq ((#==)), PListLike (pcons, pnil), PMaybe (PJust, PNothing), PUnit, Term, getField, pcon, pconsBS, pconstant, pdata, pfield, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, plam, plet, psha3_256, pto, (#), (#$), type (:-->))
 import Plutarch.TermCont (unTermCont)
-import Prelude (Applicative (pure), Monad ((>>=)), ($))
+import Prelude (Applicative (pure), Monad ((>>=)), Monoid (mempty), Semigroup ((<>)), ($))
 
-{- | FsV validates $FS garbage collection.
+{- | FsV validates spending of $FS tokens.
 
-- check the trx is signed by the submitter as indicated in the FsDatum
-- check that the trx validates after time as indicated in the FsDatum
-- check that the $FS with the ID as indicated in the FSDatum is burned
+- check that MP of the input token is also in trx mint
+
+NOTE: The validation is delegated to the $FS MP
 -}
 mkFsV :: ClosedTerm (PAsData PFsVParams :--> PValidator)
 mkFsV = phoistAcyclic $
-  plam $ \_ datum _ ctx -> unTermCont do
+  plam $ \_ _ _ ctx -> unTermCont do
     ptraceC "@FsV"
 
-    fsDatum <- pletFieldsC @'["fd'submitter", "fd'gcAfter", "fd'fsCs", "fd'id"] $ pfromData (ptryFromData @PFsDatum datum)
+    ctx' <- pletFieldsC @'["txInfo"] ctx
+    txInfo <- pletFieldsC @'["mint"] ctx'.txInfo
+    mint <- pletC $ pto $ pfromData txInfo.mint
 
-    _ <- pletC $ pmustBeSignedBy # ctx # fsDatum.fd'submitter
-    ptraceC "@FsV: Submitter signed"
+    ownIn <- pletC $ pfindOwnInput' # ctx
+    ownVal <- pletC $ pfromData $ pfield @"value" # (pfield @"resolved" # ownIn)
 
-    _ <- pletC $ pmustValidateAfter # ctx # fsDatum.fd'gcAfter
-    ptraceC "@FsV: Can collect"
-
-    fsCs <- pletC $ fsDatum.fd'fsCs
-    fsTn <- pletC $ pcon (PTokenName $ fsDatum.fd'id)
-    _ <- pletC $ pmustMint # ctx # fsCs # fsTn # (pnegate # 1)
-    ptraceC "@FsV: $FS burned"
+    pmatchC (pto ownVal) >>= \case
+      PMap elems ->
+        pure $
+          pmap
+            # plam
+              ( \kv -> unTermCont do
+                  cs <- pletC $ pfromData $ pfstBuiltin # kv
+                  pmatchC (plookup # cs # mint) >>= \case
+                    PNothing -> fail "@FsV: Spent currency symbol not in mint"
+                    PJust _ -> pure punit
+              )
+            # elems
+    ptraceC "@FsV: All spent currency symbols are in mint"
 
     pure $ popaque $ pconstant ()
 
@@ -62,29 +72,52 @@ mkFsMp = phoistAcyclic $
       PFsMpBurn _ -> pure $ fsMpBurn # pfromData params # ctx
       PFsMpMint _ -> pure $ fsMpMint # pfromData params # ctx
 
-{- | Validates burning $FS tokens.
+{- | Validates burning $FS tokens
 
 - check that for N $FS tokens being burned each is spent from @FsV
+- check the trx is signed by the submitter as indicated in the FsDatum
+- check that the trx validates after time as indicated in the FsDatum
+- check that the $FS with the ID as indicated in the FSDatum is burned
 
-NOTE: FsV handles $FS burning, this function 'delegates' that responsibility.
+NOTE: FsV delegates spending validation to FsMp
 -}
 fsMpBurn :: ClosedTerm (PFsMpParams :--> PScriptContext :--> POpaque)
 fsMpBurn = phoistAcyclic $
-  plam $ \params ctx -> unTermCont do
+  plam $ \_ ctx -> unTermCont do
     ptraceC "$FS burn"
     ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
     ownCs <- pletC $ pownCurrencySymbol # ctx'.purpose
 
-    spent <-
-      pletC $
-        pmustSpendFromAddress
-          # ctx
-          # plam (\val -> pif (pvalueOfCurrency # ownCs # val #== pdjust 1) (pdjust 1) pdnothing)
-          # (pfield @"fmp'fsVAddress" # params)
-    ptraceC "$FS burn: All $FS spent from @FsV"
+    let foldFn shouldBurn txInInfo = unTermCont do
+          txOut <- pletC $ pfield @"resolved" # txInInfo
+          txIn <- pletFieldsC @'["value", "address"] $ pfield @"resolved" # txInInfo
+          fsDatum <- pletFieldsC @'["fd'submitter", "fd'gcAfter", "fd'fsCs", "fd'id"] $ pdatumFromTxOut @PFsDatum # ctx # txOut
 
-    _ <- pletC $ pmustMintCurrency # ctx # ownCs # (pnegate # spent)
-    ptraceC "$FS burn: $FS spent mathes burned"
+          isOwnToken <- pletC $ ownCs #== fsDatum.fd'fsCs
+          pboolC
+            ( do
+                ptraceC "FsMp: Not my token"
+                pure shouldBurn
+            )
+            ( do
+                _ <- pletC $ pmustBeSignedBy # ctx # fsDatum.fd'submitter
+                ptraceC "@FsMp: Submitter signed"
+
+                _ <- pletC $ pmustValidateAfter # ctx # fsDatum.fd'gcAfter
+                ptraceC "@FsMp: Time validates"
+
+                fsTn <- pletC $ pcon (PTokenName fsDatum.fd'id)
+                idMatches <- pletC $ pvalueOf # pfromData txIn.value # fsDatum.fd'fsCs # fsTn #== 1
+                pboolC (fail "FsMp: ID must match") (ptraceC "FsMp: ID matches") idMatches
+
+                pure $ shouldBurn <> (PValue.psingleton # ownCs # fsTn # (pnegate # 1))
+            )
+            isOwnToken
+
+    shouldBurnTotal <- pletC $ pfoldTxInputs # ctx # plam foldFn # mempty
+    mintedNonAda <- pletC $ pnoAdaValue #$ pnormalize # (pfield @"mint" # ctx'.txInfo)
+    _ <- pletC $ mintedNonAda #== shouldBurnTotal
+    ptraceC "$FS burn: $FS spent are vallid and burned"
 
     pure $ popaque $ pconstant ()
 
@@ -425,6 +458,8 @@ Authentication works with 3 different tokens, namely $AA, $AUTH and $CERT.
 
 \$CERT is a Certificate token that is associated with $AUTH tokens via AUTH ID and it's sole purpose is to hold some information about $AUTH that the vertifying scripts can MUST use a reference input to validate $AUTH inputs.
 -}
+
+-- | WIP
 certV :: ClosedTerm PValidator
 certV = phoistAcyclic $
   plam $ \datum _ ctx -> unTermCont do
@@ -455,10 +490,27 @@ certV = phoistAcyclic $
 
     pure $ popaque $ pconstant ()
 
--- | Minting policy that validates minting and burning of $FS tokens
-mkAuthMp :: ClosedTerm (PAsData PFsMpParams :--> PMintingPolicy)
+-- | WIP: Minting policy that validates minting and burning of $AUTH and $CERT tokens tokens
+mkAuthMp :: ClosedTerm (PAsData PAuthMpParams :--> PMintingPolicy)
 mkAuthMp = phoistAcyclic $
-  plam $ \_ _ _ -> unTermCont do
+  plam $ \params _ ctx -> unTermCont do
     ptraceC "FsMp"
+    ptraceC "$FS mint"
+    ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
+    ownCs <- pletC $ pownCurrencySymbol # ctx'.purpose
+    authParams <- pletFieldsC @'["amp'authAuthorityAc", "amp'authAuthorityQ", "amp'certVAddress"] params
+
+    _ <-
+      pletC $
+        pmustSpend # ctx
+          # (pfield @"_0" # authParams.amp'authAuthorityAc)
+          # (pfield @"_1" # authParams.amp'authAuthorityAc)
+          # authParams.amp'authAuthorityQ
+
+    certTn <- pletC $ pcon $ PTokenName (pconstant "")
+    _ <- pletC $ pmustMint # ctx # ownCs # certTn # 1
+    _ <- pletC $ pmustPayTo # ctx # ownCs # certTn # 1 # authParams.amp'certVAddress
+
+    -- _ <- pletC $ pmustMint # ownCs # certCn+1  # 1..n
 
     pure $ popaque $ pconstant ()
