@@ -8,7 +8,7 @@ module Coop.Plutus (
 ) where
 
 import Control.Monad.Fail (MonadFail (fail))
-import Coop.Plutus.Aux (pboolC, pcurrencyTokens, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfindOwnInput', pfoldTxInputs, phasCurrency, pmaybeDataC, pmustBeSignedBy, pmustMint, pmustPayTo, pmustSpend, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
+import Coop.Plutus.Aux (pboolC, pcurrencyTokens, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfindOwnInput', pfoldTxInputs, pfoldTxOutputs, phasCurrency, pmaybeDataC, pmustBeSignedBy, pmustMint, pmustPayTo, pmustSpend, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
 import Coop.Plutus.Types (PAuthMpParams, PAuthParams, PCertDatum, PFsDatum, PFsMpParams, PFsMpRedeemer (PFsMpBurn, PFsMpMint), PFsVParams)
 import Plutarch (POpaque, popaque)
 import Plutarch.Api.V1 (AmountGuarantees (NonZero), KeyGuarantees (Sorted), PCurrencySymbol, PMap (PMap), PMaybeData, PMintingPolicy, PScriptContext, PTxInInfo, PTxOut, PValidator, PValue, ptuple)
@@ -20,11 +20,11 @@ import Plutarch.Extra.Interval (pcontains)
 import Plutarch.Extra.TermCont (pletC, pletFieldsC, pmatchC, ptraceC)
 import Plutarch.List (pmap)
 import Plutarch.Num (PNum (pnegate))
-import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PEq ((#==)), PListLike (pcons, pnil), PMaybe (PJust, PNothing), PUnit, Term, getField, pcon, pconsBS, pconstant, pdata, pfield, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, plam, plet, psha3_256, pto, (#), (#$), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PEq ((#==)), PListLike (pcons, pnil), PMaybe (PJust, PNothing), Term, getField, pcon, pconsBS, pconstant, pdata, pfield, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, plam, plet, psha3_256, pto, (#), (#$), type (:-->))
 import Plutarch.TermCont (unTermCont)
 import Prelude (Applicative (pure), Monad ((>>=)), Monoid (mempty), Semigroup ((<>)), ($))
 
-{- | FsV validates spending of $FS tokens.
+{- | FsV delegates $FS spending validation to FsMp.
 
 - check that MP of the input token is also in trx mint
 
@@ -58,8 +58,6 @@ mkFsV = phoistAcyclic $
 
     pure $ popaque $ pconstant ()
 
--- TODO: Ask about PublishAndCollect feature (no-redeemer FsMp)
-
 -- | Minting policy that validates minting and burning of $FS tokens
 mkFsMp :: ClosedTerm (PAsData PFsMpParams :--> PMintingPolicy)
 mkFsMp = phoistAcyclic $
@@ -74,10 +72,13 @@ mkFsMp = phoistAcyclic $
 
 {- | Validates burning $FS tokens
 
-- check that for N $FS tokens being burned each is spent from @FsV
-- check the trx is signed by the submitter as indicated in the FsDatum
-- check that the trx validates after time as indicated in the FsDatum
-- check that the $FS with the ID as indicated in the FSDatum is burned
+- check each input and accumulate $FS tokens
+  - skip if doesn't hold $FS token
+  - check the trx is signed by the submitter as indicated in the FsDatum
+  - check that the trx validates after time as indicated in the FsDatum
+  - check that the $FS matches the ID in FSDatum and has quantity 1
+  - accumulate validated $FS token
+- check that all accumulated spent $FS tokens are burned
 
 NOTE: FsV delegates spending validation to FsMp
 -}
@@ -114,10 +115,11 @@ fsMpBurn = phoistAcyclic $
             )
             isOwnToken
 
+    -- Contains negative quantities
     shouldBurnTotal <- pletC $ pfoldTxInputs # ctx # plam foldFn # mempty
     mintedNonAda <- pletC $ pnoAdaValue #$ pnormalize # (pfield @"mint" # ctx'.txInfo)
     _ <- pletC $ mintedNonAda #== shouldBurnTotal
-    ptraceC "$FS burn: $FS spent are vallid and burned"
+    ptraceC "$FS burn: $FS spent are valid and burned"
 
     pure $ popaque $ pconstant ()
 
@@ -129,28 +131,22 @@ fsMpMint = phoistAcyclic $
     validAuthInputs <- pletC $ caValidateAuthInputs # (pfield @"fmp'authParams" # params) # ctx
     ptraceC "$FS mint: Validated authentication inputs"
 
-    _ <- pletC $ fsMpParseOutputs # params # ctx # validAuthInputs
+    ctx' <- pletFieldsC @'["purpose"] ctx
+    ownCs <- pletC $ pownCurrencySymbol # ctx'.purpose
+    fsMintParseOutput' <- pletC $ fsMintParseOutput # params # ctx # ownCs
+
+    restAuths <- pletC $ pfoldTxOutputs # ctx # fsMintParseOutput' # validAuthInputs
     ptraceC "$FS mint: Validated Fact Statement outputs"
 
-    -- TODO: Check that at least one $FS was minted
+    pboolC
+      (fail "$FS mint: Auth inputs must ALL be used")
+      (ptraceC "$FS mint: Auth inputs are all used")
+      (restAuths #== pnil)
+
+    -- TODO: Check that the total $FS pain is minted
     pure $ popaque $ pconstant ()
 
-{- | Parse and validate transaction outputs that hold Fact Statements.
- TODO: Switch to using Plutus V2
--}
-fsMpParseOutputs :: Term s (PFsMpParams :--> PScriptContext :--> PBuiltinList PTxInInfo :--> PUnit)
-fsMpParseOutputs = phoistAcyclic $
-  plam $ \params ctx validAuthInputs -> unTermCont $ do
-    ptraceC "fsMpParseOutputs"
-    ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
-    txInfo <- pletFieldsC @'["outputs"] (ctx'.txInfo)
-    ownCs <- pletC $ pownCurrencySymbol # ctx'.purpose
-    txOuts <- pletC $ txInfo.outputs
-    fsMpParseOutput' <- pletC $ fsMpParseOutput # params # ctx # ownCs
-    _ <- pletC $ pfoldl # fsMpParseOutput' # validAuthInputs # txOuts
-    pure punit
-
-fsMpParseOutput ::
+fsMintParseOutput ::
   Term
     s
     ( PFsMpParams
@@ -160,32 +156,35 @@ fsMpParseOutput ::
         :--> PTxOut
         :--> PBuiltinList PTxInInfo
     )
-fsMpParseOutput = phoistAcyclic $
+fsMintParseOutput = phoistAcyclic $
   plam $ \params ctx ownCs validAuthInputs txOut -> unTermCont do
-    ptraceC "fsMpParseOutput"
+    ptraceC "fsMintParseOutput"
     txOut' <- pletFieldsC @'["value"] txOut
     outVal <- pletC $ pnormalize # txOut'.value
 
     hasOwnCs <- pletC $ phasCurrency # ownCs # outVal
     pboolC
       ( do
-          ptraceC "fsMpParseOutput: own token not in the output, skipping"
+          ptraceC "fsMintParseOutput: own token not in the output, skipping"
           pure validAuthInputs
       )
       ( do
-          ptraceC "fsMpParseOutput: found own token in the output, continuing"
-          pure $ fsMpParseOutputWithFs # params # ctx # ownCs # validAuthInputs # txOut
+          ptraceC "fsMintParseOutput: found own token in the output, continuing"
+          pure $ fsMintParseOutputWithFs # params # ctx # ownCs # validAuthInputs # txOut
       )
       hasOwnCs
 
 {- | Handles a transaction output that holds an $FS token.
 
 - check that 1 $FS is minted and associated with a valid $AUTH
+  - $FS token name is formed by hashing TxOutRef+Num of the associated $AUTH input
 - check that 1 $FS is sent to FsV
 
-The TxInInfo is emitted only if it's been validated. However, if any check fails the failure is raised.
+The $AUTH input is emitted only if it's been validated.
+
+NOTE: Fails hard
 -}
-fsMpParseOutputWithFs ::
+fsMintParseOutputWithFs ::
   Term
     s
     ( PFsMpParams
@@ -195,33 +194,34 @@ fsMpParseOutputWithFs ::
         :--> PTxOut
         :--> PBuiltinList PTxInInfo
     )
-fsMpParseOutputWithFs = phoistAcyclic $
+fsMintParseOutputWithFs = phoistAcyclic $
   plam $ \params ctx ownCs validAuthInputs txOut -> unTermCont do
-    ptraceC "fsMpParseOutputWithFs"
+    ptraceC "fsMintParseOutputWithFs"
     txOut' <- pletFieldsC @'["value", "address"] txOut
     outVal <- pletC $ pnormalize # txOut'.value
     outAddr <- pletC $ txOut'.address
 
     pboolC
-      (fail "fsMpParseOutputWithFs: output not sent to fsV")
-      (ptraceC "fsMpParseOutputWithFs: output sent to fsV")
+      (fail "fsMintParseOutputWithFs: Output must be sent to FsV")
+      (ptraceC "fsMintParseOutputWithFs: Output sent to FsV")
       (outAddr #== (pfield @"fmp'fsVAddress" # params))
 
     ownTokens <- pletC $ pcurrencyTokens # ownCs # outVal
+
+    let foldFn foundAndRest authInput =
+          unTermCont do
+            fsTn <- pletC $ ptokenNameFromTxInInfo # authInput
+            restAuths <- pletC $ pfield @"_1" # foundAndRest
+            pure $
+              pif
+                (ownTokens #== (psingleton # fsTn # 1)) -- NOTE: Only outputs a single $FS token!
+                (ptuple # pdata (pdjust fsTn) # pdata restAuths) -- Q: Hmm...I want to break from here
+                (ptuple # pdata pdnothing # pdata (pcons # authInput # restAuths))
+
     foundAndRest <-
       pletC $
         pfoldl
-          # plam
-            ( \foundAndRest authInput ->
-                plet
-                  (ptokenNameFromTxInInfo # authInput)
-                  ( \fsTn ->
-                      pif
-                        (ownTokens #== (psingleton # fsTn # 1)) -- NOTE: Only outputs a single $FS token!
-                        (ptuple # pdata pdnothing # pdata (pcons # authInput # (pfield @"_1" # foundAndRest)))
-                        (ptuple # pdata (pdjust fsTn) # pdata (pfield @"_1" # foundAndRest))
-                  )
-            )
+          # plam foldFn
           # ( ptuple
                 # pdata (pdnothing :: Term _ (PMaybeData PTokenName))
                 # pdata (pnil :: Term _ (PBuiltinList PTxInInfo))
@@ -232,11 +232,12 @@ fsMpParseOutputWithFs = phoistAcyclic $
     restAuthInputs <- pletC $ pfield @"_1" # foundAndRest
 
     pmaybeDataC
-      (fail "fsMpParseOutputWithFs: invalid $FS not found")
+      (fail "fsMintParseOutputWithFs: invalid $FS found")
       ( \fsTn -> do
-          ptraceC "fsMpParseOutputWithFs: $FS validated"
+          ptraceC "fsMintParseOutputWithFs: $FS validated"
+          -- TODO: Consider accumulating tokens and checking totals after
           _ <- pletC $ pmustMint # ctx # ownCs # fsTn # 1
-          ptraceC "fsMpParseOutputWithFs: $FS minted"
+          ptraceC "fsMintParseOutputWithFs: $FS minted"
       )
       mayFsTn
 
