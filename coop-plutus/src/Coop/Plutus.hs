@@ -8,7 +8,7 @@ module Coop.Plutus (
 ) where
 
 import Control.Monad.Fail (MonadFail (fail))
-import Coop.Plutus.Aux (pboolC, pcurrencyTokens, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfindOwnInput', pfoldTxInputs, pfoldTxOutputs, phasCurrency, pmaybeDataC, pmustBeSignedBy, pmustMint, pmustPayTo, pmustSpend, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
+import Coop.Plutus.Aux (pboolC, pcurrencyTokens, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfindOwnInput', pfoldTxInputs, pfoldTxOutputs, phasCurrency, pmaybeDataC, pmustBeSignedBy, pmustHandleSpentWithMp, pmustMint, pmustPayTo, pmustSpend, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
 import Coop.Plutus.Types (PAuthMpParams, PAuthParams, PCertDatum, PFsDatum, PFsMpParams, PFsMpRedeemer (PFsMpBurn, PFsMpMint), PFsVParams)
 import Plutarch (POpaque, popaque)
 import Plutarch.Api.V1 (AmountGuarantees (NonZero), KeyGuarantees (Sorted), PCurrencySymbol, PMap (PMap), PMaybeData, PMintingPolicy, PScriptContext, PTuple, PTxInInfo, PTxOut, PValidator, PValue, ptuple)
@@ -350,7 +350,7 @@ caParseInputWithAuth ::
         :--> PTuple (PBuiltinList PTxInInfo) (PValue 'Sorted 'NonZero)
     )
 caParseInputWithAuth = phoistAcyclic $
-  plam $ \ctx authTokenCs certs acc txIn -> unTermCont do
+  plam $ \_ authTokenCs certs acc txIn -> unTermCont do
     ptraceC "caParseInputWithAuth"
     txInOut <- pletC $ pfield @"resolved" # txIn
     txInVal <- pletC $ pnormalize # (pfield @"value" # txInOut)
@@ -395,8 +395,7 @@ caParseRefs = phoistAcyclic $
     -- TODO: Migrate to reference inputs
     ptraceC "caParseRefs"
     txInfo <- pletFieldsC @'["inputs"] (pfield @"txInfo" # ctx)
-    txInputs <- pletC $ getField @"inputs" txInfo
-    pure $ pfoldl # (caParseRef # params # ctx) # pnil # txInputs
+    pure $ pfoldl # (caParseRef # params # ctx) # pnil # txInfo.inputs
 
 caParseRef ::
   Term
@@ -408,9 +407,9 @@ caParseRef ::
         :--> PBuiltinList PCertDatum
     )
 caParseRef = phoistAcyclic $
-  plam $ \params ctx acc txIn -> unTermCont do
+  plam $ \params ctx acc txInInfo -> unTermCont do
     ptraceC "caParseRef"
-    txInOut <- pletC $ pfield @"resolved" # txIn
+    txInOut <- pletC $ pfield @"resolved" # txInInfo
     txInVal <- pletC $ pnormalize # (pfield @"value" # txInOut)
     certTokenCs <- pletC $ pfield @"ap'certTokenCs" # params
 
@@ -421,7 +420,7 @@ caParseRef = phoistAcyclic $
       )
       ( do
           ptraceC "caParseRef: cert token in the input, continuing"
-          pure $ caParseRefWithCert # ctx # certTokenCs # txInVal # acc # txIn
+          pure $ caParseRefWithCert # ctx # certTokenCs # txInVal # acc # txInInfo
       )
       (phasCurrency # certTokenCs # txInVal)
 
@@ -487,40 +486,68 @@ vertifying scripts can MUST use a reference input to validate $AUTH inputs.
 -- | WIP
 certV :: ClosedTerm PValidator
 certV = phoistAcyclic $
-  plam $ \datum _ ctx -> unTermCont do
+  plam $ \_ _ ctx -> unTermCont do
     ptraceC "@CertV"
 
-    certDatum <-
-      pletFieldsC
-        @'[ "cert'id"
-          , "cert'validity"
-          , "cert'redeemerAc"
-          , "cert'cs"
-          ]
-        $ pfromData (ptryFromData @PCertDatum datum)
+    _ <- pletC $ pmustHandleSpentWithMp # ctx
+    ptraceC "@CertV: Spending delegated to AuthMp"
 
-    -- _ <- pletC $ pmustValidateAfter # ctx # (pfield @"to" # certDatum.cert'validity)
-    ptraceC "@FsV: Can collect"
+    pure $ popaque $ pconstant ()
 
-    redeemerCs <- pletC $ pfield @"_0" # certDatum.cert'redeemerAc
-    redeemerTn <- pletC $ pfield @"_1" # certDatum.cert'redeemerAc
+authMpBurnCert :: ClosedTerm (PScriptContext :--> POpaque)
+authMpBurnCert = phoistAcyclic $
+  plam $ \ctx -> unTermCont do
+    ptraceC "AuthMp burn $CERT"
+    ptraceC "AuthMp burn $CERT"
 
-    _ <- pletC $ pmustMint # ctx # redeemerCs # redeemerTn # 1
-    ptraceC "@CertV: $CERT spent"
+    ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
+    ownCs <- pletC $ pownCurrencySymbol # ctx'.purpose
 
-    certCs <- pletC $ certDatum.cert'cs
-    certTn <- pletC $ pcon (PTokenName $ certDatum.cert'id)
-    _ <- pletC $ pmustMint # ctx # certCs # certTn # (pnegate # 1)
-    ptraceC "@CertV: $CERT burned"
+    let foldFn acc txInInfo = unTermCont do
+          txIn <- pletC $ pfield @"resolved" # txInInfo
+          txInVal <- pletC $ pfield @"value" # txIn
+          pboolC
+            (ptraceC "AuthMp burn $CERT: Skipping foreign input" >> pure acc)
+            ( do
+                ptraceC "AuthMp burn $CERT: Found own input"
+                certDatum' <- pletC $ pdatumFromTxOut @PCertDatum # ctx # txIn
+                certDatum <-
+                  pletFieldsC
+                    @'[ "cert'id"
+                      , "cert'validity"
+                      , "cert'redeemerAc"
+                      ]
+                    $ certDatum'
 
+                -- _ <- pletC $ pmustValidateAfter # ctx # (pfield @"to" # certDatum.cert'validity)
+                ptraceC "AuthMp burn $CERT: Can collect"
+
+                redeemerAc <- pletFieldsC @'["_0", "_1"] certDatum.cert'redeemerAc
+
+                _ <- pletC $ pmustSpend # ctx # redeemerAc._0 # redeemerAc._1 # 1
+                ptraceC "AuthMp burn $CERT: $CERT_RDMR spent"
+
+                certTn <- pletC $ pcon (PTokenName $ certDatum.cert'id)
+                pboolC
+                  (fail "AuthMp burn $CERT: Must spend a single $CERT token")
+                  (fail "AuthMp burn $CERT: Spent a single $CERT token")
+                  (pvalueOf # txInVal # ownCs # certTn #== 1)
+                _ <- pletC $ pmustMint # ctx # ownCs # certTn # (pnegate # 1)
+                ptraceC "AuthMp burn $CERT: $CERT spent and burned"
+
+                pure acc
+            )
+            (phasCurrency # ownCs # txInVal)
+
+    _ <- pletC $ pfoldTxInputs # ctx # plam foldFn # punit
     pure $ popaque $ pconstant ()
 
 -- | WIP: Minting policy that validates minting and burning of $AUTH and $CERT tokens tokens
 mkAuthMp :: ClosedTerm (PAsData PAuthMpParams :--> PMintingPolicy)
 mkAuthMp = phoistAcyclic $
   plam $ \params _ ctx -> unTermCont do
-    ptraceC "FsMp"
-    ptraceC "$FS mint"
+    ptraceC "AuthMp"
+    ptraceC "AuthMp mint"
     ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
     ownCs <- pletC $ pownCurrencySymbol # ctx'.purpose
     authParams <- pletFieldsC @'["amp'authAuthorityAc", "amp'authAuthorityQ", "amp'certVAddress"] params

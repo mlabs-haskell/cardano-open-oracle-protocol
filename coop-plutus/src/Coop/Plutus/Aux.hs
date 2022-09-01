@@ -26,11 +26,12 @@ module Coop.Plutus.Aux (
   pfoldTxOutputs,
   pfoldTxInputs,
   pmustBurnWhatIsSpent,
+  pmustHandleSpentWithMp,
 ) where
 
 import Control.Monad.Fail (MonadFail (fail))
 import Plutarch (TermCont, popaque, pto)
-import Plutarch.Api.V1 (AmountGuarantees (Positive), KeyGuarantees (Sorted), PAddress, PCurrencySymbol, PDatum, PDatumHash, PMap, PMaybeData (PDJust, PDNothing), PMintingPolicy, PPOSIXTime, PPubKeyHash, PScriptContext, PScriptPurpose (PMinting, PSpending), PTokenName, PTuple, PTxInInfo, PTxOut, PTxOutRef, PValue)
+import Plutarch.Api.V1 (AmountGuarantees (Positive), KeyGuarantees (Sorted), PAddress, PCurrencySymbol, PDatum, PDatumHash, PMap (PMap), PMaybeData (PDJust, PDNothing), PMintingPolicy, PPOSIXTime, PPubKeyHash, PScriptContext, PScriptPurpose (PMinting, PSpending), PTokenName, PTuple, PTxInInfo, PTxOut, PTxOutRef, PValue)
 import Plutarch.Api.V1.AssocMap (pempty, plookup)
 import Plutarch.Api.V1.Value (pforgetPositive, pnoAdaValue, pvalueOf)
 import Plutarch.Api.V1.Value qualified as PValue
@@ -41,7 +42,7 @@ import Plutarch.Extra.Interval (pbefore)
 import Plutarch.Extra.TermCont (pletC, pletFieldsC, pmatchC, ptraceC)
 import Plutarch.List (PIsListLike, PListLike (pelimList, pnil), pany, pfoldr)
 import Plutarch.Num (PNum ((#+)))
-import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PEq ((#==)), PInteger (), PIsData, PMaybe (PJust, PNothing), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pdata, pdnil, pelem, pfield, pfix, pfoldl, pfromData, phoistAcyclic, pif, plam, plet, pmap, pmatch, psndBuiltin, ptraceError, ptryFrom, (#), (#$), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PEq ((#==)), PInteger (), PIsData, PMaybe (PJust, PNothing), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pdata, pdnil, pelem, pfield, pfix, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pmap, pmatch, psndBuiltin, ptraceError, ptryFrom, (#), (#$), type (:-->))
 import Plutarch.TermCont (TermCont (runTermCont), tcont, unTermCont)
 import PlutusTx.Prelude (Group (inv))
 import Prelude (Applicative (pure), Monad ((>>)), Monoid (mempty), Semigroup ((<>)), fst, ($), (<$>), (>>=))
@@ -399,6 +400,34 @@ pmustBurnWhatIsSpent = phoistAcyclic $
       (fail "pmustBurnWhatIsSpent: Spent is not burned.")
       (pure $ pcon PTrue)
       spentIsBurned
+
+pmustHandleSpentWithMp :: ClosedTerm (PScriptContext :--> PBool)
+pmustHandleSpentWithMp = phoistAcyclic $
+  plam $ \ctx -> unTermCont do
+    ptraceC "pmustHandleSpentWithMp"
+
+    ctx' <- pletFieldsC @'["txInfo"] ctx
+    txInfo <- pletFieldsC @'["mint"] ctx'.txInfo
+    mint <- pletC $ pto $ pfromData txInfo.mint
+
+    ownIn <- pletC $ pfindOwnInput' # ctx
+    ownVal <- pletC $ pfromData $ pfield @"value" # (pfield @"resolved" # ownIn)
+
+    pmatchC (pto ownVal) >>= \case
+      PMap elems ->
+        pure $
+          pmap
+            # plam
+              ( \kv -> unTermCont do
+                  cs <- pletC $ pfromData $ pfstBuiltin # kv
+                  pmatchC (plookup # cs # mint) >>= \case
+                    PNothing -> fail "pmustHandleSpentWithMp: Spent currency symbol must be in mint"
+                    PJust _ -> pure punit
+              )
+            # elems
+    ptraceC "pmustHandleSpentWithMp: All spent currency symbols are in mint"
+
+    pure $ pcon PTrue
 
 pdnothing :: Term s (PMaybeData a)
 pdnothing = pcon $ PDNothing pdnil
