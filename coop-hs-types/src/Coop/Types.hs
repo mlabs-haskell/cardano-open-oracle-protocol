@@ -12,6 +12,7 @@ module Coop.Types (
   CertDatum (..),
   AuthParams (..),
   AuthMpParams (..),
+  AuthMpRedeemer (..),
 ) where
 
 import Coop.PlutusOrphans ()
@@ -94,6 +95,10 @@ data CertDatum = CertDatum
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
 
+data AuthMpRedeemer = AuthMpBurnCert | AuthMpBurnAuth | AuthMpMint
+  deriving stock (Show, Generic, Eq, Typeable)
+  deriving anyclass (ToJSON, FromJSON)
+
 data AuthMpParams = AuthMpParams
   { amp'authAuthorityAc :: (CurrencySymbol, TokenName)
   , amp'authAuthorityQ :: Integer
@@ -105,6 +110,7 @@ data AuthMpParams = AuthMpParams
 PlutusTx.unstableMakeIsData ''CertDatum
 PlutusTx.unstableMakeIsData ''AuthParams
 PlutusTx.unstableMakeIsData ''AuthMpParams
+PlutusTx.unstableMakeIsData ''AuthMpRedeemer
 PlutusTx.unstableMakeIsData ''FsMpParams
 PlutusTx.unstableMakeIsData ''FsVParams
 PlutusTx.unstableMakeIsData ''FsDatum

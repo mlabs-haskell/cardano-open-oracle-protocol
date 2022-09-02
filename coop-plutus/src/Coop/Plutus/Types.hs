@@ -9,9 +9,10 @@ module Coop.Plutus.Types (
   PCertDatum (..),
   PAuthParams (..),
   PAuthMpParams (..),
+  PAuthMpRedeemer (..),
 ) where
 
-import Coop.Types (AuthMpParams, AuthParams, CertDatum, FsDatum, FsMpParams, FsMpRedeemer, FsVParams)
+import Coop.Types (AuthMpParams, AuthMpRedeemer, AuthParams, CertDatum, FsDatum, FsMpParams, FsMpRedeemer, FsVParams)
 import Data.Typeable (Typeable)
 import GHC.Generics qualified as GHC
 import Generics.SOP (Generic)
@@ -164,6 +165,18 @@ instance DerivePlutusType PAuthMpParams where type DPTStrat _ = PlutusTypeData
 instance PUnsafeLiftDecl PAuthMpParams where type PLifted PAuthMpParams = AuthMpParams
 deriving via (DerivePConstantViaData AuthMpParams PAuthMpParams) instance (PConstantDecl AuthMpParams)
 instance PTryFrom PData (PAsData PAuthMpParams)
+
+data PAuthMpRedeemer s
+  = PAuthMpBurnCert (Term s (PDataRecord '[]))
+  | PAuthMpBurnAuth (Term s (PDataRecord '[]))
+  | PAuthMpMint (Term s (PDataRecord '[]))
+  deriving stock (GHC.Generic, Typeable)
+  deriving anyclass (Generic, PlutusType, PIsData, PEq)
+
+instance DerivePlutusType PAuthMpRedeemer where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PAuthMpRedeemer where type PLifted PAuthMpRedeemer = AuthMpRedeemer
+deriving via (DerivePConstantViaData AuthMpRedeemer PAuthMpRedeemer) instance (PConstantDecl AuthMpRedeemer)
+instance PTryFrom PData (PAsData PAuthMpRedeemer)
 
 -- FIXME: Purge this when Plutarch supports it
 instance PTryFrom PData (PAsData PBool)

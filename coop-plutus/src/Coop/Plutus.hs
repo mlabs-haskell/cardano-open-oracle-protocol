@@ -9,7 +9,7 @@ module Coop.Plutus (
 
 import Control.Monad.Fail (MonadFail (fail))
 import Coop.Plutus.Aux (pboolC, pcurrencyTokens, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfindOwnInput', pfoldTxInputs, pfoldTxOutputs, phasCurrency, pmaybeDataC, pmustBeSignedBy, pmustHandleSpentWithMp, pmustMint, pmustPayTo, pmustSpend, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
-import Coop.Plutus.Types (PAuthMpParams, PAuthParams, PCertDatum, PFsDatum, PFsMpParams, PFsMpRedeemer (PFsMpBurn, PFsMpMint), PFsVParams)
+import Coop.Plutus.Types (PAuthMpParams, PAuthMpRedeemer (PAuthMpBurnAuth, PAuthMpBurnCert, PAuthMpMint), PAuthParams, PCertDatum, PFsDatum, PFsMpParams, PFsMpRedeemer (PFsMpBurn, PFsMpMint), PFsVParams)
 import Plutarch (POpaque, popaque)
 import Plutarch.Api.V1 (AmountGuarantees (NonZero), KeyGuarantees (Sorted), PCurrencySymbol, PMap (PMap), PMaybeData, PMintingPolicy, PScriptContext, PTuple, PTxInInfo, PTxOut, PValidator, PValue, ptuple)
 import Plutarch.Api.V1.AssocMap (plookup, psingleton)
@@ -498,7 +498,6 @@ authMpBurnCert :: ClosedTerm (PScriptContext :--> POpaque)
 authMpBurnCert = phoistAcyclic $
   plam $ \ctx -> unTermCont do
     ptraceC "AuthMp burn $CERT"
-    ptraceC "AuthMp burn $CERT"
 
     ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
     ownCs <- pletC $ pownCurrencySymbol # ctx'.purpose
@@ -519,7 +518,7 @@ authMpBurnCert = phoistAcyclic $
                       ]
                     $ certDatum'
 
-                -- _ <- pletC $ pmustValidateAfter # ctx # (pfield @"to" # certDatum.cert'validity)
+                -- TODO: _ <- pletC $ pmustValidateAfter # ctx # (pfield @"to" # certDatum.cert'validity)
                 ptraceC "AuthMp burn $CERT: Can collect"
 
                 redeemerAc <- pletFieldsC @'["_0", "_1"] certDatum.cert'redeemerAc
@@ -543,9 +542,9 @@ authMpBurnCert = phoistAcyclic $
     pure $ popaque $ pconstant ()
 
 -- | WIP: Minting policy that validates minting and burning of $AUTH and $CERT tokens tokens
-mkAuthMp :: ClosedTerm (PAsData PAuthMpParams :--> PMintingPolicy)
-mkAuthMp = phoistAcyclic $
-  plam $ \params _ ctx -> unTermCont do
+authMpMint :: ClosedTerm (PAuthMpParams :--> PScriptContext :--> POpaque)
+authMpMint = phoistAcyclic $
+  plam $ \params ctx -> unTermCont do
     ptraceC "AuthMp"
     ptraceC "AuthMp mint"
     ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
@@ -590,3 +589,15 @@ mkAuthMp = phoistAcyclic $
     _ <- pletC $ (pvalueOf # (pfield @"mint" # ctx'.txInfo) # ownCs # authTn) #< 0
 
     pure $ popaque $ pconstant ()
+
+mkAuthMp :: ClosedTerm (PAsData PAuthMpParams :--> PMintingPolicy)
+mkAuthMp = phoistAcyclic $
+  plam $ \params red ctx -> unTermCont do
+    ptraceC "AuthMp"
+
+    red' <- pletC $ pfromData (ptryFromData @PAuthMpRedeemer red)
+
+    pmatchC red' >>= \case
+      PAuthMpBurnCert _ -> pure $ authMpBurnCert # ctx
+      PAuthMpBurnAuth _ -> pure $ authMpBurnCert # ctx
+      PAuthMpMint _ -> pure $ authMpMint # pfromData params # ctx
