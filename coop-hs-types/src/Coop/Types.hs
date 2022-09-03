@@ -13,6 +13,8 @@ module Coop.Types (
   AuthParams (..),
   AuthMpParams (..),
   AuthMpRedeemer (..),
+  CertMpParams (..),
+  CertMpRedeemer (..),
 ) where
 
 import Coop.PlutusOrphans ()
@@ -95,22 +97,36 @@ data CertDatum = CertDatum
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
 
-data AuthMpRedeemer = AuthMpBurnCert | AuthMpBurnAuth | AuthMpMint
+data CertMpRedeemer = CertMpBurn | CertMpMint
+  deriving stock (Show, Generic, Eq, Typeable)
+  deriving anyclass (ToJSON, FromJSON)
+
+data CertMpParams = CertMpParams
+  { cmp'authAuthorityAc :: (CurrencySymbol, TokenName)
+  , cmp'authAuthorityQ :: Integer
+  , cmp'certVAddress :: Address
+  }
+  deriving stock (Show, Generic, Eq)
+  deriving anyclass (ToJSON, FromJSON)
+
+data AuthMpRedeemer = AuthMpBurn | AuthMpMint
   deriving stock (Show, Generic, Eq, Typeable)
   deriving anyclass (ToJSON, FromJSON)
 
 data AuthMpParams = AuthMpParams
   { amp'authAuthorityAc :: (CurrencySymbol, TokenName)
   , amp'authAuthorityQ :: Integer
-  , amp'certVAddress :: Address
   }
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
 
 PlutusTx.unstableMakeIsData ''CertDatum
 PlutusTx.unstableMakeIsData ''AuthParams
+PlutusTx.unstableMakeIsData ''CertMpParams
+PlutusTx.unstableMakeIsData ''CertMpRedeemer
 PlutusTx.unstableMakeIsData ''AuthMpParams
 PlutusTx.unstableMakeIsData ''AuthMpRedeemer
+
 PlutusTx.unstableMakeIsData ''FsMpParams
 PlutusTx.unstableMakeIsData ''FsVParams
 PlutusTx.unstableMakeIsData ''FsDatum

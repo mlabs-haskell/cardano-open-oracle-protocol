@@ -27,13 +27,14 @@ module Coop.Plutus.Aux (
   pfoldTxInputs,
   pmustBurnWhatIsSpent,
   pmustHandleSpentWithMp,
+  pcurrencyValue,
 ) where
 
 import Control.Monad.Fail (MonadFail (fail))
 import Plutarch (TermCont, popaque, pto)
-import Plutarch.Api.V1 (AmountGuarantees (Positive), KeyGuarantees (Sorted), PAddress, PCurrencySymbol, PDatum, PDatumHash, PMap (PMap), PMaybeData (PDJust, PDNothing), PMintingPolicy, PPOSIXTime, PPubKeyHash, PScriptContext, PScriptPurpose (PMinting, PSpending), PTokenName, PTuple, PTxInInfo, PTxOut, PTxOutRef, PValue)
-import Plutarch.Api.V1.AssocMap (pempty, plookup)
-import Plutarch.Api.V1.Value (pforgetPositive, pnoAdaValue, pvalueOf)
+import Plutarch.Api.V1 (AmountGuarantees (NonZero, Positive), KeyGuarantees (Sorted), PAddress, PCurrencySymbol, PDatum, PDatumHash, PMap (PMap), PMaybeData (PDJust, PDNothing), PMintingPolicy, PPOSIXTime, PPubKeyHash, PScriptContext, PScriptPurpose (PMinting, PSpending), PTokenName, PTuple, PTxInInfo, PTxOut, PTxOutRef, PValue (PValue))
+import Plutarch.Api.V1.AssocMap (pempty, plookup, psingleton)
+import Plutarch.Api.V1.Value (pforgetPositive, pnoAdaValue, pnormalize, pvalueOf)
 import Plutarch.Api.V1.Value qualified as PValue
 import Plutarch.Bool (PBool (PTrue))
 import Plutarch.DataRepr (pdcons)
@@ -69,6 +70,16 @@ pcurrencyTokens = phoistAcyclic $
       ( \case
           PNothing -> pempty
           PJust tokens -> tokens
+      )
+
+pcurrencyValue :: forall (q :: AmountGuarantees) (s :: S). Term s (PCurrencySymbol :--> PValue 'Sorted q :--> PValue 'Sorted 'NonZero)
+pcurrencyValue = phoistAcyclic $
+  plam $ \cs val ->
+    pmatch
+      (plookup # cs # pto val)
+      ( \case
+          PNothing -> mempty @(Term _ (PValue 'Sorted 'NonZero))
+          PJust tokens -> pnormalize # pcon (PValue $ psingleton # cs # tokens)
       )
 
 pboolC :: TermCont @r s a -> TermCont @r s a -> Term s PBool -> TermCont @r s a
