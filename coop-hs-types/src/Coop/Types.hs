@@ -30,7 +30,10 @@ import Plutus.V1.Ledger.Api (Script, LedgerBytes, CurrencySymbol, Address, Valid
 #endif
 
 data CoopPlutus = CoopPlutus
-  { cp'mkCoopInstanceMp :: Script
+  { cp'mkNftMp :: Script
+  , cp'mkAuthMp :: Script
+  , cp'mkCertMp :: Script
+  , cp'certV :: Script
   , cp'mkFsMp :: Script
   , cp'mkFsV :: Script
   }
