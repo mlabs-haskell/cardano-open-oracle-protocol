@@ -2,9 +2,9 @@
 
 module Main (main) where
 
-import Coop.Pab (createCoopInstance, deploy, mintFs)
+import Coop.Pab (mkAuthScripts)
 import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), loadCoopPlutus)
-import Coop.Types (CoopPlutus (cp'mkCoopInstanceMp))
+import Coop.Types (CoopPlutus (cp'mkNftMp))
 import Data.Bifunctor (Bifunctor (second))
 import Data.Default (def)
 import Data.List.NonEmpty (NonEmpty)
@@ -35,45 +35,57 @@ tests coopPlutus =
         ( withContract
             ( const $ do
                 _ <- waitNSlots 5
-                _ <- createCoopInstance @String (cp'mkCoopInstanceMp coopPlutus)
+                _ <- mkAuthScripts @String coopPlutus
                 waitNSlots 5
             )
         )
-        [shouldSucceed, Predicate.not shouldFail]
-    , runAfter "create-coop-instance" $
-        assertExecutionWith
-          [ShowTrace, ShowBudgets]
-          "deploy"
-          (initAda (100 : replicate 10 7))
-          ( withContract
-              ( const $ do
-                  _ <- waitNSlots 5
-                  _ <- deploy @String coopPlutus
-                  waitNSlots 5
-              )
-          )
-          [shouldSucceed]
-    , runAfter "deploy" $
-        assertExecutionWith
-          [ShowTrace, ShowBudgets]
-          "publish-fs"
-          (initAda (100 : replicate 10 7) <> initAda (100 : replicate 10 7))
-          ( withContract
-              ( \(submitterPPkh : _) -> do
-                  _ <- waitNSlots 5
-                  coopDeployment <- deploy @String coopPlutus
-                  _ <- waitNSlots 5
-                  publisherPpkh <- ownFirstPaymentPubKeyHash
-                  logInfo @String ("publish-fs with: submitter = " <> show submitterPPkh <> " publisher = " <> show publisherPpkh)
-                  _ <-
-                    mintFs
-                      (unPaymentPubKeyHash submitterPPkh)
-                      (unPaymentPubKeyHash publisherPpkh)
-                      coopDeployment
-                  waitNSlots 5
-              )
-          )
-          [shouldSucceed]
+        [shouldSucceed]
+        --   assertExecutionWith
+        --     [ShowTrace, ShowBudgets]
+        --     "create-coop-instance"
+        --     (initAda (100 : replicate 10 7))
+        --     ( withContract
+        --         ( const $ do
+        --             _ <- waitNSlots 5
+        --             _ <- createCoopInstance @String (cp'mkCoopInstanceMp coopPlutus)
+        --             waitNSlots 5
+        --         )
+        --     )
+        --     [shouldSucceed, Predicate.not shouldFail]
+        -- , runAfter "create-coop-instance" $
+        --     assertExecutionWith
+        --       [ShowTrace, ShowBudgets]
+        --       "deploy"
+        --       (initAda (100 : replicate 10 7))
+        --       ( withContract
+        --           ( const $ do
+        --               _ <- waitNSlots 5
+        --               _ <- deploy @String coopPlutus
+        --               waitNSlots 5
+        --           )
+        --       )
+        --       [shouldSucceed]
+        -- , runAfter "deploy" $
+        --     assertExecutionWith
+        --       [ShowTrace, ShowBudgets]
+        --       "publish-fs"
+        --       (initAda (100 : replicate 10 7) <> initAda (100 : replicate 10 7))
+        --       ( withContract
+        --           ( \(submitterPPkh : _) -> do
+        --               _ <- waitNSlots 5
+        --               coopDeployment <- deploy @String coopPlutus
+        --               _ <- waitNSlots 5
+        --               publisherPpkh <- ownFirstPaymentPubKeyHash
+        --               logInfo @String ("publish-fs with: submitter = " <> show submitterPPkh <> " publisher = " <> show publisherPpkh)
+        --               _ <-
+        --                 mintFs
+        --                   (unPaymentPubKeyHash submitterPPkh)
+        --                   (unPaymentPubKeyHash publisherPpkh)
+        --                   coopDeployment
+        --               waitNSlots 5
+        --           )
+        --       )
+        --       [shouldSucceed]
     ]
 
 runAfter ::

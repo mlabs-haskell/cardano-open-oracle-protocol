@@ -15,6 +15,7 @@ module Coop.Types (
   AuthMpRedeemer (..),
   CertMpParams (..),
   CertMpRedeemer (..),
+  AuthDeployment (..),
 ) where
 
 import Coop.PlutusOrphans ()
@@ -45,6 +46,8 @@ data CoopDeployment = CoopDeployment
   , cd'fsMp :: MintingPolicy
   , cd'fsVParams :: FsVParams
   , cd'fsV :: Validator
+  , cd'coopToken :: (CurrencySymbol, TokenName)
+  , cd'auth :: AuthDeployment
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
@@ -84,6 +87,15 @@ newtype FsVParams = FsVParams
   deriving anyclass (ToJSON, FromJSON)
 
 -- | Authentication Tokens and Certificates
+data AuthDeployment = AuthDeployment
+  { ad'authority :: (CurrencySymbol, TokenName)
+  , ad'certV :: Validator
+  , ad'certMp :: MintingPolicy
+  , ad'authMp :: MintingPolicy
+  }
+  deriving stock (Show, Generic, Eq, Typeable)
+  deriving anyclass (ToJSON, FromJSON)
+
 data AuthParams = AuthParams
   { ap'authTokenCs :: CurrencySymbol
   , ap'certTokenCs :: CurrencySymbol

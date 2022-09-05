@@ -1,18 +1,29 @@
-module Coop.Pab.Aux (loadCoopPlutus, runBpi, DeployMode (..), minUtxoAdaValue) where
+module Coop.Pab.Aux (loadCoopPlutus, runBpi, DeployMode (..), minUtxoAdaValue, mintNft, tokenNameFromTxOutRef) where
 
 import BotPlutusInterface.Contract (runContract)
 import BotPlutusInterface.Types (ContractEnvironment (ContractEnvironment), ContractState (ContractState), PABConfig, ceContractInstanceId, ceContractLogs, ceContractState, ceContractStats, cePABConfig)
 import Control.Concurrent.STM (newTVarIO)
 import Coop.Types (CoopPlutus)
+import Crypto.Hash (SHA3_256 (SHA3_256), hashWith)
 import Data.Aeson (ToJSON, decodeFileStrict)
+import Data.ByteArray (convert)
+import Data.ByteString (ByteString, cons)
+import Data.Map (keys)
+import Data.Text (Text)
 import Data.UUID.V4 qualified as UUID
+import Data.Void (Void)
+import Ledger (applyArguments, getCardanoTxId, pubKeyHashAddress)
 import Ledger.Ada (lovelaceValueOf)
-import Plutus.Contract (Contract, ContractInstanceId)
+import Plutus.Contract (Contract, ContractInstanceId, logInfo, ownFirstPaymentPubKeyHash, submitTxConstraintsWith, throwError, utxosAt)
+import Plutus.Contract.Constraints (mintingPolicy, mustMintValue, mustPayToPubKey, mustSpendPubKeyOutput, unspentOutputs)
 import Plutus.PAB.Core.ContractInstance.STM (Activity (Active))
-import Plutus.V1.Ledger.Api (Value)
+import Plutus.Script.Utils.V1.Scripts (scriptCurrencySymbol)
+import Plutus.V1.Ledger.Api (CurrencySymbol, MintingPolicy (MintingPolicy), Script, TokenName (TokenName), TxId (getTxId), TxOutRef (txOutRefId, txOutRefIdx), Value, fromBuiltin, toBuiltin, toData)
+import Plutus.V1.Ledger.Value qualified as Value
 import System.Directory (getTemporaryDirectory)
 import System.FilePath ((</>))
 import System.Process (callProcess)
+import Text.Printf (printf)
 import Wallet.Types (ContractInstanceId (ContractInstanceId))
 
 data DeployMode = DEPLOY_PROD | DEPLOY_DEBUG deriving stock (Show, Read, Eq)
@@ -65,3 +76,41 @@ minUtxoAdaValue = lovelaceValueOf 2_000_000
 --   logInfo $ PStart @(PLog e a event) processName
 --   --contractWithLogger (logInfo @String )
 --   return undefined
+
+mintNft :: Script -> Integer -> Contract w s Text (TxId, (CurrencySymbol, TokenName, Integer))
+mintNft mkNftMp q = do
+  let logI m = logInfo @String ("mintNft: " <> m)
+  logI "Starting"
+  pkh <- ownFirstPaymentPubKeyHash
+  utxos <- utxosAt (pubKeyHashAddress pkh Nothing)
+  case keys utxos of
+    [] -> do
+      throwError "no utxo found"
+    oref : _ -> do
+      logI $ "Using oref " <> show oref
+      let nftTn = tokenNameFromTxOutRef oref
+          nftMp = MintingPolicy $ applyArguments mkNftMp [toData q, toData nftTn, toData oref]
+          nftCs = scriptCurrencySymbol nftMp
+          val = Value.singleton nftCs nftTn 1
+          lookups =
+            mconcat
+              [ mintingPolicy nftMp
+              , unspentOutputs utxos
+              ]
+          tx =
+            mconcat
+              [ mustMintValue val
+              , mustSpendPubKeyOutput oref
+              , mustPayToPubKey pkh val
+              ]
+      tx <- submitTxConstraintsWith @Void lookups tx
+      logI $ printf "Forged an NFT %s" (show val)
+      logI "Finished"
+      return (getCardanoTxId tx, (nftCs, nftTn, q))
+
+tokenNameFromTxOutRef :: TxOutRef -> TokenName
+tokenNameFromTxOutRef oref =
+  let ix = fromInteger . txOutRefIdx $ oref
+      txId = fromBuiltin . getTxId . txOutRefId $ oref
+      hashedOref = convert @_ @ByteString . hashWith SHA3_256 $ cons ix txId
+   in TokenName . toBuiltin $ hashedOref

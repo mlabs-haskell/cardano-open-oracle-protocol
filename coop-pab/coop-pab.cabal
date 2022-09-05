@@ -93,10 +93,13 @@ library
     , aeson
     , base
     , bot-plutus-interface
+    , bytestring
     , containers
     , coop-hs-types
+    , cryptonite
     , directory
     , filepath
+    , memory
     , plutip
     , plutus-contract
     , plutus-ledger

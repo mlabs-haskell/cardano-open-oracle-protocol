@@ -1,16 +1,21 @@
 module Coop.Pab (
-  createCoopInstance,
-  deploy,
-  mintFs,
+  mkAuthScripts,
+  mintCoop,
 ) where
 
-import Coop.Pab.Aux (minUtxoAdaValue)
+--  deploy,
+--  mintFs,
+
+import Coop.Pab.Aux (minUtxoAdaValue, mintNft)
 import Coop.Types (
+  AuthMpParams (AuthMpParams),
+  CertMpParams (CertMpParams),
   CoopDeployment (CoopDeployment, cd'fsMp, cd'fsV),
-  CoopPlutus (cp'mkCoopInstanceMp, cp'mkFsMp, cp'mkFsV),
+  CoopPlutus (cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkFsV, cp'mkNftMp),
   FsDatum (FsDatum),
   FsMpParams (FsMpParams),
   FsVParams (FsVParams),
+  cp'certV,
  )
 import Data.Map (keys)
 import Data.Text (Text)
@@ -39,73 +44,68 @@ import Test.Plutip.Internal.BotPlutusInterface.Setup ()
 import Test.Plutip.Internal.LocalCluster ()
 import Text.Printf (printf)
 
-createCoopInstance :: Script -> Contract w s Text (TxId, CurrencySymbol)
-createCoopInstance mkCoopInstanceMp = do
-  let logI m = logInfo @String ("createCoopInstance: " <> m)
-  logI "Starting"
-  pkh <- ownFirstPaymentPubKeyHash
-  utxos <- utxosAt (pubKeyHashAddress pkh Nothing)
-  case keys utxos of
-    [] -> do
-      throwError "no utxo found"
-    oref : _ -> do
-      logI $ "Using oref " <> show oref
-      let coopInstTn = TokenName . getTxId . txOutRefId $ oref
-          coopInstMp = MintingPolicy $ applyArguments mkCoopInstanceMp [toData coopInstTn, toData oref]
-          coopInstCs = scriptCurrencySymbol coopInstMp
-          val = Value.singleton coopInstCs coopInstTn 1
-          lookups =
-            mconcat
-              [ mintingPolicy coopInstMp
-              , unspentOutputs utxos
-              ]
-          tx =
-            mconcat
-              [ mustMintValue val
-              , mustSpendPubKeyOutput oref
-              , mustPayToPubKey pkh val
-              ]
-      tx <- submitTxConstraintsWith @Void lookups tx
-      logI $ printf "forged %s" (show val)
-      logI "Finished"
-      return (getCardanoTxId tx, coopInstCs)
+-- deploy :: CoopPlutus -> Contract w s Text CoopDeployment
+-- deploy coopPlutus = do
+--   let logI m = logInfo @String ("deploy: " <> m)
+--   logI "Starting"
+--   (_, cs) <- mintCoop (cp'mkNftMp coopPlutus)
+--   let fsVP = FsVParams cs
+--       fsV = Validator $ applyArguments (cp'mkFsV coopPlutus) [toData fsVP]
+--       fsMpP = FsMpParams cs (mkValidatorAddress fsV)
+--       fsMp = MintingPolicy $ applyArguments (cp'mkFsMp coopPlutus) [toData fsMpP]
+--   logI "Finished"
+--   return $ CoopDeployment fsMpP fsMp fsVP fsV
 
-deploy :: CoopPlutus -> Contract w s Text CoopDeployment
-deploy coopPlutus = do
-  let logI m = logInfo @String ("deploy: " <> m)
+mkAuthScripts :: CoopPlutus -> Contract w s Text AuthDeployment
+mkAuthScripts coopPlutus = do
+  let logI m = logInfo @String ("mkAuthScripts: " <> m)
   logI "Starting"
-  (_, cs) <- createCoopInstance (cp'mkCoopInstanceMp coopPlutus)
-  let fsVP = FsVParams cs
-      fsV = Validator $ applyArguments (cp'mkFsV coopPlutus) [toData fsVP]
-      fsMpP = FsMpParams cs (mkValidatorAddress fsV)
-      fsMp = MintingPolicy $ applyArguments (cp'mkFsMp coopPlutus) [toData fsMpP]
+  -- TODO: Parametrise mkNft by N
+  (_, (aaCs, aaTn, _)) <- mintAa (cp'mkNftMp coopPlutus)
+  let authMpParams = AuthMpParams (aaCs, aaTn) 1
+      certMpParams = CertMpParams (aaCs, aaTn) 1 (mkValidatorAddress certV)
+      certV = Validator $ cp'certV coopPlutus
+      certMp = MintingPolicy $ applyArguments (cp'mkCertMp coopPlutus) [toData certMpParams]
+      authMp = MintingPolicy $ applyArguments (cp'mkAuthMp coopPlutus) [toData authMpParams]
   logI "Finished"
-  return $ CoopDeployment fsMpP fsMp fsVP fsV
+  return $ AuthDeployment (aaCs, aaTn) certV certMp authMp
 
-mintFs :: PubKeyHash -> PubKeyHash -> CoopDeployment -> Contract w s Text TxId
-mintFs submitterPkh publisherPkh coopDeployment = do
-  let logI m = logInfo @String ("mintFs: " <> m)
+mintAa :: Script -> Contract w s Text (TxId, (CurrencySymbol, TokenName, Integer))
+mintAa mkNftMp = do
+  let logI m = logInfo @String ("mintAa: " <> m)
   logI "Starting"
-  let fsMp = cd'fsMp coopDeployment
-      fsV = cd'fsV coopDeployment
-      fsVAddr = validatorHash fsV
-      fsTn = TokenName . getPubKeyHash $ publisherPkh
-      fsCs = scriptCurrencySymbol fsMp
-      fsVal = Value.singleton fsCs fsTn 1
-      fsDatum = Datum . toBuiltinData $ FsDatum submitterPkh publisherPkh "aa" "aa" 0
-      lookups =
-        mconcat
-          [ mintingPolicy fsMp
-          , otherScript fsV
-          , otherData fsDatum
-          ]
-      tx =
-        mconcat
-          [ mustMintValue fsVal
-          , mustBeSignedBy (PaymentPubKeyHash publisherPkh)
-          , mustBeSignedBy (PaymentPubKeyHash submitterPkh)
-          , mustPayToOtherScript fsVAddr fsDatum (fsVal <> minUtxoAdaValue)
-          ]
-  tx <- submitTxConstraintsWith @Void lookups tx
-  logI "Finished"
-  return (getCardanoTxId tx)
+  mintNft mkNftMp 1
+
+mintCoop :: Script -> Contract w s Text (TxId, (CurrencySymbol, TokenName, Integer))
+mintCoop mkNftMp = do
+  let logI m = logInfo @String ("mintCoop: " <> m)
+  logI "Starting"
+  mintNft mkNftMp 1
+
+-- mintFs :: PubKeyHash -> PubKeyHash -> CoopDeployment -> Contract w s Text TxId
+-- mintFs submitterPkh publisherPkh coopDeployment = do
+--   let logI m = logInfo @String ("mintFs: " <> m)
+--   logI "Starting"
+--   let fsMp = cd'fsMp coopDeployment
+--       fsV = cd'fsV coopDeployment
+--       fsVAddr = validatorHash fsV
+--       fsTn = TokenName . getPubKeyHash $ publisherPkh
+--       fsCs = scriptCurrencySymbol fsMp
+--       fsVal = Value.singleton fsCs fsTn 1
+--       fsDatum = Datum . toBuiltinData $ FsDatum submitterPkh publisherPkh "aa" "aa" 0
+--       lookups =
+--         mconcat
+--           [ mintingPolicy fsMp
+--           , otherScript fsV
+--           , otherData fsDatum
+--           ]
+--       tx =
+--         mconcat
+--           [ mustMintValue fsVal
+--           , mustBeSignedBy (PaymentPubKeyHash publisherPkh)
+--           , mustBeSignedBy (PaymentPubKeyHash submitterPkh)
+--           , mustPayToOtherScript fsVAddr fsDatum (fsVal <> minUtxoAdaValue)
+--           ]
+--   tx <- submitTxConstraintsWith @Void lookups tx
+--   logI "Finished"
+--   return (getCardanoTxId tx)

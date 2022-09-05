@@ -158,16 +158,16 @@ pfindMap = phoistAcyclic $
 {- | Minting policy for OneShot tokens.
 
 Ensures a given `TxOutRef` is consumed to enforce uniqueness of the token.
-Only a single token can be minted at a time.
+`q` tokens can be minted at a time.
 -}
 mkOneShotMintingPolicy ::
   ClosedTerm
-    ( PAsData PTokenName
+    ( PAsData PInteger :--> PAsData PTokenName
         :--> PAsData PTxOutRef
         :--> PMintingPolicy
     )
 mkOneShotMintingPolicy = phoistAcyclic $
-  plam $ \tn txOutRef _ ctx -> unTermCont do
+  plam $ \q tn txOutRef _ ctx -> unTermCont do
     ptraceC "mkOneShotMintingPolicy"
     ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
     txInfo <- pletFieldsC @'["inputs", "mint"] ctx'.txInfo
@@ -183,7 +183,7 @@ mkOneShotMintingPolicy = phoistAcyclic $
     pboolC
       (fail "mkOneShotMintingPolicy: Incorrect minted value")
       (pure $ popaque punit)
-      (phasSingleToken # cs # pfromData tn # mint)
+      (pvalueOf # mint # cs # pfromData tn #== pfromData q)
 
 -- | Check if utxo is consumed
 pconsumesRef :: Term s (PTxOutRef :--> PBuiltinList PTxInInfo :--> PBool)
@@ -192,14 +192,6 @@ pconsumesRef = phoistAcyclic $
     pany #$ plam $ \input -> unTermCont do
       txOutRef' <- pletC $ pfield @"outRef" # input
       pure $ txOutRef #== txOutRef'
-
--- | Check if a value has exactly one of the given token
-phasSingleToken ::
-  forall (w1 :: KeyGuarantees) (w2 :: AmountGuarantees) (s :: S).
-  Term s (PCurrencySymbol :--> PTokenName :--> PValue w1 w2 :--> PBool)
-phasSingleToken = phoistAcyclic $
-  plam $ \cs tn v ->
-    1 #== pvalueOf # v # cs # tn
 
 pdatumFromTxOut :: forall a (s :: S). (PIsData a, PTryFrom PData (PAsData a)) => Term s (PScriptContext :--> PTxOut :--> a)
 pdatumFromTxOut = phoistAcyclic $
