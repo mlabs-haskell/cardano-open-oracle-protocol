@@ -26,7 +26,29 @@
 
     iohk-nix.follows = "plutip/iohk-nix";
 
-    nixpkgsFourmolu.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs-fourmolu.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+
+    # NOTE: Very useful for direnv
+    coop-docs = {
+      url = "path:./coop-docs/";
+      flake = false;
+    };
+
+    coop-hs-types = {
+      url = "path:./coop-hs-types/";
+      flake = false;
+    };
+
+    coop-plutus = {
+      url = "path:./coop-plutus/";
+      flake = false;
+    };
+
+    coop-pab = {
+      url = "path:./coop-pab/";
+      flake = false;
+    };
+
   };
   outputs =
     { self
@@ -38,7 +60,11 @@
     , plutarch
     , iohk-nix
     , plutip
-    , nixpkgsFourmolu
+    , nixpkgs-fourmolu
+    , coop-docs
+    , coop-hs-types
+    , coop-plutus
+    , coop-pab
     }:
     flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" ]
       (system:
@@ -56,7 +82,7 @@
             (import "${iohk-nix}/overlays/crypto")
           ];
         };
-        pkgsFourmolu = import nixpkgsFourmolu {
+        pkgsFourmolu = import nixpkgs-fourmolu {
           inherit system;
         };
         fourmolu = pkgsFourmolu.haskell.packages.ghc924.fourmolu_0_6_0_0;
@@ -78,7 +104,7 @@
           inherit (pre-commit-check) shellHook;
         };
 
-        coopHsTypesProj = import ./coop-hs-types/build.nix {
+        coopHsTypesProj = import "${coop-hs-types}/build.nix" {
           inherit pkgs plutip;
           inherit (pkgsWithOverlay) haskell-nix;
           inherit (pre-commit-check) shellHook;
@@ -95,7 +121,7 @@
           ];
         };
 
-        coopPlutusProj = import ./coop-plutus/build.nix {
+        coopPlutusProj = import "${coop-plutus}/build.nix" {
           inherit plutarch;
           pkgs = pkgsForPlutarch;
           inherit (pkgsForPlutarch) haskell-nix;
@@ -120,13 +146,13 @@
         };
         coopPublisherFlake = coopPublisherProj.flake { };
 
-        coopDocsDevShell = import ./coop-docs/build.nix {
+        coopDocsDevShell = import "${coop-docs}/build.nix" {
           inherit pkgs;
           inherit (pre-commit-hooks.outputs.packages.${system}) markdownlint-cli;
           inherit (pre-commit-check) shellHook;
         };
 
-        coopPabProj = import ./coop-pab/build.nix {
+        coopPabProj = import "${coop-pab}/build.nix" {
           inherit pkgs plutip;
           inherit (pkgsWithOverlay) haskell-nix;
           inherit (pre-commit-check) shellHook;

@@ -18,6 +18,7 @@ module Coop.Types (
   AuthDeployment (..),
 ) where
 
+import Control.Lens (makeFields)
 import Coop.PlutusOrphans ()
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Typeable (Typeable)
@@ -42,11 +43,9 @@ data CoopPlutus = CoopPlutus
   deriving anyclass (ToJSON, FromJSON)
 
 data CoopDeployment = CoopDeployment
-  { cd'fsMpParams :: FsMpParams
+  { cd'coopToken :: (CurrencySymbol, TokenName)
   , cd'fsMp :: MintingPolicy
-  , cd'fsVParams :: FsVParams
   , cd'fsV :: Validator
-  , cd'coopToken :: (CurrencySymbol, TokenName)
   , cd'auth :: AuthDeployment
   }
   deriving stock (Show, Eq, Generic)
@@ -88,7 +87,7 @@ newtype FsVParams = FsVParams
 
 -- | Authentication Tokens and Certificates
 data AuthDeployment = AuthDeployment
-  { ad'authority :: (CurrencySymbol, TokenName)
+  { ad'authorityToken :: (CurrencySymbol, TokenName)
   , ad'certV :: Validator
   , ad'certMp :: MintingPolicy
   , ad'authMp :: MintingPolicy
@@ -107,7 +106,7 @@ data CertDatum = CertDatum
   { cert'id :: LedgerBytes
   , cert'validity :: POSIXTimeRange
   , cert'redeemerAc :: (CurrencySymbol, TokenName)
-  , cert'cs :: CurrencySymbol
+  , cert'cs :: CurrencySymbol -- TODO: remove
   }
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
@@ -135,6 +134,7 @@ data AuthMpParams = AuthMpParams
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
 
+-- | Plutus ToData/FromData instances
 PlutusTx.unstableMakeIsData ''CertDatum
 PlutusTx.unstableMakeIsData ''AuthParams
 PlutusTx.unstableMakeIsData ''CertMpParams
@@ -146,3 +146,19 @@ PlutusTx.unstableMakeIsData ''FsMpParams
 PlutusTx.unstableMakeIsData ''FsVParams
 PlutusTx.unstableMakeIsData ''FsDatum
 PlutusTx.unstableMakeIsData ''FsMpRedeemer
+
+-- | Lenses
+makeFields ''CoopPlutus
+makeFields ''CoopDeployment
+makeFields ''FsMpParams
+makeFields ''FsVParams
+makeFields ''FsDatum
+makeFields ''FsMpRedeemer
+
+makeFields ''AuthDeployment
+makeFields ''CertDatum
+makeFields ''AuthParams
+makeFields ''CertMpParams
+makeFields ''CertMpRedeemer
+makeFields ''AuthMpParams
+makeFields ''AuthMpRedeemer

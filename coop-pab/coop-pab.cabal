@@ -99,6 +99,7 @@ library
     , cryptonite
     , directory
     , filepath
+    , lens
     , memory
     , plutip
     , plutus-contract
@@ -106,6 +107,7 @@ library
     , plutus-ledger-api
     , plutus-pab
     , plutus-script-utils
+    , plutus-tx
     , process
     , stm
     , text
@@ -115,6 +117,7 @@ test-suite coop-pab-tests
   import:         common-language
   build-depends:
     , base
+    , bot-plutus-interface
     , coop-hs-types
     , coop-pab
     , data-default

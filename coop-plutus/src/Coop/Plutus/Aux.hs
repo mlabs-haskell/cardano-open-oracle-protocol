@@ -28,6 +28,7 @@ module Coop.Plutus.Aux (
   pmustBurnWhatIsSpent,
   pmustHandleSpentWithMp,
   pcurrencyValue,
+  pmustSpendAtLeast,
 ) where
 
 import Control.Monad.Fail (MonadFail (fail))
@@ -43,7 +44,7 @@ import Plutarch.Extra.Interval (pbefore)
 import Plutarch.Extra.TermCont (pletC, pletFieldsC, pmatchC, ptraceC)
 import Plutarch.List (PIsListLike, PListLike (pelimList, pnil), pany, pfoldr)
 import Plutarch.Num (PNum ((#+)))
-import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PEq ((#==)), PInteger (), PIsData, PMaybe (PJust, PNothing), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pdata, pdnil, pelem, pfield, pfix, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pmap, pmatch, psndBuiltin, ptraceError, ptryFrom, (#), (#$), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PEq ((#==)), PInteger (), PIsData, PMaybe (PJust, PNothing), PPartialOrd ((#<=)), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pdata, pdnil, pelem, pfield, pfix, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pmap, pmatch, psndBuiltin, ptraceError, ptryFrom, (#), (#$), type (:-->))
 import Plutarch.TermCont (TermCont (runTermCont), tcont, unTermCont)
 import PlutusTx.Prelude (Group (inv))
 import Prelude (Applicative (pure), Monad ((>>)), Monoid (mempty), Semigroup ((<>)), fst, ($), (<$>), (>>=))
@@ -328,10 +329,10 @@ pfoldTxInputs = phoistAcyclic $
         # pfromData txInfo.inputs
 
 -- | Checks total tokens spent
-pmustSpend :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PBool)
-pmustSpend = phoistAcyclic $
-  plam $ \ctx cs tn mustSpendQ -> unTermCont do
-    ptraceC "pmustSpend"
+pmustSpendPred :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> (PInteger :--> PBool) :--> PBool)
+pmustSpendPred = phoistAcyclic $
+  plam $ \ctx cs tn predOnQ -> unTermCont do
+    ptraceC "pmustSpendPred"
     spentQ <-
       pletC $
         pfoldTxInputs # ctx
@@ -344,9 +345,24 @@ pmustSpend = phoistAcyclic $
           # 0
 
     pboolC
-      (fail "pmustSpend: didn't spend the required quantity")
-      (ptraceC "mustSpend: spent required quantity" >> pure (pcon PTrue))
-      (mustSpendQ #== spentQ)
+      (fail "pmustSpendPred: didn't spend the required quantity")
+      (ptraceC "pmustSpendPred: spent required quantity" >> pure (pcon PTrue))
+      (predOnQ # spentQ)
+
+-- | Checks total tokens spent
+pmustSpend :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PBool)
+pmustSpend = phoistAcyclic $
+  plam $ \ctx cs tn mustSpendQ -> unTermCont do
+    ptraceC "pmustSpend"
+    pure $ pmustSpendPred # ctx # cs # tn # plam (#== mustSpendQ)
+
+-- | Checks total tokens spent
+pmustSpendAtLeast :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PBool)
+pmustSpendAtLeast = phoistAcyclic $
+  plam $ \ctx cs tn mustSpendAtLeastQ -> unTermCont do
+    ptraceC "pmustSpendAtLeast"
+    ptraceC "pmustSpend"
+    pure $ pmustSpendPred # ctx # cs # tn # plam (mustSpendAtLeastQ #<=)
 
 -- | Checks and sums tokens spend from a given address
 pmustSpendFromAddress :: ClosedTerm (PScriptContext :--> (PValue 'Sorted 'Positive :--> PMaybeData PInteger) :--> PAddress :--> PInteger)

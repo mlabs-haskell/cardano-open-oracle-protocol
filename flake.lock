@@ -438,6 +438,54 @@
         "type": "github"
       }
     },
+    "coop-docs": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-u1JunkxKRwrY4Ss3NyE3zXTiCULIA0SEyK2H4hhGbzA=",
+        "path": "./coop-docs/",
+        "type": "path"
+      },
+      "original": {
+        "path": "./coop-docs/",
+        "type": "path"
+      }
+    },
+    "coop-hs-types": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-bbnE7K74Q3mI/u+Ja1/AdYQDB8uocvuwYgGArOMT4t4=",
+        "path": "./coop-hs-types/",
+        "type": "path"
+      },
+      "original": {
+        "path": "./coop-hs-types/",
+        "type": "path"
+      }
+    },
+    "coop-pab": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-g3EVOINmTOv4tNy8+czJOHgaOZ+ysUSvq58lhZKEXUc=",
+        "path": "./coop-pab/",
+        "type": "path"
+      },
+      "original": {
+        "path": "./coop-pab/",
+        "type": "path"
+      }
+    },
+    "coop-plutus": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-JuyPQcC90aiTkrg8tPjUsQwk/rVjqTh6PejqCgw5mUA=",
+        "path": "./coop-plutus/",
+        "type": "path"
+      },
+      "original": {
+        "path": "./coop-plutus/",
+        "type": "path"
+      }
+    },
     "ekg-forward": {
       "flake": false,
       "locked": {
@@ -1491,6 +1539,22 @@
         "type": "github"
       }
     },
+    "nixpkgs-fourmolu": {
+      "locked": {
+        "lastModified": 1662096612,
+        "narHash": "sha256-R+Q8l5JuyJryRPdiIaYpO5O3A55rT+/pItBrKcy7LM4=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "21de2b973f9fee595a7a1ac4693efff791245c34",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nixpkgs-latest": {
       "locked": {
         "lastModified": 1653918805,
@@ -1560,22 +1624,6 @@
         "owner": "NixOS",
         "repo": "nixpkgs",
         "rev": "30d3d79b7d3607d56546dd2a6b49e156ba0ec634",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "nixpkgs-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgsFourmolu": {
-      "locked": {
-        "lastModified": 1661353537,
-        "narHash": "sha256-1E2IGPajOsrkR49mM5h55OtYnU0dGyre6gl60NXKITE=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "0e304ff0d9db453a4b230e9386418fd974d5804a",
         "type": "github"
       },
       "original": {
@@ -1981,6 +2029,10 @@
     },
     "root": {
       "inputs": {
+        "coop-docs": "coop-docs",
+        "coop-hs-types": "coop-hs-types",
+        "coop-pab": "coop-pab",
+        "coop-plutus": "coop-plutus",
         "flake-utils": "flake-utils",
         "haskell-nix": [
           "plutip",
@@ -1995,7 +2047,7 @@
           "plutip",
           "nixpkgs"
         ],
-        "nixpkgsFourmolu": "nixpkgsFourmolu",
+        "nixpkgs-fourmolu": "nixpkgs-fourmolu",
         "plutarch": "plutarch",
         "plutip": "plutip",
         "pre-commit-hooks": "pre-commit-hooks"

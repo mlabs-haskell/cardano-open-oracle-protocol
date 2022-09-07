@@ -9,7 +9,7 @@ module Coop.Plutus (
 ) where
 
 import Control.Monad.Fail (MonadFail (fail))
-import Coop.Plutus.Aux (pboolC, pcurrencyValue, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfindOwnInput', pfoldTxInputs, pfoldTxOutputs, phasCurrency, pmaybeDataC, pmustBeSignedBy, pmustHandleSpentWithMp, pmustMint, pmustPayTo, pmustSpend, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
+import Coop.Plutus.Aux (pboolC, pcurrencyValue, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfindOwnInput', pfoldTxInputs, pfoldTxOutputs, phasCurrency, pmaybeDataC, pmustBeSignedBy, pmustHandleSpentWithMp, pmustMint, pmustPayTo, pmustSpendAtLeast, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
 import Coop.Plutus.Types (PAuthMpParams, PAuthMpRedeemer (PAuthMpBurn, PAuthMpMint), PAuthParams, PCertDatum, PCertMpParams, PCertMpRedeemer (PCertMpBurn, PCertMpMint), PFsDatum, PFsMpParams, PFsMpRedeemer (PFsMpBurn, PFsMpMint), PFsVParams)
 import Plutarch (POpaque, popaque)
 import Plutarch.Api.V1 (AmountGuarantees (NonZero, Positive), KeyGuarantees (Sorted), PCurrencySymbol, PMap (PMap), PMaybeData, PMintingPolicy, PScriptContext, PTxInInfo, PTxOut, PValidator, PValue)
@@ -532,7 +532,7 @@ certMpBurn = phoistAcyclic $
 
                 redeemerAc <- pletFieldsC @'["_0", "_1"] certDatum.cert'redeemerAc
 
-                _ <- pletC $ pmustSpend # ctx # redeemerAc._0 # redeemerAc._1 # 1
+                _ <- pletC $ pmustSpendAtLeast # ctx # redeemerAc._0 # redeemerAc._1 # 1
                 ptraceC "CertMp burn: $CERT_RDMR spent"
 
                 certTn <- pletC $ pcon (PTokenName $ certDatum.cert'id)
@@ -540,6 +540,7 @@ certMpBurn = phoistAcyclic $
                   (fail "CertMp burn: Must spend a single $CERT token")
                   (ptraceC "CertMp burn: Spent a single $CERT token")
                   (pvalueOf # txInVal # ownCs # certTn #== 1)
+
                 _ <- pletC $ pmustMint # ctx # ownCs # certTn # (pnegate # 1)
                 ptraceC "CertMp burn: $CERT spent and burned"
 
@@ -628,19 +629,24 @@ pmustSpendAa = phoistAcyclic $
   plam $ \ctx aaCs aaTn aaQ -> unTermCont do
     ptraceC "pmustSpendAa"
     let foldFn acc txIn = unTermCont do
-          PPair aaVal tnBytes <- pmatchC acc
-
-          -- accumulate token name bytes
+          -- check if $AA input
           txIn' <- pletFieldsC @'["resolved", "outRef"] txIn
-          txId <- pletC $ pfield @"_0" #$ pfield @"id" # txIn'.outRef
-          txIdx <- pletC $ pfield @"idx" # txIn'.outRef
-          tnBytes' <- pletC $ tnBytes <> pconsBS # txIdx # txId
-
-          -- accumulate token quantities
           txInVal <- pletC $ pfield @"value" # txIn'.resolved
-          aaVal' <- pletC $ aaVal #+ (pvalueOf # txInVal # aaCs # aaTn)
+          pboolC
+            (ptraceC "pmustSpendAa: Skipping non $AA input" >> pure acc)
+            ( do
+                ptraceC "pmustSpendAa: Found an $AA input"
+                PPair aaVal tnBytes <- pmatchC acc
+                -- accumulate token name bytes
+                txId <- pletC $ pfield @"_0" #$ pfield @"id" # txIn'.outRef
+                txIdx <- pletC $ pfield @"idx" # txIn'.outRef
+                tnBytes' <- pletC $ tnBytes <> pconsBS # txIdx # txId
+                -- accumulate token quantities
+                aaVal' <- pletC $ aaVal #+ (pvalueOf # txInVal # aaCs # aaTn)
 
-          pure $ pcon $ PPair aaVal' tnBytes'
+                pure $ pcon $ PPair aaVal' tnBytes'
+            )
+            (phasCurrency # aaCs # txInVal)
 
     PPair aaTokensSpent tnBytes <- pmatchC $ pfoldTxInputs # ctx # plam foldFn # pcon (PPair 0 mempty)
 
