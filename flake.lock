@@ -438,54 +438,6 @@
         "type": "github"
       }
     },
-    "coop-docs": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-u1JunkxKRwrY4Ss3NyE3zXTiCULIA0SEyK2H4hhGbzA=",
-        "path": "./coop-docs/",
-        "type": "path"
-      },
-      "original": {
-        "path": "./coop-docs/",
-        "type": "path"
-      }
-    },
-    "coop-hs-types": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-bbnE7K74Q3mI/u+Ja1/AdYQDB8uocvuwYgGArOMT4t4=",
-        "path": "./coop-hs-types/",
-        "type": "path"
-      },
-      "original": {
-        "path": "./coop-hs-types/",
-        "type": "path"
-      }
-    },
-    "coop-pab": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-g3EVOINmTOv4tNy8+czJOHgaOZ+ysUSvq58lhZKEXUc=",
-        "path": "./coop-pab/",
-        "type": "path"
-      },
-      "original": {
-        "path": "./coop-pab/",
-        "type": "path"
-      }
-    },
-    "coop-plutus": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-JuyPQcC90aiTkrg8tPjUsQwk/rVjqTh6PejqCgw5mUA=",
-        "path": "./coop-plutus/",
-        "type": "path"
-      },
-      "original": {
-        "path": "./coop-plutus/",
-        "type": "path"
-      }
-    },
     "ekg-forward": {
       "flake": false,
       "locked": {
@@ -2029,10 +1981,6 @@
     },
     "root": {
       "inputs": {
-        "coop-docs": "coop-docs",
-        "coop-hs-types": "coop-hs-types",
-        "coop-pab": "coop-pab",
-        "coop-plutus": "coop-plutus",
         "flake-utils": "flake-utils",
         "haskell-nix": [
           "plutip",

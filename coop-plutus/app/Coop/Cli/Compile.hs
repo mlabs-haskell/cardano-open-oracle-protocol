@@ -2,9 +2,9 @@
 
 module Coop.Cli.Compile (CompileOpts (..), CompileMode (..), compile) where
 
-import Coop.Plutus (certV, mkAuthMp, mkCertMp, mkFsMp, mkFsV)
+import Coop.Plutus (certV, fsV, mkAuthMp, mkCertMp, mkFsMp)
 import Coop.Plutus.Aux (mkOneShotMintingPolicy)
-import Coop.Types (CoopPlutus (CoopPlutus, cp'certV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkFsV, cp'mkNftMp))
+import Coop.Types (CoopPlutus (CoopPlutus, cp'certV, cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkNftMp))
 import Data.Aeson (encode)
 import Data.ByteString.Lazy (writeFile)
 import Plutarch (Config (Config), TracingMode (DoTracing, NoTracing))
@@ -28,7 +28,7 @@ compile opts = do
   mkCertMp' <- either (\err -> fail $ "Failed compiling mkCertMp with " <> show err) pure (Plutarch.compile cfg mkCertMp)
   certV' <- either (\err -> fail $ "Failed compiling certV with " <> show err) pure (Plutarch.compile cfg certV)
   mkFsMp' <- either (\err -> fail $ "Failed compiling mkFsMp with " <> show err) pure (Plutarch.compile cfg mkFsMp)
-  mkFsV' <- either (\err -> fail $ "Failed compiling mkFsV with " <> show err) pure (Plutarch.compile cfg mkFsV)
+  fsV' <- either (\err -> fail $ "Failed compiling fsV with " <> show err) pure (Plutarch.compile cfg fsV)
 
   let cs =
         CoopPlutus
@@ -37,7 +37,7 @@ compile opts = do
           , cp'mkCertMp = mkCertMp'
           , cp'certV = certV'
           , cp'mkFsMp = mkFsMp'
-          , cp'mkFsV = mkFsV'
+          , cp'fsV = fsV'
           }
   Data.ByteString.Lazy.writeFile (co'File opts) (encode cs)
   return ()

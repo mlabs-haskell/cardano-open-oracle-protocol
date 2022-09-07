@@ -4,7 +4,6 @@
 module Coop.Plutus.Types (
   PFsMpParams (..),
   PFsMpRedeemer (..),
-  PFsVParams (..),
   PFsDatum (..),
   PCertDatum (..),
   PAuthParams (..),
@@ -14,7 +13,7 @@ module Coop.Plutus.Types (
   PCertMpRedeemer (..),
 ) where
 
-import Coop.Types (AuthMpParams, AuthMpRedeemer, AuthParams, CertDatum, CertMpParams, CertMpRedeemer, FsDatum, FsMpParams, FsMpRedeemer, FsVParams)
+import Coop.Types (AuthMpParams, AuthMpRedeemer, AuthParams, CertDatum, CertMpParams, CertMpRedeemer, FsDatum, FsMpParams, FsMpRedeemer)
 import Data.Typeable (Typeable)
 import GHC.Generics qualified as GHC
 import Generics.SOP (Generic)
@@ -48,11 +47,9 @@ newtype PFsDatum s
           s
           ( PDataRecord
               '[ "fd'fs" ':= PByteString
-               , "fd'id" ':= PByteString
-               , "fd'description" ':= PByteString
+               , "fd'fsId" ':= PByteString
                , "fd'gcAfter" ':= PPOSIXTime
                , "fd'submitter" ':= PPubKeyHash
-               , "fd'fsCs" ':= PCurrencySymbol
                ]
           )
       )
@@ -80,7 +77,7 @@ newtype PFsMpParams s
       ( Term
           s
           ( PDataRecord
-              '[ "fmp'coopInstance" ':= PCurrencySymbol
+              '[ "fmp'coopAc" ':= PTuple PCurrencySymbol PTokenName
                , "fmp'fsVAddress" ':= PAddress
                , "fmp'authParams" ':= PAuthParams
                ]
@@ -93,23 +90,6 @@ instance DerivePlutusType PFsMpParams where type DPTStrat _ = PlutusTypeData
 instance PUnsafeLiftDecl PFsMpParams where type PLifted PFsMpParams = FsMpParams
 deriving via (DerivePConstantViaData FsMpParams PFsMpParams) instance (PConstantDecl FsMpParams)
 instance PTryFrom PData (PAsData PFsMpParams)
-
-newtype PFsVParams s
-  = PFsVParams
-      ( Term
-          s
-          ( PDataRecord
-              '[ "fvp'coopInstance" ':= PCurrencySymbol
-               ]
-          )
-      )
-  deriving stock (GHC.Generic, Typeable)
-  deriving anyclass (Generic, PlutusType, PIsData, PEq, PDataFields)
-
-instance DerivePlutusType PFsVParams where type DPTStrat _ = PlutusTypeData
-instance PUnsafeLiftDecl PFsVParams where type PLifted PFsVParams = FsVParams
-deriving via (DerivePConstantViaData FsVParams PFsVParams) instance (PConstantDecl FsVParams)
-instance PTryFrom PData (PAsData PFsVParams)
 
 newtype PAuthParams s
   = PAuthParams
@@ -137,7 +117,6 @@ newtype PCertDatum (s :: S)
               '[ "cert'id" ':= PByteString
                , "cert'validity" ':= PPOSIXTimeRange
                , "cert'redeemerAc" ':= PTuple PCurrencySymbol PTokenName
-               , "cert'cs" ':= PCurrencySymbol
                ]
           )
       )
@@ -155,7 +134,7 @@ newtype PAuthMpParams (s :: S)
           s
           ( PDataRecord
               '[ "amp'authAuthorityAc" ':= PTuple PCurrencySymbol PTokenName
-               , "amp'authAuthorityQ" ':= PInteger
+               , "amp'requiredAtLeastAaQ" ':= PInteger
                ]
           )
       )
@@ -184,7 +163,7 @@ newtype PCertMpParams (s :: S)
           s
           ( PDataRecord
               '[ "cmp'authAuthorityAc" ':= PTuple PCurrencySymbol PTokenName
-               , "cmp'authAuthorityQ" ':= PInteger
+               , "cmp'requiredAtLeastAaQ" ':= PInteger
                , "cmp'certVAddress" ':= PAddress
                ]
           )

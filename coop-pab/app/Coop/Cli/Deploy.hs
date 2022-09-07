@@ -18,7 +18,7 @@ deploy opts = do
   coopPlutus <- loadCoopPlutus (do'mode opts)
   pabConf <-
     either error id <$> loadPABConfig (do'pabConfig opts)
-  (_, errOrCoopDeployment) <- runBpi @Text pabConf $ Pab.deployCoop @Text coopPlutus
+  (_, errOrCoopDeployment) <- runBpi @Text pabConf $ Pab.deployCoop @Text coopPlutus 1
   coopDeployment <- either (fail . show) pure errOrCoopDeployment
   encodeFile (do'deploymentFile opts) coopDeployment
   return ()

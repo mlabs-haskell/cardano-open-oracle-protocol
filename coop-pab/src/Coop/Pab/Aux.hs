@@ -27,7 +27,7 @@ import Plutus.Contract.Constraints (mintingPolicy, mustMintValue, mustPayToPubKe
 import Plutus.PAB.Core.ContractInstance.STM (Activity (Active))
 import Plutus.Script.Utils.V1.Scripts (scriptCurrencySymbol)
 import Plutus.V1.Ledger.Api (Address, BuiltinByteString, CurrencySymbol, Datum (Datum, getDatum), FromData (fromBuiltinData), MintingPolicy (MintingPolicy), Script, ToData, TokenName (TokenName), TxId (getTxId), TxOutRef (txOutRefId, txOutRefIdx), adaSymbol, adaToken, fromBuiltin, toBuiltin, toBuiltinData, toData)
-import Plutus.V1.Ledger.Value (valueOf)
+import Plutus.V1.Ledger.Value (AssetClass, assetClass, valueOf)
 import Plutus.V1.Ledger.Value qualified as Value
 import PlutusTx.AssocMap qualified as AssocMap
 import System.Directory (getTemporaryDirectory)
@@ -74,7 +74,7 @@ hasCurrency (Value vals) cs = AssocMap.member cs vals
 currencyValue :: Value -> CurrencySymbol -> Value
 currencyValue (Value vals) cs = maybe mempty (Value . AssocMap.singleton cs) $ AssocMap.lookup cs vals
 
-mintNft :: Script -> Integer -> Contract w s Text (TxId, (CurrencySymbol, TokenName, Integer))
+mintNft :: Script -> Integer -> Contract w s Text (TxId, (AssetClass, Integer))
 mintNft mkNftMp q = do
   let logI m = logInfo @String ("mintNft: " <> m)
   logI "Starting"
@@ -101,7 +101,7 @@ mintNft mkNftMp q = do
       tx <- submitTxConstraintsWith @Void lookups tx
       logI $ printf "Forged an NFT %s" (show val)
       logI "Finished"
-      return (getCardanoTxId tx, (nftCs, nftTn, q))
+      return (getCardanoTxId tx, (assetClass nftCs nftTn, q))
 
 -- FIXME: Sort orefs to match the onchain order
 -- TODO: Switch to using blake
@@ -134,14 +134,15 @@ datumFromTxOut out =
             dat <-
               either
                 ( \h -> do
+                    logI "Got datum hash"
                     mayDat <- datumFromHash h
                     maybe (throwError "datumFromHash failed") pure mayDat
                 )
-                pure
+                (\d -> logI "Got inlined datum" >> pure d)
                 hashOrDatum
             maybe
-              (logI ("fromBuiltinData failed: " <> show (typeRep (Proxy @a))) >> pure Nothing)
-              pure
+              (logI ("fromDatum failed: " <> show (typeRep (Proxy @a)) <> " is not: " <> show dat) >> pure Nothing)
+              (pure . Just)
               (fromDatum dat)
         )
         (out ^? ciTxOutDatum)

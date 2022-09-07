@@ -5,8 +5,6 @@ module Coop.Types (
   CoopDeployment (..),
   FsMpParams (..),
   FsMpRedeemer (..),
-  FsVParams (..),
-  FsDescription (),
   FactStatement (),
   FsDatum (..),
   CertDatum (..),
@@ -26,9 +24,11 @@ import GHC.Generics (Generic)
 import PlutusTx qualified
 
 #ifdef NEW_LEDGER_NAMESPACE
-import PlutusLedgerApi.V1 (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, POSIXTimeRange, PubKeyHash, TokenName)
+import PlutusLedgerApi.V1 (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, POSIXTimeRange, PubKeyHash)
+import PlutusLedgerApi.V1.Value (AssetClass)
 #else
-import Plutus.V1.Ledger.Api (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, POSIXTimeRange, PubKeyHash, TokenName)
+import Plutus.V1.Ledger.Api (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, POSIXTimeRange, PubKeyHash)
+import Plutus.V1.Ledger.Value (AssetClass)
 #endif
 
 data CoopPlutus = CoopPlutus
@@ -37,13 +37,13 @@ data CoopPlutus = CoopPlutus
   , cp'mkCertMp :: Script
   , cp'certV :: Script
   , cp'mkFsMp :: Script
-  , cp'mkFsV :: Script
+  , cp'fsV :: Script
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
 data CoopDeployment = CoopDeployment
-  { cd'coopToken :: (CurrencySymbol, TokenName)
+  { cd'coopAc :: AssetClass
   , cd'fsMp :: MintingPolicy
   , cd'fsV :: Validator
   , cd'auth :: AuthDeployment
@@ -52,23 +52,19 @@ data CoopDeployment = CoopDeployment
   deriving anyclass (ToJSON, FromJSON)
 
 -- | Plutus types
-type FsDescription = LedgerBytes
-
 type FactStatement = LedgerBytes
 
 data FsDatum = FsDatum
   { fd'fs :: FactStatement
-  , fd'id :: LedgerBytes
-  , fd'description :: FsDescription
+  , fd'fsId :: LedgerBytes
   , fs'gcAfter :: POSIXTime
   , fs'submitter :: PubKeyHash
-  , fs'fsCs :: CurrencySymbol
   }
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
 
 data FsMpParams = FsMpParams
-  { fmp'coopInstance :: CurrencySymbol -- provided by the one shot mp,
+  { fmp'coopAc :: AssetClass -- provided by the one shot mp,
   , fmp'fsVAddress :: Address
   , fmp'authParams :: AuthParams
   }
@@ -79,15 +75,9 @@ data FsMpRedeemer = FsMpBurn | FsMpMint
   deriving stock (Show, Generic, Eq, Typeable)
   deriving anyclass (ToJSON, FromJSON)
 
-newtype FsVParams = FsVParams
-  { fvp'coopInstance :: CurrencySymbol -- provided by the one shot mp
-  }
-  deriving stock (Show, Generic, Eq, Typeable)
-  deriving anyclass (ToJSON, FromJSON)
-
 -- | Authentication Tokens and Certificates
 data AuthDeployment = AuthDeployment
-  { ad'authorityToken :: (CurrencySymbol, TokenName)
+  { ad'authorityAc :: AssetClass
   , ad'certV :: Validator
   , ad'certMp :: MintingPolicy
   , ad'authMp :: MintingPolicy
@@ -105,8 +95,7 @@ data AuthParams = AuthParams
 data CertDatum = CertDatum
   { cert'id :: LedgerBytes
   , cert'validity :: POSIXTimeRange
-  , cert'redeemerAc :: (CurrencySymbol, TokenName)
-  , cert'cs :: CurrencySymbol -- TODO: remove
+  , cert'redeemerAc :: AssetClass
   }
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
@@ -116,8 +105,8 @@ data CertMpRedeemer = CertMpBurn | CertMpMint
   deriving anyclass (ToJSON, FromJSON)
 
 data CertMpParams = CertMpParams
-  { cmp'authAuthorityAc :: (CurrencySymbol, TokenName)
-  , cmp'authAuthorityQ :: Integer
+  { cmp'authAuthorityAc :: AssetClass
+  , cmp'requiredAtLeastAaQ :: Integer -- How many $AA tokens required at least?
   , cmp'certVAddress :: Address
   }
   deriving stock (Show, Generic, Eq)
@@ -128,8 +117,8 @@ data AuthMpRedeemer = AuthMpBurn | AuthMpMint
   deriving anyclass (ToJSON, FromJSON)
 
 data AuthMpParams = AuthMpParams
-  { amp'authAuthorityAc :: (CurrencySymbol, TokenName)
-  , amp'authAuthorityQ :: Integer
+  { amp'authAuthorityAc :: AssetClass
+  , amp'requiredAtLeastAaQ :: Integer -- How many $AA tokens required at least?
   }
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
@@ -143,7 +132,6 @@ PlutusTx.unstableMakeIsData ''AuthMpParams
 PlutusTx.unstableMakeIsData ''AuthMpRedeemer
 
 PlutusTx.unstableMakeIsData ''FsMpParams
-PlutusTx.unstableMakeIsData ''FsVParams
 PlutusTx.unstableMakeIsData ''FsDatum
 PlutusTx.unstableMakeIsData ''FsMpRedeemer
 
@@ -151,7 +139,6 @@ PlutusTx.unstableMakeIsData ''FsMpRedeemer
 makeFields ''CoopPlutus
 makeFields ''CoopDeployment
 makeFields ''FsMpParams
-makeFields ''FsVParams
 makeFields ''FsDatum
 makeFields ''FsMpRedeemer
 

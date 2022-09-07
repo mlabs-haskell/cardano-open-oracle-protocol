@@ -3,15 +3,16 @@
 module Main (main) where
 
 import BotPlutusInterface.Types (LogContext (ContractLog), LogLevel (Info))
-import Coop.Pab (burnCerts, deployAuth, deployCoop, findOutsAtCertVWithCERT, findOutsAtOwnHolding, findOutsAtOwnHoldingAa, mintCert, mintCertRedeemers)
+import Coop.Pab (burnCerts, deployAuth, deployCoop, findOutsAtCertVWithCERT, findOutsAtOwnHolding, findOutsAtOwnHoldingAa, mintCert, mintCertRedeemers, testDataRoundtrip, testDataRoundtrip')
 import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), loadCoopPlutus, makeCollateralOuts, mintNft)
-import Coop.Types (CoopPlutus (cp'mkNftMp))
+import Coop.Types (CertDatum (CertDatum), CoopPlutus (cp'certV, cp'mkNftMp))
 import Data.Bifunctor (Bifunctor (second))
 import Data.Bool (bool)
 import Data.Default (def)
 import Data.List.NonEmpty (NonEmpty)
 import GHC.Natural (Natural)
-import Ledger (interval)
+import Ledger (Validator (Validator), interval)
+import Ledger.Value (assetClass, currencySymbol, tokenName)
 import Plutus.Contract (currentTime, logInfo, throwError, waitNSlots)
 import Test.Plutip.Contract (TestWallets, assertExecutionWith, initAda, withContract)
 import Test.Plutip.Internal.Types (ClusterEnv)
@@ -38,14 +39,31 @@ tests coopPlutus =
     "coop-pab-tests"
     [ assertExecutionWith
         testOpts
+        "datum-roundtrip"
+        (initAda [100])
+        ( withContract @String
+            ( const $ do
+                _ <- waitNSlots slotsToWait
+                let validityInterval = interval 0 100_000
+                    x = CertDatum "" validityInterval (assetClass (currencySymbol "") (tokenName ""))
+                if testDataRoundtrip' x
+                  then do
+                    testDataRoundtrip (Validator . cp'certV $ coopPlutus) x
+                  else do
+                    throwError "Pure roundtrip failed"
+            )
+        )
+        [shouldSucceed]
+    , assertExecutionWith
+        testOpts
         "mint-nft"
         (initAda [100])
         ( withContract @String
             ( const $ do
                 _ <- waitNSlots slotsToWait
-                (_, (cs, tn, _)) <- mintNft (cp'mkNftMp coopPlutus) 1
+                (_, (nftAc, _)) <- mintNft (cp'mkNftMp coopPlutus) 1
                 _ <- waitNSlots slotsToWait
-                found <- findOutsAtOwnHolding cs tn
+                found <- findOutsAtOwnHolding nftAc
                 return $ length found
             )
         )
@@ -58,7 +76,7 @@ tests coopPlutus =
           ( withContract @String
               ( const $ do
                   _ <- waitNSlots slotsToWait
-                  _ <- deployAuth coopPlutus
+                  _ <- deployAuth coopPlutus 3
                   waitNSlots slotsToWait
               )
           )
@@ -72,7 +90,7 @@ tests coopPlutus =
               ( const $ do
                   _ <- makeCollateralOuts 5 20_000_000
                   _ <- waitNSlots slotsToWait
-                  coopDeployment <- deployCoop coopPlutus
+                  coopDeployment <- deployCoop coopPlutus 3
                   _ <- waitNSlots slotsToWait
                   aaOuts <- findOutsAtOwnHoldingAa coopDeployment
                   return $ length aaOuts
@@ -88,15 +106,15 @@ tests coopPlutus =
               ( const $ do
                   _ <- makeCollateralOuts 5 20_000_000
                   _ <- waitNSlots slotsToWait
-                  coopDeployment <- deployCoop coopPlutus
+                  coopDeployment <- deployCoop coopPlutus 3
                   _ <- waitNSlots slotsToWait
-                  (_, (certRedeemerCs, certRedeemerTn, _)) <- mintCertRedeemers 100 coopPlutus
+                  (_, (certRedeemerAc, _)) <- mintCertRedeemers 100 coopPlutus
                   _ <- waitNSlots slotsToWait
                   aaOuts <- findOutsAtOwnHoldingAa coopDeployment
                   _ <- waitNSlots slotsToWait
                   now <- currentTime
                   let validityInterval = interval now (now + 100_000)
-                  _ <- mintCert (certRedeemerCs, certRedeemerTn) validityInterval aaOuts coopDeployment
+                  _ <- mintCert certRedeemerAc validityInterval aaOuts coopDeployment
                   _ <- waitNSlots slotsToWait
                   certOuts <- findOutsAtCertVWithCERT coopDeployment
                   logInfo $ "Found " <> (show . length $ certOuts) <> " $CERT outputs"
@@ -114,17 +132,17 @@ tests coopPlutus =
               ( const $ do
                   _ <- makeCollateralOuts 5 20_000_000
                   _ <- waitNSlots slotsToWait
-                  coopDeployment <- deployCoop coopPlutus
+                  coopDeployment <- deployCoop coopPlutus 3
                   _ <- waitNSlots slotsToWait
-                  (_, (certRedeemerCs, certRedeemerTn, _)) <- mintCertRedeemers 100 coopPlutus
+                  (_, (certRedeemerAc, _)) <- mintCertRedeemers 100 coopPlutus
                   _ <- waitNSlots slotsToWait
                   aaOuts <- findOutsAtOwnHoldingAa coopDeployment
                   _ <- waitNSlots slotsToWait
                   now <- currentTime
                   let validityInterval = interval now (now + 100_000)
-                  _ <- mintCert (certRedeemerCs, certRedeemerTn) validityInterval aaOuts coopDeployment
+                  _ <- mintCert certRedeemerAc validityInterval aaOuts coopDeployment
                   _ <- waitNSlots slotsToWait
-                  certRedeemerOuts <- findOutsAtOwnHolding certRedeemerCs certRedeemerTn
+                  certRedeemerOuts <- findOutsAtOwnHolding certRedeemerAc
                   certOuts <- findOutsAtCertVWithCERT coopDeployment
                   logInfo $ "Found " <> (show . length $ certOuts) <> " $CERT outputs"
                   bool (throwError "There should be some $CERT inputs") (pure ()) $ not (null certOuts)

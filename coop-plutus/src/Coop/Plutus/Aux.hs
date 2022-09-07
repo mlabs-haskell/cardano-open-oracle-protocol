@@ -310,8 +310,8 @@ pmustPayTo = phoistAcyclic $
           # 0
 
     pboolC
-      (fail "pmustPayTo: didn't pay the required quantity")
-      (ptraceC "pmustPayTo: paid required quantity" >> pure (pcon PTrue))
+      (fail "pmustPayTo: Must pay the specified quantity")
+      (ptraceC "pmustPayTo: Paid the specified quantity" >> pure (pcon PTrue))
       (mustPayQ #== paidQ)
 
 -- | Foldl over transaction inputs
