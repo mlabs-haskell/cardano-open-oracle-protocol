@@ -181,13 +181,13 @@ tests coopPlutus =
         assertExecutionWith
           testOpts
           "mint-auth"
-          (initAda [200] <> initAda [200] <> initAda [200] <> initAda [200])
+          (initAda [200] <> initAda [200] <> initAda [200] <> initAda [200] <> initAda [200]) -- TODO: Make this more explicit somehow
           ( do
               (coopDeployment, _) <- godDeploysCoop coopPlutus
 
               withContractAs @String
                 1
-                ( \[_, authWalletGeorge, authWalletPeter] -> do
+                ( \[_, _, authWalletGeorge, authWalletPeter] -> do
                     logInfo @String "Running as aaWallet"
                     self <- ownFirstPaymentPubKeyHash
                     aaOuts <- findOutsAtHoldingAa self coopDeployment
@@ -214,7 +214,7 @@ godDeploysCoop :: CoopPlutus -> ReaderT (ClusterEnv, NonEmpty BpiWallet) IO (Coo
 godDeploysCoop coopPlutus = do
   res <-
     withContract @String
-      ( \[aaWallet, certRedeemerWallet] -> do
+      ( \(aaWallet : certRedeemerWallet : _) -> do
           logInfo @String "Running as godWallet"
           self <- ownFirstPaymentPubKeyHash
           _ <- makeCollateralOuts self 5 20_000_000
