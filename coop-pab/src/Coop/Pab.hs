@@ -6,18 +6,17 @@ module Coop.Pab (
   mintCertRedeemers,
   burnCerts,
   findOutsAtCertV,
-  findOutsAtOwnHoldingAa,
-  findOutsAtOwnHolding,
   findOutsAtCertVWithCERT,
-  testDataRoundtrip,
-  testDataRoundtrip',
+  mintAuth,
+  findOutsAtHoldingAa,
 ) where
 
 import Control.Lens ((^.))
-import Coop.Pab.Aux (currencyValue, findOutsAt, fromDatum, hasCurrency, hashTxOutRefs, minUtxoAdaValue, mintNft, toDatum)
+import Coop.Pab.Aux (currencyValue, findOutsAt, findOutsAtHolding, hasCurrency, hashTxOutRefs, minUtxoAdaValue, mintNft, toDatum)
 import Coop.Types (
   AuthDeployment (AuthDeployment, ad'authMp, ad'authorityAc, ad'certMp, ad'certV),
   AuthMpParams (AuthMpParams),
+  AuthMpRedeemer (AuthMpMint),
   AuthParams (AuthParams, ap'authTokenCs, ap'certTokenCs),
   CertDatum (CertDatum),
   CertMpParams (CertMpParams),
@@ -27,22 +26,18 @@ import Coop.Types (
   FsMpParams (FsMpParams),
   cp'certV,
  )
-import Data.Bool (bool)
-import Data.Data (Typeable)
 import Data.Foldable (toList)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Text (Text)
 import Data.Void (Void)
-import Ledger (POSIXTimeRange, applyArguments, getCardanoTxId, scriptCurrencySymbol, validatorHash)
-import Ledger.Address (pubKeyHashAddress)
+import Ledger (POSIXTimeRange, PaymentPubKeyHash, applyArguments, getCardanoTxId, scriptCurrencySymbol, validatorHash)
 import Ledger.Tx (ChainIndexTxOut, ciTxOutValue)
-import Plutus.Contract (Contract, ownFirstPaymentPubKeyHash, submitTxConstraintsWith, throwError, waitNSlots)
-import Plutus.Contract.Constraints (mintingPolicy, mustMintValueWithRedeemer, mustPayToOtherScript, mustSpendAtLeast, mustSpendPubKeyOutput, mustSpendScriptOutput, otherData, otherScript, ownPaymentPubKeyHash, unspentOutputs)
+import Plutus.Contract (Contract, ownFirstPaymentPubKeyHash, submitTxConstraintsWith, waitNSlots)
+import Plutus.Contract.Constraints (mintingPolicy, mustMintValueWithRedeemer, mustPayToOtherScript, mustPayToPubKey, mustSpendPubKeyOutput, mustSpendScriptOutput, otherData, otherScript, ownPaymentPubKeyHash, unspentOutputs)
 import Plutus.Contract.Logging (logInfo)
 import Plutus.Script.Utils.V1.Address (mkValidatorAddress)
 import Plutus.V1.Ledger.Api (
-  FromData,
   LedgerBytes (LedgerBytes),
   MintingPolicy (MintingPolicy),
   Redeemer (Redeemer),
@@ -54,20 +49,19 @@ import Plutus.V1.Ledger.Api (
   Value,
   toData,
  )
-import Plutus.V1.Ledger.Value (AssetClass (unAssetClass), valueOf)
+import Plutus.V1.Ledger.Value (AssetClass, assetClass)
 import Plutus.V1.Ledger.Value qualified as Value
 import PlutusTx.Prelude (Group (inv))
 import Test.Plutip.Internal.BotPlutusInterface.Setup ()
 import Test.Plutip.Internal.LocalCluster ()
 
--- TODO: deployCoop aaWallet certRedeemerWallet
-deployCoop :: CoopPlutus -> Integer -> Contract w s Text CoopDeployment
-deployCoop coopPlutus atLeastAaQ = do
+deployCoop :: CoopPlutus -> PaymentPubKeyHash -> PaymentPubKeyHash -> Integer -> Contract w s Text CoopDeployment
+deployCoop coopPlutus self aaWallet atLeastAaQ = do
   let logI m = logInfo @String ("deployCoop: " <> m)
   logI "Starting"
-  authDeployment <- deployAuth coopPlutus atLeastAaQ
+  authDeployment <- deployAuth coopPlutus self aaWallet atLeastAaQ
   waitNSlots 5
-  (_, (coopAc, _)) <- mintCoop coopPlutus
+  (_, (coopAc, _)) <- mintCoop coopPlutus self
   logI $ "Created COOP instance token ($COOP): " <> show coopAc
   let fsV = Validator (cp'fsV coopPlutus)
       fsMp =
@@ -90,11 +84,11 @@ deployCoop coopPlutus atLeastAaQ = do
         , ap'certTokenCs = scriptCurrencySymbol (ad'certMp authDeployment)
         }
 
-deployAuth :: CoopPlutus -> Integer -> Contract w s Text AuthDeployment
-deployAuth coopPlutus atLeastAaQ = do
+deployAuth :: CoopPlutus -> PaymentPubKeyHash -> PaymentPubKeyHash -> Integer -> Contract w s Text AuthDeployment
+deployAuth coopPlutus self aaWallet atLeastAaQ = do
   let logI m = logInfo @String ("deployAuth: " <> m)
   logI "Starting"
-  (_, (aaAc, aaQ)) <- mintAa coopPlutus atLeastAaQ
+  (_, (aaAc, aaQ)) <- mintAa coopPlutus self aaWallet atLeastAaQ
   logI $ "Created " <> show aaQ <> " Authentication Authority token ($AA): " <> show aaAc
   let authMpParams = AuthMpParams aaAc atLeastAaQ
       certMpParams = CertMpParams aaAc atLeastAaQ (mkValidatorAddress certV)
@@ -104,23 +98,23 @@ deployAuth coopPlutus atLeastAaQ = do
   logI "Finished"
   return $ AuthDeployment aaAc certV certMp authMp
 
-mintAa :: CoopPlutus -> Integer -> Contract w s Text (TxId, (AssetClass, Integer))
-mintAa coopPlutus aaQ = do
+mintAa :: CoopPlutus -> PaymentPubKeyHash -> PaymentPubKeyHash -> Integer -> Contract w s Text (TxId, (AssetClass, Integer))
+mintAa coopPlutus self aaWallet aaQ = do
   let logI m = logInfo @String ("mintAa: " <> m)
   logI "Starting"
-  mintNft (cp'mkNftMp coopPlutus) aaQ
+  mintNft self aaWallet (cp'mkNftMp coopPlutus) aaQ
 
-mintCoop :: CoopPlutus -> Contract w s Text (TxId, (AssetClass, Integer))
-mintCoop coopPlutus = do
+mintCoop :: CoopPlutus -> PaymentPubKeyHash -> Contract w s Text (TxId, (AssetClass, Integer))
+mintCoop coopPlutus self = do
   let logI m = logInfo @String ("mintCoop: " <> m)
   logI "Starting"
-  mintNft (cp'mkNftMp coopPlutus) 1
+  mintNft self self (cp'mkNftMp coopPlutus) 1
 
-mintCertRedeemers :: Integer -> CoopPlutus -> Contract w s Text (TxId, (AssetClass, Integer))
-mintCertRedeemers q coopPlutus = do
+mintCertRedeemers :: CoopPlutus -> PaymentPubKeyHash -> PaymentPubKeyHash -> Integer -> Contract w s Text (TxId, (AssetClass, Integer))
+mintCertRedeemers coopPlutus self certRedeemerWallet q = do
   let logI m = logInfo @String ("mintCertRedeemers: " <> m)
   logI "Starting"
-  mintNft (cp'mkNftMp coopPlutus) q
+  mintNft self certRedeemerWallet (cp'mkNftMp coopPlutus) q
 
 mintCert :: AssetClass -> POSIXTimeRange -> Map TxOutRef ChainIndexTxOut -> CoopDeployment -> Contract w s Text TxId
 mintCert redeemerAc validityInterval aaOuts coopDeployment = do
@@ -137,8 +131,6 @@ mintCert redeemerAc validityInterval aaOuts coopDeployment = do
       certCs = scriptCurrencySymbol certMp
       certVal = Value.singleton certCs certTn 1
       certDatum = toDatum $ CertDatum certId validityInterval redeemerAc
-      (aaCs, aaTn) = (unAssetClass . ad'authorityAc . cd'auth) coopDeployment
-      aaVal = Value.singleton aaCs aaTn 1
 
   let lookups =
         mconcat
@@ -152,10 +144,32 @@ mintCert redeemerAc validityInterval aaOuts coopDeployment = do
         mustMintValueWithRedeemer (Redeemer . toBuiltinData $ CertMpMint) certVal
           <> mustPayToOtherScript certVAddr certDatum (certVal <> minUtxoAdaValue)
           <> mconcat (mustSpendPubKeyOutput <$> aaOrefs)
-          <> mustSpendAtLeast aaVal -- NOTE: This should be redundant due to the above statement
   tx <- submitTxConstraintsWith @Void lookups tx
   logI "Finished"
   return (getCardanoTxId tx)
+
+mintAuth :: PaymentPubKeyHash -> [PaymentPubKeyHash] -> Integer -> Map TxOutRef ChainIndexTxOut -> CoopDeployment -> Contract w s Text (TxId, AssetClass)
+mintAuth aaWallet authWallets authQEach aaOuts coopDeployment = do
+  let logI m = logInfo @String ("mintAuth: " <> m)
+  logI "Starting"
+  let authMp = (ad'authMp . cd'auth) coopDeployment
+      aaOrefs = Map.keys aaOuts
+      hashedAaOrefs = hashTxOutRefs aaOrefs
+      authTn = TokenName hashedAaOrefs
+      authCs = scriptCurrencySymbol authMp
+      authValEach = Value.singleton authCs authTn authQEach
+      authValTotal = Value.singleton authCs authTn (authQEach * (fromIntegral . length $ authWallets))
+  let lookups =
+        mintingPolicy authMp
+          <> ownPaymentPubKeyHash aaWallet
+          <> unspentOutputs aaOuts
+      tx =
+        mustMintValueWithRedeemer (Redeemer . toBuiltinData $ AuthMpMint) authValTotal
+          <> mconcat ((`mustPayToPubKey` (authValEach <> minUtxoAdaValue)) <$> authWallets)
+          <> mconcat (mustSpendPubKeyOutput <$> aaOrefs)
+  tx <- submitTxConstraintsWith @Void lookups tx
+  logI "Finished"
+  return (getCardanoTxId tx, assetClass authCs authTn)
 
 burnCerts :: Map TxOutRef ChainIndexTxOut -> Map TxOutRef ChainIndexTxOut -> CoopDeployment -> Contract w s Text TxId
 burnCerts certOuts redeemerOuts coopDeployment = do
@@ -200,18 +214,12 @@ findOutsAtCertV coopDeployment pred = do
 findOutsAtCertVWithCERT :: CoopDeployment -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
 findOutsAtCertVWithCERT coopDeployment = findOutsAtCertV coopDeployment (\v _ -> hasCurrency v ((scriptCurrencySymbol . ad'certMp . cd'auth) coopDeployment))
 
-findOutsAtOwnHolding :: AssetClass -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
-findOutsAtOwnHolding ac = do
-  self <- ownFirstPaymentPubKeyHash
-  let (cs, tn) = unAssetClass ac
-  findOutsAt @Void (pubKeyHashAddress self Nothing) (\v _ -> valueOf v cs tn > 0)
-
-findOutsAtOwnHoldingAa :: CoopDeployment -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
-findOutsAtOwnHoldingAa coopDeployment = do
-  let logI m = logInfo @String ("findOutsAtOwnHoldingAa: " <> m)
+findOutsAtHoldingAa :: PaymentPubKeyHash -> CoopDeployment -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
+findOutsAtHoldingAa wallet coopDeployment = do
+  let logI m = logInfo @String ("findOutsAtHoldingAa: " <> m)
   logI "Starting"
   let aaAc = (ad'authorityAc . cd'auth) coopDeployment
-  found <- findOutsAtOwnHolding aaAc
+  found <- findOutsAtHolding wallet aaAc
   logI "Finished"
   return found
 
@@ -254,30 +262,3 @@ findOutsAtOwnHoldingAa coopDeployment = do
 --   tx <- submitTxConstraintsWith @Void lookups tx
 --   logI "Finished"
 --   return (getCardanoTxId tx)
-
-testDataRoundtrip :: (Typeable a, FromData a, ToData a, Eq a) => Validator -> a -> Contract w s Text TxId
-testDataRoundtrip val x = do
-  let logI m = logInfo @String ("testDataRoundtrip: " <> m)
-  self <- ownFirstPaymentPubKeyHash
-
-  let datum = toDatum x
-      lookups =
-        mconcat
-          [ otherScript val
-          , otherData datum
-          , ownPaymentPubKeyHash self
-          ]
-      tx = mustPayToOtherScript (validatorHash val) datum minUtxoAdaValue
-  logI $ "Sending datum: " <> show datum
-  tx <- submitTxConstraintsWith @Void lookups tx
-  waitNSlots 30
-  found <- findOutsAt (mkValidatorAddress val) (\_ mayX -> mayX == Just x)
-  bool
-    (logI "Found the datum that was sent")
-    (throwError "Must find the datum that was sent")
-    $ found == mempty
-  logI "Finished"
-  return $ getCardanoTxId tx
-
-testDataRoundtrip' :: (Typeable a, FromData a, ToData a, Eq a) => a -> Bool
-testDataRoundtrip' x = let datum = toDatum x; mayX = fromDatum datum in mayX == Just x
