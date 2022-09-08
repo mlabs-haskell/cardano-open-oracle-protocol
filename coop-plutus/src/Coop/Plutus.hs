@@ -586,6 +586,14 @@ mkAuthMp = phoistAcyclic $
       PAuthMpBurn _ -> pure $ authMpBurn # ctx
       PAuthMpMint _ -> pure $ authMpMint # pfromData params # ctx
 
+{- | Validates minting of $AUTH tokens
+
+- check that at least N $AA tokens are spent
+- hash spent $AA inputs and create a unique token name for $AUTH token
+- check if M $AUTH tokens with the same unique token name have been minted and paid
+
+NOTE: One transaction can yield ($AUTH, <unique_token_name>, M)
+-}
 authMpMint :: ClosedTerm (PAuthMpParams :--> PScriptContext :--> POpaque)
 authMpMint = phoistAcyclic $
   plam $ \params ctx -> unTermCont do
@@ -603,30 +611,45 @@ authMpMint = phoistAcyclic $
 
     pure $ popaque $ pconstant ()
 
--- TODO
+{- | Validates burning of $AUTH tokens
+
+- accumulate all spent $AUTH tokens and check if all are burned
+
+NOTE: $AUTH tokens can be burned freely
+-}
 authMpBurn :: ClosedTerm (PScriptContext :--> POpaque)
 authMpBurn = phoistAcyclic $
   plam $ \ctx -> unTermCont do
     ptraceC "AuthMp burn $AUTH"
 
     ctx' <- pletFieldsC @'["txInfo", "purpose"] ctx
+    minted <- pletC $ pfield @"mint" # ctx'.txInfo
     ownCs <- pletC $ pownCurrencySymbol # ctx'.purpose
 
-    let foldFn acc txInInfo = unTermCont do
+    let foldFn shouldBurn txInInfo = unTermCont do
           txIn <- pletC $ pfield @"resolved" # txInInfo
           txInVal <- pletC $ pfield @"value" # txIn
           pboolC
-            (ptraceC "AuthMp burn $AUTH: Skipping foreign input" >> pure acc)
+            (ptraceC "AuthMp burn $AUTH: Skipping foreign input" >> pure shouldBurn)
             ( do
                 ptraceC "AuthMp burn $AUTH: Found own input"
 
-                pure acc
+                ownSpent <- pletC $ pcurrencyValue # ownCs # txInVal
+                pure $ shouldBurn <> inv ownSpent
             )
             (phasCurrency # ownCs # txInVal)
 
-    _ <- pletC $ pfoldTxInputs # ctx # plam foldFn # punit
+    shouldBurnTotal <- pletC $ pfoldTxInputs # ctx # plam foldFn # mempty
+    ownMinted <- pletC $ pcurrencyValue # ownCs # minted
+    _ <- pletC $ ownMinted #== shouldBurnTotal
+
     pure $ popaque $ pconstant ()
 
+{- | Checks for total spent $AA tokens
+
+- accumulate all spent $AA tokens and check if totals are at least as specified
+- create unique bytestring from $AA inputs by hashing the concatenation of (idx,id) pairs
+-}
 pmustSpendAtLeastAa :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PByteString)
 pmustSpendAtLeastAa = phoistAcyclic $
   plam $ \ctx aaCs aaTn atLeastAaQ -> unTermCont do

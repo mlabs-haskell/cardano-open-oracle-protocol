@@ -169,7 +169,7 @@ burnCerts coopDeployment self certOuts redeemerOuts = do
       tx =
         mustMintValueWithRedeemer (Redeemer . toBuiltinData $ CertMpBurn) certVal
           <> mconcat (mustSpendPubKeyOutput <$> redeemerOrefs)
-          <> mconcat ((\oref -> mustSpendScriptOutput oref (Redeemer . toBuiltinData $ ())) <$> certOrefs)
+          <> mconcat ((\oref -> mustSpendScriptOutput oref (toRedeemer ())) <$> certOrefs)
 
   tx <- submitTxConstraintsWith @Void lookups tx
   logI "Finished"

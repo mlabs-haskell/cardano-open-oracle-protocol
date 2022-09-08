@@ -32,7 +32,7 @@ main = do
   defaultMain (tests coopPlutus)
 
 slotsToWait :: Natural
-slotsToWait = 80
+slotsToWait = 100
 
 testOpts :: [TraceOption]
 testOpts = [ShowTraceButOnlyContext ContractLog Info, ShowBudgets]
@@ -123,6 +123,7 @@ tests coopPlutus =
                   1
                   ( \_ -> do
                       logInfo @String "Running as aaWallet"
+                      _ <- waitNSlots slotsToWait
                       self <- ownFirstPaymentPubKeyHash
                       aaOuts <- findOutsAtHoldingAa self coopDeployment
                       _ <- waitNSlots slotsToWait
@@ -153,6 +154,7 @@ tests coopPlutus =
                   1
                   ( \[_, _] -> do
                       logInfo @String "Running as aaWallet"
+                      _ <- waitNSlots slotsToWait
                       self <- ownFirstPaymentPubKeyHash
                       aaOuts <- findOutsAtHoldingAa self coopDeployment
                       _ <- waitNSlots slotsToWait
@@ -191,6 +193,7 @@ tests coopPlutus =
                 1
                 ( \[_, _, authWalletGeorge, authWalletPeter] -> do
                     logInfo @String "Running as aaWallet"
+                    _ <- waitNSlots slotsToWait
                     self <- ownFirstPaymentPubKeyHash
                     aaOuts <- findOutsAtHoldingAa self coopDeployment
                     _ <- waitNSlots slotsToWait
@@ -217,6 +220,7 @@ tests coopPlutus =
                   1
                   ( \[_, _, authWalletGeorge, authWalletPeter] -> do
                       logInfo @String "Running as aaWallet"
+                      _ <- waitNSlots slotsToWait
                       self <- ownFirstPaymentPubKeyHash
                       aaOuts <- findOutsAtHoldingAa self coopDeployment
                       _ <- waitNSlots slotsToWait
