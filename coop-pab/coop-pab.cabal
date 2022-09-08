@@ -133,6 +133,7 @@ test-suite coop-pab-tests
 
   hs-source-dirs: test
   main-is:        Main.hs
+  other-modules:  Aux
   ghc-options:    -Wall -threaded -rtsopts
   type:           exitcode-stdio-1.0
 

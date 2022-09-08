@@ -2,29 +2,28 @@
 
 module Main (main) where
 
+import Aux (runAfter, withSuccessContract)
 import BotPlutusInterface.Types (LogContext (ContractLog), LogLevel (Info))
 import Control.Lens ((^.))
 import Control.Monad.Reader (ReaderT)
 import Coop.Pab (burnAuths, burnCerts, deployAuth, deployCoop, findOutsAtCertVWithCERT, findOutsAtHoldingAa, mintAuth, mintCert, mintCertRedeemers)
 import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), ciValueOf, findOutsAtHolding, loadCoopPlutus, makeCollateralOuts, mintNft, testDataRoundtrip, testDataRoundtrip')
 import Coop.Types (AuthDeployment (ad'authorityAc), CertDatum (CertDatum), CoopDeployment (cd'auth), CoopPlutus (cp'certV, cp'mkNftMp))
-import Data.Bifunctor (Bifunctor (second))
 import Data.Bool (bool)
 import Data.Default (def)
 import Data.Foldable (Foldable (toList))
 import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
 import GHC.Natural (Natural)
-import Ledger (PaymentPubKeyHash, Validator (Validator), ciTxOutValue, interval)
+import Ledger (Validator (Validator), ciTxOutValue, interval)
 import Ledger.Value (AssetClass (unAssetClass), assetClass, currencySymbol, tokenName, valueOf)
-import Plutus.Contract (Contract, currentTime, logInfo, ownFirstPaymentPubKeyHash, throwError, waitNSlots)
-import Test.Plutip.Contract (TestWallets, assertExecutionWith, initAda, withContract, withContractAs)
-import Test.Plutip.Contract.Types (TestContractConstraints)
-import Test.Plutip.Internal.Types (ClusterEnv, ExecutionResult (outcome))
+import Plutus.Contract (currentTime, logInfo, ownFirstPaymentPubKeyHash, throwError, waitNSlots)
+import Test.Plutip.Contract (assertExecutionWith, initAda, withContract, withContractAs)
+import Test.Plutip.Internal.Types (ClusterEnv)
 import Test.Plutip.LocalCluster (BpiWallet, withConfiguredCluster)
 import Test.Plutip.Options (TraceOption (ShowBudgets, ShowTraceButOnlyContext))
 import Test.Plutip.Predicate (shouldSucceed, shouldYield)
-import Test.Tasty (DependencyType (AllFinish), TestName, TestTree, after, defaultMain)
+import Test.Tasty (TestTree, defaultMain)
 
 main :: IO ()
 main = do
@@ -260,12 +259,6 @@ tests coopPlutus =
           [shouldSucceed, shouldYield ([], [])]
     ]
 
-runAfter ::
-  TestName ->
-  (TestWallets, IO (ClusterEnv, NonEmpty BpiWallet) -> TestTree) ->
-  (TestWallets, IO (ClusterEnv, NonEmpty BpiWallet) -> TestTree)
-runAfter testName = second (fmap . after AllFinish $ '/' : testName ++ "/")
-
 godDeploysCoop :: CoopPlutus -> ReaderT (ClusterEnv, NonEmpty BpiWallet) IO (CoopDeployment, AssetClass)
 godDeploysCoop coopPlutus =
   withSuccessContract @String
@@ -281,12 +274,3 @@ godDeploysCoop coopPlutus =
         _ <- waitNSlots slotsToWait
         return (coopDeployment, certRedeemerAc)
     )
-
-withSuccessContract :: TestContractConstraints w e a => Int -> ([PaymentPubKeyHash] -> Contract w s e a) -> ReaderT (ClusterEnv, NonEmpty BpiWallet) IO a
-withSuccessContract ixWallet contract = do
-  res <-
-    withContractAs ixWallet contract
-  either
-    (fail . show)
-    (\(res', _) -> pure res')
-    $ outcome res
