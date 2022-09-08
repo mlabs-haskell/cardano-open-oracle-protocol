@@ -116,6 +116,7 @@ library
 test-suite coop-pab-tests
   import:         common-language
   build-depends:
+    , aeson
     , base
     , bot-plutus-interface
     , coop-hs-types

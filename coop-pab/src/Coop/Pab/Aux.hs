@@ -1,4 +1,4 @@
-module Coop.Pab.Aux (loadCoopPlutus, runBpi, DeployMode (..), minUtxoAdaValue, mintNft, hasCurrency, currencyValue, makeCollateralOuts, findOutsAt, toDatum, fromDatum, hashTxOutRefs, findOutsAtHolding, testDataRoundtrip, testDataRoundtrip', ciValueOf) where
+module Coop.Pab.Aux (loadCoopPlutus, runBpi, DeployMode (..), minUtxoAdaValue, mintNft, hasCurrency, currencyValue, makeCollateralOuts, findOutsAt, toDatum, fromDatum, hashTxOutRefs, findOutsAtHolding, testDataRoundtrip, testDataRoundtrip', ciValueOf, toRedeemer) where
 
 import BotPlutusInterface.Contract (runContract)
 import BotPlutusInterface.Types (ContractEnvironment (ContractEnvironment), ContractState (ContractState), PABConfig, ceContractInstanceId, ceContractLogs, ceContractState, ceContractStats, cePABConfig)
@@ -20,7 +20,7 @@ import Data.Text (Text)
 import Data.Typeable (typeRep)
 import Data.UUID.V4 qualified as UUID
 import Data.Void (Void)
-import Ledger (ChainIndexTxOut, PaymentPubKeyHash, applyArguments, ciTxOutDatum, ciTxOutValue, getCardanoTxId, pubKeyHashAddress)
+import Ledger (ChainIndexTxOut, PaymentPubKeyHash, Redeemer (Redeemer), applyArguments, ciTxOutDatum, ciTxOutValue, getCardanoTxId, pubKeyHashAddress)
 import Ledger.Ada (lovelaceValueOf)
 import Ledger.Value (Value (Value), isAdaOnlyValue)
 import Plutus.Contract (Contract, ContractInstanceId, datumFromHash, logInfo, ownFirstPaymentPubKeyHash, submitTxConstraintsWith, throwError, utxosAt, waitNSlots)
@@ -181,6 +181,9 @@ findOutsAtHoldingOnlyAda addr pred = do
 
 toDatum :: ToData a => a -> Datum
 toDatum = Datum . toBuiltinData
+
+toRedeemer :: ToData a => a -> Redeemer
+toRedeemer = Redeemer . toBuiltinData
 
 fromDatum :: FromData a => Datum -> Maybe a
 fromDatum = fromBuiltinData . getDatum
