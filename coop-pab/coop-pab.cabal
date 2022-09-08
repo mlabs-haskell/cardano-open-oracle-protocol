@@ -119,6 +119,7 @@ test-suite coop-pab-tests
     , aeson
     , base
     , bot-plutus-interface
+    , containers
     , coop-hs-types
     , coop-pab
     , data-default
@@ -127,6 +128,7 @@ test-suite coop-pab-tests
     , plutip
     , plutus-contract
     , plutus-ledger
+    , plutus-script-utils
     , tasty
     , tasty-hunit
     , text

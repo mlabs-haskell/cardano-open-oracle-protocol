@@ -1,4 +1,27 @@
-module Coop.Pab.Aux (loadCoopPlutus, runBpi, DeployMode (..), minUtxoAdaValue, mintNft, hasCurrency, currencyValue, makeCollateralOuts, findOutsAt, toDatum, fromDatum, hashTxOutRefs, findOutsAtHolding, testDataRoundtrip, testDataRoundtrip', ciValueOf, toRedeemer) where
+module Coop.Pab.Aux (
+  Trx (..),
+  loadCoopPlutus,
+  runBpi,
+  DeployMode (..),
+  minUtxoAdaValue,
+  mintNft,
+  mkMintNftTrx,
+  hasCurrency,
+  currencyValue,
+  makeCollateralOuts,
+  findOutsAt,
+  toDatum,
+  fromDatum,
+  hashTxOutRefs,
+  findOutsAtHolding,
+  testDataRoundtrip,
+  testDataRoundtrip',
+  ciValueOf,
+  toRedeemer,
+  submitTrx,
+  findOutsAt',
+  findOutsAtHolding',
+) where
 
 import BotPlutusInterface.Contract (runContract)
 import BotPlutusInterface.Types (ContractEnvironment (ContractEnvironment), ContractState (ContractState), PABConfig, ceContractInstanceId, ceContractLogs, ceContractState, ceContractStats, cePABConfig)
@@ -13,18 +36,19 @@ import Data.ByteArray (convert)
 import Data.ByteString (ByteString, cons)
 import Data.Data (Typeable)
 import Data.Kind (Type)
-import Data.Map (Map, keys)
+import Data.Map (Map, fromList)
 import Data.Map qualified as Map
 import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
 import Data.Typeable (typeRep)
 import Data.UUID.V4 qualified as UUID
 import Data.Void (Void)
-import Ledger (ChainIndexTxOut, PaymentPubKeyHash, Redeemer (Redeemer), applyArguments, ciTxOutDatum, ciTxOutValue, getCardanoTxId, pubKeyHashAddress)
+import Ledger (CardanoTx, ChainIndexTxOut, PaymentPubKeyHash, Redeemer (Redeemer), applyArguments, ciTxOutDatum, ciTxOutValue, getCardanoTxId, pubKeyHashAddress)
 import Ledger.Ada (lovelaceValueOf)
+import Ledger.Typed.Scripts (RedeemerType, ValidatorTypes (DatumType))
 import Ledger.Value (Value (Value), isAdaOnlyValue)
-import Plutus.Contract (Contract, ContractInstanceId, datumFromHash, logInfo, ownFirstPaymentPubKeyHash, submitTxConstraintsWith, throwError, utxosAt, waitNSlots)
-import Plutus.Contract.Constraints (mintingPolicy, mustMintValue, mustPayToOtherScript, mustPayToPubKey, mustSpendPubKeyOutput, otherData, otherScript, ownPaymentPubKeyHash, unspentOutputs)
+import Plutus.Contract (AsContractError, Contract, ContractInstanceId, datumFromHash, logInfo, ownFirstPaymentPubKeyHash, submitTxConstraintsWith, throwError, utxosAt, waitNSlots)
+import Plutus.Contract.Constraints (ScriptLookups, TxConstraints, mintingPolicy, mustMintValue, mustPayToOtherScript, mustPayToPubKey, mustSpendPubKeyOutput, otherData, otherScript, ownPaymentPubKeyHash, unspentOutputs)
 import Plutus.PAB.Core.ContractInstance.STM (Activity (Active))
 import Plutus.Script.Utils.V1.Address (mkValidatorAddress)
 import Plutus.Script.Utils.V1.Scripts (scriptCurrencySymbol, validatorHash)
@@ -76,33 +100,38 @@ hasCurrency (Value vals) cs = AssocMap.member cs vals
 currencyValue :: Value -> CurrencySymbol -> Value
 currencyValue (Value vals) cs = maybe mempty (Value . AssocMap.singleton cs) $ AssocMap.lookup cs vals
 
+mkMintNftTrx :: PaymentPubKeyHash -> PaymentPubKeyHash -> (TxOutRef, ChainIndexTxOut) -> Script -> Integer -> (Trx i o a, AssetClass)
+mkMintNftTrx self toWallet out@(oref, _) mkNftMp q =
+  let nftTn = TokenName . hashTxOutRefs $ [oref]
+      nftMp = MintingPolicy $ applyArguments mkNftMp [toData q, toData nftTn, toData oref]
+      nftCs = scriptCurrencySymbol nftMp
+      val = Value.singleton nftCs nftTn q
+      lookups =
+        mintingPolicy nftMp
+          <> unspentOutputs (fromList [out])
+          <> ownPaymentPubKeyHash self
+      constraints =
+        mustMintValue val
+          <> mustSpendPubKeyOutput oref
+          <> mustPayToPubKey toWallet (val <> minUtxoAdaValue)
+   in (Trx lookups constraints, assetClass nftCs nftTn)
+
 mintNft :: PaymentPubKeyHash -> PaymentPubKeyHash -> Script -> Integer -> Contract w s Text (TxId, (AssetClass, Integer))
 mintNft self toWallet mkNftMp q = do
   let logI m = logInfo @String ("mintNft: " <> m)
   logI "Starting"
   adaOnlyOuts <- findOutsAtHoldingOnlyAda (pubKeyHashAddress self Nothing) (const True)
-  case keys adaOnlyOuts of
+  case Map.toList adaOnlyOuts of
     [] -> do
       throwError "mintNft: no utxo found"
-    oref : _ -> do
-      logI $ "Using oref " <> show oref
-      let nftTn = TokenName . hashTxOutRefs $ [oref]
-          nftMp = MintingPolicy $ applyArguments mkNftMp [toData q, toData nftTn, toData oref]
-          nftCs = scriptCurrencySymbol nftMp
-          val = Value.singleton nftCs nftTn q
-          lookups =
-            mintingPolicy nftMp
-              <> unspentOutputs adaOnlyOuts
-              <> ownPaymentPubKeyHash self
-          tx =
-            mustMintValue val
-              <> mustSpendPubKeyOutput oref
-              <> mustPayToPubKey toWallet (val <> minUtxoAdaValue)
+    out : _ -> do
+      logI $ "Using out " <> show out
+      let (trx, nftAc) = mkMintNftTrx self toWallet out mkNftMp q
 
-      tx <- submitTxConstraintsWith @Void lookups tx
-      logI $ printf "NFT minted %s and sent to %s" (show val) (show toWallet)
+      tx <- submitTrx @Void trx
+      logI $ printf "NFT %s minted and sent to %s" (show nftAc) (show toWallet)
       logI "Finished"
-      return (getCardanoTxId tx, (assetClass nftCs nftTn, q))
+      return (getCardanoTxId tx, (nftAc, q))
 
 -- FIXME: Sort orefs to match the onchain order
 -- TODO: Switch to using blake
@@ -164,10 +193,16 @@ findOutsAt addr pred = do
   logI $ "Found " <> (show . length $ found) <> " TxOuts @" <> show addr
   return $ Map.fromList found
 
-findOutsAtHolding :: PaymentPubKeyHash -> AssetClass -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
-findOutsAtHolding wallet ac = do
+findOutsAt' :: Typeable a => FromData a => PaymentPubKeyHash -> (Value -> Maybe a -> Bool) -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
+findOutsAt' ppkh = findOutsAt (pubKeyHashAddress ppkh Nothing)
+
+findOutsAtHolding :: Address -> AssetClass -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
+findOutsAtHolding addr ac = do
   let (cs, tn) = unAssetClass ac
-  findOutsAt @Void (pubKeyHashAddress wallet Nothing) (\v _ -> valueOf v cs tn > 0)
+  findOutsAt @Void addr (\v _ -> valueOf v cs tn > 0)
+
+findOutsAtHolding' :: PaymentPubKeyHash -> AssetClass -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
+findOutsAtHolding' wallet = findOutsAtHolding (pubKeyHashAddress wallet Nothing)
 
 findOutsAtHoldingOnlyAda :: Address -> (Integer -> Bool) -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
 findOutsAtHoldingOnlyAda addr pred = do
@@ -218,21 +253,14 @@ testDataRoundtrip' x = let datum = toDatum x; mayX = fromDatum datum in mayX == 
 ciValueOf :: AssetClass -> ChainIndexTxOut -> Integer
 ciValueOf ac out = let (cs, tn) = unAssetClass ac in valueOf (out ^. ciTxOutValue) cs tn
 
--- data PLog e a = PLog
---   { pl'processName :: Text
---   , pl'event :: PEvent e a
---   }
--- data PEvent e a
---   = PStart
---   | PEnd (Either e a)
---   | PEmit Text PEmitInfo
+-- | Trx utilities
+data Trx i o a = Trx (ScriptLookups a) (TxConstraints i o)
 
--- data PEmitInfo = forall i. (ToJSON i, Generic i) => PEmitInfo i deriving (Generic) via (i) deriving anyclass (ToJSON)
+instance Semigroup (Trx i o a) where
+  Trx l c <> Trx l' c' = Trx (l <> l') (c <> c')
 
--- instance (ToJSON e, ToJSON a) => ToJSON (PLog e a)
+instance Monoid (Trx i o a) where
+  mempty = Trx mempty mempty
 
--- plogged :: (ToJSON e, ToJSON a, ToJSON event) => Text -> (Contract w s Text () -> Contract w s Text a) -> Contract w s Text a
--- plogged processName contractWithLogger = do
---   logInfo $ PStart @(PLog e a event) processName
---   --contractWithLogger (logInfo @String )
---   return undefined
+submitTrx :: forall a e w s. (FromData (DatumType a), ToData (RedeemerType a), ToData (DatumType a), AsContractError e) => Trx (RedeemerType a) (DatumType a) a -> Contract w s e CardanoTx
+submitTrx (Trx lookups constraints) = submitTxConstraintsWith lookups constraints

@@ -4,20 +4,22 @@ module Main (main) where
 
 import Aux (runAfter, withSuccessContract)
 import BotPlutusInterface.Types (LogContext (ContractLog), LogLevel (Info))
-import Control.Lens ((^.))
 import Control.Monad.Reader (ReaderT)
-import Coop.Pab (burnAuths, burnCerts, deployAuth, deployCoop, findOutsAtCertVWithCERT, findOutsAtHoldingAa, mintAuth, mintCert, mintCertRedeemers)
-import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), ciValueOf, findOutsAtHolding, loadCoopPlutus, makeCollateralOuts, mintNft, testDataRoundtrip, testDataRoundtrip')
-import Coop.Types (AuthDeployment (ad'authorityAc), CertDatum (CertDatum), CoopDeployment (cd'auth), CoopPlutus (cp'certV, cp'mkNftMp))
+import Coop.Pab (burnAuths, burnCerts, deployCoop, findOutsAtCertVWithCERT, findOutsAtHoldingAa, mintCertRedeemers, mkMintAuthTrx, mkMintCertTrx)
+import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), ciValueOf, findOutsAt', findOutsAtHolding, findOutsAtHolding', loadCoopPlutus, makeCollateralOuts, mkMintNftTrx, submitTrx)
+import Coop.Types (AuthDeployment (ad'authorityAc, ad'certV), CoopDeployment (cd'auth, cd'coopAc), CoopPlutus (cp'mkNftMp))
 import Data.Bool (bool)
 import Data.Default (def)
 import Data.Foldable (Foldable (toList))
 import Data.List.NonEmpty (NonEmpty)
+import Data.Map qualified as Map
 import Data.Text (Text)
+import Data.Void (Void)
 import GHC.Natural (Natural)
-import Ledger (Validator (Validator), ciTxOutValue, interval)
-import Ledger.Value (AssetClass (unAssetClass), assetClass, currencySymbol, tokenName, valueOf)
+import Ledger (interval)
+import Ledger.Value (AssetClass)
 import Plutus.Contract (currentTime, logInfo, ownFirstPaymentPubKeyHash, throwError, waitNSlots)
+import Plutus.Script.Utils.V1.Address (mkValidatorAddress)
 import Test.Plutip.Contract (assertExecutionWith, initAda, withContract, withContractAs)
 import Test.Plutip.Internal.Types (ClusterEnv)
 import Test.Plutip.LocalCluster (BpiWallet, withConfiguredCluster)
@@ -43,55 +45,21 @@ tests coopPlutus =
     "coop-pab-tests"
     [ assertExecutionWith
         testOpts
-        "datum-roundtrip"
-        (initAda [100])
-        ( withContract @String
-            ( const $ do
-                _ <- waitNSlots slotsToWait
-                let validityInterval = interval 0 100_000
-                    x = CertDatum "" validityInterval (assetClass (currencySymbol "") (tokenName ""))
-                if testDataRoundtrip' x
-                  then do
-                    testDataRoundtrip (Validator . cp'certV $ coopPlutus) x
-                  else do
-                    throwError "Pure roundtrip failed"
-            )
-        )
-        [shouldSucceed]
-    , assertExecutionWith
-        testOpts
         "mint-nft"
         (initAda [100] <> initAda [100])
         ( withContract @String
             ( \[nftWallet] -> do
                 self <- ownFirstPaymentPubKeyHash
+                outs <- findOutsAt' @Void self (\_ _ -> True)
+                let (trx, nftAc) = mkMintNftTrx self nftWallet (head . Map.toList $ outs) (cp'mkNftMp coopPlutus) 1
+                _ <- submitTrx @Void trx
                 _ <- waitNSlots slotsToWait
-                (_, (nftAc, _)) <- mintNft self nftWallet (cp'mkNftMp coopPlutus) 1
-                _ <- waitNSlots slotsToWait
-                found <- findOutsAtHolding nftWallet nftAc
+                found <- findOutsAtHolding' nftWallet nftAc
                 return $ length found
             )
         )
         [shouldSucceed, shouldYield 1]
     , runAfter "mint-nft" $
-        assertExecutionWith
-          testOpts
-          "deploy-authentication"
-          (initAda [100] <> initAda [100])
-          ( withContract @String
-              ( \[aaWallet] -> do
-                  logInfo @String "Running as godWallet"
-                  self <- ownFirstPaymentPubKeyHash
-                  _ <- waitNSlots slotsToWait
-                  authDeployment <- deployAuth coopPlutus self aaWallet 3
-                  _ <- waitNSlots slotsToWait
-                  aaOuts <- findOutsAtHolding aaWallet (ad'authorityAc authDeployment)
-                  let (aaCs, aaTn) = unAssetClass . ad'authorityAc $ authDeployment
-                  return $ [valueOf (out ^. ciTxOutValue) aaCs aaTn | out <- toList aaOuts]
-              )
-          )
-          [shouldSucceed, shouldYield [3]]
-    , runAfter "deploy-authentication" $
         assertExecutionWith
           testOpts
           "deploy-coop"
@@ -104,11 +72,16 @@ tests coopPlutus =
                   _ <- waitNSlots slotsToWait
                   coopDeployment <- deployCoop coopPlutus self aaWallet 3
                   _ <- waitNSlots slotsToWait
-                  aaOuts <- findOutsAtHoldingAa aaWallet coopDeployment
-                  return $ [ciValueOf (ad'authorityAc . cd'auth $ coopDeployment) out | out <- toList aaOuts]
+                  let aaAc = ad'authorityAc . cd'auth $ coopDeployment
+                      coopAc = cd'coopAc coopDeployment
+                  aaOuts <- findOutsAtHolding' aaWallet aaAc
+                  coopOuts <- findOutsAtHolding' self coopAc
+                  return $
+                    [ciValueOf aaAc out | out <- toList aaOuts]
+                      <> [ciValueOf coopAc out | out <- toList coopOuts]
               )
           )
-          [shouldSucceed, shouldYield [3]]
+          [shouldSucceed, shouldYield [3, 1]]
     , runAfter "deploy-coop" $
         assertExecutionWith
           testOpts
@@ -117,29 +90,22 @@ tests coopPlutus =
           ( do
               (coopDeployment, certRedeemerAc) <- godDeploysCoop coopPlutus
 
-              _ <-
-                withContractAs @String
-                  1
-                  ( \_ -> do
-                      logInfo @String "Running as aaWallet"
-                      _ <- waitNSlots slotsToWait
-                      self <- ownFirstPaymentPubKeyHash
-                      aaOuts <- findOutsAtHoldingAa self coopDeployment
-                      _ <- waitNSlots slotsToWait
-                      now <- currentTime
-                      let validityInterval = interval now (now + 100_000)
-                      _ <- mintCert coopDeployment self certRedeemerAc validityInterval aaOuts
-                      waitNSlots slotsToWait
-                  )
-              withContract @String
+              withContractAs @String
+                1
                 ( \_ -> do
-                    certOuts <- findOutsAtCertVWithCERT coopDeployment
-                    logInfo $ "Found " <> (show . length $ certOuts) <> " $CERT outputs"
-                    bool (throwError "There should be some $CERT inputs") (pure ()) $ not (null certOuts)
-                    waitNSlots slotsToWait
+                    logInfo @String "Running as aaWallet"
+                    self <- ownFirstPaymentPubKeyHash
+                    aaOuts <- findOutsAtHoldingAa self coopDeployment
+                    now <- currentTime
+                    let validityInterval = interval now (now + 100_000)
+                        (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRedeemerAc validityInterval aaOuts
+                    _ <- submitTrx @Void mintCertTrx
+                    _ <- waitNSlots slotsToWait
+                    certOuts <- findOutsAtHolding (mkValidatorAddress . ad'certV . cd'auth $ coopDeployment) certAc
+                    return [ciValueOf certAc out | out <- toList certOuts]
                 )
           )
-          [shouldSucceed]
+          [shouldSucceed, shouldYield [1]]
     , runAfter "mint-cert" $
         assertExecutionWith
           testOpts
@@ -148,19 +114,19 @@ tests coopPlutus =
           ( do
               (coopDeployment, certRedeemerAc) <- godDeploysCoop coopPlutus
 
-              _ <-
-                withContractAs @String
+              certAc <-
+                withSuccessContract @String
                   1
                   ( \[_, _] -> do
                       logInfo @String "Running as aaWallet"
-                      _ <- waitNSlots slotsToWait
                       self <- ownFirstPaymentPubKeyHash
                       aaOuts <- findOutsAtHoldingAa self coopDeployment
-                      _ <- waitNSlots slotsToWait
                       now <- currentTime
                       let validityInterval = interval now (now + 100_000)
-                      _ <- mintCert coopDeployment self certRedeemerAc validityInterval aaOuts
-                      waitNSlots slotsToWait
+                          (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRedeemerAc validityInterval aaOuts
+                      _ <- submitTrx @Void mintCertTrx
+                      _ <- waitNSlots slotsToWait
+                      return certAc
                   )
 
               withContractAs @String
@@ -168,8 +134,8 @@ tests coopPlutus =
                 ( \[_, _] -> do
                     logInfo @String "Running as certRedeemerWallet"
                     self <- ownFirstPaymentPubKeyHash
-                    certRedeemerOuts <- findOutsAtHolding self certRedeemerAc
-                    certOuts <- findOutsAtCertVWithCERT coopDeployment
+                    certRedeemerOuts <- findOutsAtHolding' self certRedeemerAc
+                    certOuts <- findOutsAtHolding (mkValidatorAddress . ad'certV . cd'auth $ coopDeployment) certAc
                     logInfo $ "Found " <> (show . length $ certOuts) <> " $CERT outputs"
                     bool
                       (throwError "There should be some $CERT inputs")
@@ -192,14 +158,13 @@ tests coopPlutus =
                 1
                 ( \[_, _, authWalletGeorge, authWalletPeter] -> do
                     logInfo @String "Running as aaWallet"
-                    _ <- waitNSlots slotsToWait
                     self <- ownFirstPaymentPubKeyHash
                     aaOuts <- findOutsAtHoldingAa self coopDeployment
+                    let (authMintTrx, authAc) = mkMintAuthTrx coopDeployment self [authWalletGeorge, authWalletPeter] 10 aaOuts
+                    _ <- submitTrx @Void authMintTrx
                     _ <- waitNSlots slotsToWait
-                    (_, authAc) <- mintAuth coopDeployment self [authWalletGeorge, authWalletPeter] 10 aaOuts
-                    _ <- waitNSlots slotsToWait
-                    georgesOuts <- findOutsAtHolding authWalletGeorge authAc
-                    petersOuts <- findOutsAtHolding authWalletPeter authAc
+                    georgesOuts <- findOutsAtHolding' authWalletGeorge authAc
+                    petersOuts <- findOutsAtHolding' authWalletPeter authAc
                     return $
                       [ciValueOf authAc out | out <- toList georgesOuts]
                         <> [ciValueOf authAc out | out <- toList petersOuts]
@@ -219,11 +184,10 @@ tests coopPlutus =
                   1
                   ( \[_, _, authWalletGeorge, authWalletPeter] -> do
                       logInfo @String "Running as aaWallet"
-                      _ <- waitNSlots slotsToWait
                       self <- ownFirstPaymentPubKeyHash
                       aaOuts <- findOutsAtHoldingAa self coopDeployment
-                      _ <- waitNSlots slotsToWait
-                      (_, authAc) <- mintAuth coopDeployment self [authWalletGeorge, authWalletPeter] 10 aaOuts
+                      let (authMintTrx, authAc) = mkMintAuthTrx coopDeployment self [authWalletGeorge, authWalletPeter] 10 aaOuts
+                      _ <- submitTrx @Void authMintTrx
                       _ <- waitNSlots slotsToWait
                       return authAc
                   )
@@ -234,10 +198,10 @@ tests coopPlutus =
                   ( \_ -> do
                       logInfo @String "Running as authWalletGeorge"
                       self <- ownFirstPaymentPubKeyHash
-                      authOuts <- findOutsAtHolding self authAc
+                      authOuts <- findOutsAtHolding' self authAc
                       _ <- burnAuths coopDeployment self authOuts
                       _ <- waitNSlots (slotsToWait * 2)
-                      authOuts' <- findOutsAtHolding self authAc
+                      authOuts' <- findOutsAtHolding' self authAc
                       return $ [ciValueOf authAc out | out <- toList authOuts']
                   )
 
@@ -247,16 +211,47 @@ tests coopPlutus =
                   ( \_ -> do
                       logInfo @String "Running as authWalletPeter"
                       self <- ownFirstPaymentPubKeyHash
-                      authOuts <- findOutsAtHolding self authAc
+                      authOuts <- findOutsAtHolding' self authAc
                       _ <- burnAuths coopDeployment self authOuts
                       _ <- waitNSlots (slotsToWait * 2)
-                      authOuts' <- findOutsAtHolding self authAc
+                      authOuts' <- findOutsAtHolding' self authAc
                       return $ [ciValueOf authAc out | out <- toList authOuts']
                   )
 
               withContract @String (const $ return (authQAtGeorge, authQAtPeter))
           )
           [shouldSucceed, shouldYield ([], [])]
+    , runAfter "burn-auth" $
+        assertExecutionWith
+          testOpts
+          "mint-combined-cert-auth"
+          (initAda [200] <> initAda [200] <> initAda [200] <> initAda [200] <> initAda [200]) -- TODO: Make this more explicit somehow
+          ( do
+              (coopDeployment, certRedeemerAc) <- godDeploysCoop coopPlutus
+
+              withContractAs @String
+                1
+                ( \[_, _, authWalletGeorge, authWalletPeter] -> do
+                    logInfo @String "Running as aaWallet"
+                    _ <- waitNSlots slotsToWait
+                    self <- ownFirstPaymentPubKeyHash
+                    aaOuts <- findOutsAtHoldingAa self coopDeployment
+                    now <- currentTime
+                    let validityInterval = interval now (now + 100_000)
+                    let (mintAuthTrx, authAc) = mkMintAuthTrx coopDeployment self [authWalletGeorge, authWalletPeter] 10 aaOuts
+                        (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRedeemerAc validityInterval aaOuts
+                    _ <- submitTrx @Void (mintAuthTrx <> mintCertTrx)
+                    _ <- waitNSlots slotsToWait
+                    georgesOuts <- findOutsAtHolding' authWalletGeorge authAc
+                    petersOuts <- findOutsAtHolding' authWalletPeter authAc
+                    certVOuts <- findOutsAtCertVWithCERT coopDeployment
+                    return $
+                      [ciValueOf authAc out | out <- toList georgesOuts]
+                        <> [ciValueOf authAc out | out <- toList petersOuts]
+                        <> [ciValueOf certAc out | out <- toList certVOuts]
+                )
+          )
+          [shouldSucceed, shouldYield [10, 10, 1]]
     ]
 
 godDeploysCoop :: CoopPlutus -> ReaderT (ClusterEnv, NonEmpty BpiWallet) IO (CoopDeployment, AssetClass)
