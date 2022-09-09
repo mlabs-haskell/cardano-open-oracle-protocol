@@ -8,6 +8,7 @@ module Coop.Pab (
   burnAuths,
   mkMintCertTrx,
   mkMintAuthTrx,
+  mkMintFsTrx,
 ) where
 
 import Control.Lens ((^.))
@@ -20,9 +21,11 @@ import Coop.Types (
   CertDatum (CertDatum),
   CertMpParams (CertMpParams),
   CertMpRedeemer (CertMpBurn, CertMpMint),
-  CoopDeployment (CoopDeployment, cd'auth),
+  CoopDeployment (CoopDeployment, cd'auth, cd'fsMp, cd'fsV),
   CoopPlutus (cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkNftMp),
+  FsDatum,
   FsMpParams (FsMpParams),
+  FsMpRedeemer (FsMpMint),
   cp'certV,
  )
 import Data.Foldable (toList)
@@ -33,7 +36,7 @@ import Data.Void (Void)
 import Ledger (POSIXTimeRange, PaymentPubKeyHash, applyArguments, getCardanoTxId, scriptCurrencySymbol, validatorHash)
 import Ledger.Tx (ChainIndexTxOut, ciTxOutValue)
 import Plutus.Contract (Contract, submitTxConstraintsWith, throwError)
-import Plutus.Contract.Constraints (mintingPolicy, mustMintValueWithRedeemer, mustPayToOtherScript, mustPayToPubKey, mustSpendPubKeyOutput, mustSpendScriptOutput, otherData, otherScript, ownPaymentPubKeyHash, unspentOutputs)
+import Plutus.Contract.Constraints (mintingPolicy, mustBeSignedBy, mustMintValueWithRedeemer, mustPayToOtherScript, mustPayToPubKey, mustSpendPubKeyOutput, mustSpendScriptOutput, otherData, otherScript, ownPaymentPubKeyHash, unspentOutputs)
 import Plutus.Contract.Logging (logInfo)
 import Plutus.Script.Utils.V1.Address (mkValidatorAddress)
 import Plutus.V1.Ledger.Api (
@@ -184,25 +187,29 @@ mkMintAuthTrx coopDeployment self authWallets authQEach aaOuts =
           <> mconcat (mustSpendPubKeyOutput <$> aaOrefs)
    in (Trx lookups constraints, assetClass authCs authTn)
 
-burnAuths :: CoopDeployment -> PaymentPubKeyHash -> Map TxOutRef ChainIndexTxOut -> Contract w s Text TxId
-burnAuths coopDeployment self authOuts = do
-  let logI m = logInfo @String ("burnAuths: " <> m)
-  logI "Starting"
+mkBurnAuthsTrx :: CoopDeployment -> PaymentPubKeyHash -> Map TxOutRef ChainIndexTxOut -> Trx i o a
+mkBurnAuthsTrx coopDeployment self authOuts = do
   let authMp = (ad'authMp . cd'auth) coopDeployment
       authCs = scriptCurrencySymbol authMp
       authOrefs = Map.keys authOuts
       authVal = foldMap (\out -> inv $ currencyValue (out ^. ciTxOutValue) authCs) (toList authOuts)
 
-  let lookups =
+      lookups =
         mintingPolicy authMp
           <> ownPaymentPubKeyHash self
           <> unspentOutputs authOuts
 
-      tx =
+      constraints =
         mustMintValueWithRedeemer (toRedeemer AuthMpBurn) authVal
           <> mconcat (mustSpendPubKeyOutput <$> authOrefs)
+   in Trx lookups constraints
 
-  tx <- submitTxConstraintsWith @Void lookups tx
+burnAuths :: CoopDeployment -> PaymentPubKeyHash -> Map TxOutRef ChainIndexTxOut -> Contract w s Text TxId
+burnAuths coopDeployment self authOuts = do
+  let logI m = logInfo @String ("burnAuths: " <> m)
+  logI "Starting"
+  let trx = mkBurnAuthsTrx coopDeployment self authOuts
+  tx <- submitTrx @Void trx
   logI "Finished"
   return (getCardanoTxId tx)
 
@@ -230,42 +237,33 @@ findOutsAtHoldingAa wallet coopDeployment = do
   logI "Finished"
   return found
 
--- data FsDatum = FsDatum
---   { fd'fs :: FactStatement
---   , fd'id :: LedgerBytes
---   , fd'description :: FsDescription
---   , fs'gcAfter :: POSIXTime
---   , fs'submitter :: PubKeyHash
---   , fs'fsCs :: CurrencySymbol
---   }
---   deriving stock (Show, Generic, Eq)
---   deriving anyclass (ToJSON, FromJSON)
+mkMintFsTrx :: CoopDeployment -> PaymentPubKeyHash -> FsDatum -> (TxOutRef, ChainIndexTxOut) -> ((TxOutRef, ChainIndexTxOut), CertDatum) -> PaymentPubKeyHash -> (Trx i o a, AssetClass)
+mkMintFsTrx coopDeployment self fsDatum authOut (certOut, certDatum) submitterPpkh = do
+  let fsMp = cd'fsMp coopDeployment
+      fsV = cd'fsV coopDeployment
+      fsVAddr = validatorHash fsV
+      fsCs = scriptCurrencySymbol fsMp
+      fsTn = TokenName . hashTxOutRefs $ [fst authOut]
+      fsVal = Value.singleton fsCs fsTn 1
+      certV = ad'certV . cd'auth $ coopDeployment
+      lookups =
+        mintingPolicy fsMp
+          <> otherScript fsV
+          <> otherScript certV
+          <> otherData (toDatum fsDatum)
+          <> otherData (toDatum certDatum)
+          <> unspentOutputs (Map.fromList [certOut])
+          <> ownPaymentPubKeyHash submitterPpkh
 
--- mintFs :: TxOutRef -> TxOutRef -> PubKeyHash -> PubKeyHash -> CoopDeployment -> Contract w s Text TxId
--- mintFs authTokenUtxo certTokenUTxo submitterPkh publisherPkh coopDeployment = do
---   let logI m = logInfo @String ("mintFs: " <> m)
---   logI "Starting"
---   let fsMp = cd'fsMp coopDeployment
---       fsV = cd'fsV coopDeployment
---       fsVAddr = validatorHash fsV
---       fsTn = TokenName . getPubKeyHash $ publisherPkh
---       fsCs = scriptCurrencySymbol fsMp
---       fsVal = Value.singleton fsCs fsTn 1
---       fsDatum = Datum . toBuiltinData $ FsDatum "factstatement" "id" "" 0 submitterPkh fsCs
---       lookups =
---         mconcat
---           [ mintingPolicy fsMp
---           , otherScript fsV
---           , otherData fsDatum
---           ]
---       tx =
---         mconcat
---           [ mustMintValue fsVal
---           , mustSpend
---           , mustBeSignedBy (PaymentPubKeyHash publisherPkh)
---           , mustBeSignedBy (PaymentPubKeyHash submitterPkh)
---           , mustPayToOtherScript fsVAddr fsDatum (fsVal <> minUtxoAdaValue)
---           ]
---   tx <- submitTxConstraintsWith @Void lookups tx
---   logI "Finished"
---   return (getCardanoTxId tx)
+      constraints =
+        mustMintValueWithRedeemer (toRedeemer FsMpMint) fsVal
+          <> mustSpendPubKeyOutput (fst authOut)
+          <> mustSpendScriptOutput (fst certOut) (toRedeemer ()) -- FIXME: We need mustReferenceScriptOutput
+          --          <> mustPayToOtherScript certV Datum Value
+          <> mustBeSignedBy self
+          <> mustBeSignedBy submitterPpkh
+          <> mustPayToOtherScript fsVAddr (toDatum fsDatum) (fsVal <> minUtxoAdaValue)
+      mintFsTrx =
+        mkBurnAuthsTrx coopDeployment self (Map.fromList [authOut])
+          <> Trx lookups constraints
+   in (mintFsTrx, assetClass fsCs fsTn)

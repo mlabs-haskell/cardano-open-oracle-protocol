@@ -1,5 +1,6 @@
 module Coop.Pab.Aux (
   Trx (..),
+  datumFromTxOut,
   loadCoopPlutus,
   runBpi,
   DeployMode (..),

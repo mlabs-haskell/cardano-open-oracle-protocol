@@ -5,9 +5,9 @@ module Main (main) where
 import Aux (runAfter, withSuccessContract)
 import BotPlutusInterface.Types (LogContext (ContractLog), LogLevel (Info))
 import Control.Monad.Reader (ReaderT)
-import Coop.Pab (burnAuths, burnCerts, deployCoop, findOutsAtCertVWithCERT, findOutsAtHoldingAa, mintCertRedeemers, mkMintAuthTrx, mkMintCertTrx)
-import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), ciValueOf, findOutsAt', findOutsAtHolding, findOutsAtHolding', loadCoopPlutus, makeCollateralOuts, mkMintNftTrx, submitTrx)
-import Coop.Types (AuthDeployment (ad'authorityAc, ad'certV), CoopDeployment (cd'auth, cd'coopAc), CoopPlutus (cp'mkNftMp))
+import Coop.Pab (burnAuths, burnCerts, deployCoop, findOutsAtCertVWithCERT, findOutsAtHoldingAa, mintCertRedeemers, mkMintAuthTrx, mkMintCertTrx, mkMintFsTrx)
+import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), ciValueOf, datumFromTxOut, findOutsAt', findOutsAtHolding, findOutsAtHolding', loadCoopPlutus, makeCollateralOuts, mkMintNftTrx, submitTrx)
+import Coop.Types (AuthDeployment (ad'authorityAc, ad'certV), CoopDeployment (cd'auth, cd'coopAc), CoopPlutus (cp'mkNftMp), FsDatum (FsDatum))
 import Data.Bool (bool)
 import Data.Default (def)
 import Data.Foldable (Foldable (toList))
@@ -16,7 +16,7 @@ import Data.Map qualified as Map
 import Data.Text (Text)
 import Data.Void (Void)
 import GHC.Natural (Natural)
-import Ledger (interval)
+import Ledger (PaymentPubKeyHash (unPaymentPubKeyHash), interval)
 import Ledger.Value (AssetClass)
 import Plutus.Contract (currentTime, logInfo, ownFirstPaymentPubKeyHash, throwError, waitNSlots)
 import Plutus.Script.Utils.V1.Address (mkValidatorAddress)
@@ -252,6 +252,60 @@ tests coopPlutus =
                 )
           )
           [shouldSucceed, shouldYield [10, 10, 1]]
+    , runAfter "mint-combined-cert-auth" $
+        assertExecutionWith
+          testOpts
+          "mint-fs"
+          -- god <> aa <> certRedeemer <> authWallet <> submitterWallet
+          (initAda [200] <> initAda [200] <> initAda [200] <> initAda [200] <> initAda [200]) -- TODO: Make this more explicit somehow
+          ( do
+              (coopDeployment, certRedeemerAc) <- godDeploysCoop coopPlutus
+
+              (authAc, certAc) <-
+                withSuccessContract @String
+                  1
+                  ( \[_god, _certR, authWallet, _sub] -> do
+                      logInfo @String "Running as aaWallet"
+                      _ <- waitNSlots slotsToWait
+                      self <- ownFirstPaymentPubKeyHash
+                      aaOuts <- findOutsAtHoldingAa self coopDeployment
+                      now <- currentTime
+                      let validityInterval = interval now (now + 100_000)
+                      let (mintAuthTrx, authAc) = mkMintAuthTrx coopDeployment self [authWallet] 10 aaOuts
+                          (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRedeemerAc validityInterval aaOuts
+                      _ <- submitTrx @Void (mintAuthTrx <> mintCertTrx)
+                      _ <- waitNSlots slotsToWait
+                      return (authAc, certAc)
+                  )
+
+              withContractAs @String
+                3
+                ( \[_god, _aa, _certR, submitterWallet] -> do
+                    logInfo @String "Running as authWallet"
+                    self <- ownFirstPaymentPubKeyHash
+                    authOuts <- findOutsAtHolding' self authAc
+                    authOut <- case Map.toList authOuts of
+                      [] -> throwError "Must find at least one $AUTH token"
+                      (out : _) -> return out
+
+                    certOuts <- findOutsAtHolding (mkValidatorAddress . ad'certV . cd'auth $ coopDeployment) certAc
+                    certOut <- case Map.toList certOuts of
+                      [] -> throwError "Must find at least one $CERT token"
+                      (out : _) -> return out
+                    mayCertDatum <- datumFromTxOut $ snd certOut
+                    certDatum <-
+                      maybe
+                        (throwError "Must find a CertDatum")
+                        pure
+                        mayCertDatum
+                    logInfo @String (show certDatum)
+                    let fsDatum = FsDatum "aa" "aa" 0 (unPaymentPubKeyHash submitterWallet)
+                        (mintFsTrx, _) = mkMintFsTrx coopDeployment self fsDatum authOut (certOut, certDatum) submitterWallet
+                    _ <- submitTrx @Void mintFsTrx
+                    waitNSlots slotsToWait
+                )
+          )
+          [shouldSucceed]
     ]
 
 godDeploysCoop :: CoopPlutus -> ReaderT (ClusterEnv, NonEmpty BpiWallet) IO (CoopDeployment, AssetClass)

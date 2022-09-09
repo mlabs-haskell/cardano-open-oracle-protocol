@@ -199,7 +199,7 @@ pdatumFromTxOut = phoistAcyclic $
   plam $ \ctx txOut -> unTermCont do
     -- TODO: Migrate to inline datums
     ctx' <- pletFieldsC @'["txInfo"] ctx
-    txInfo <- pletFieldsC @'["datums"] (getField @"txInfo" ctx')
+    txInfo <- pletFieldsC @'["datums"] ctx'.txInfo
 
     outDatumHash <-
       pmaybeDataC
@@ -430,9 +430,8 @@ pmustHandleSpentWithMp = phoistAcyclic $
     mint <- pletC $ pto $ pfromData txInfo.mint
 
     ownIn <- pletC $ pfindOwnInput' # ctx
-    ownVal <- pletC $ pfromData $ pfield @"value" # (pfield @"resolved" # ownIn)
-
-    pmatchC (pto ownVal) >>= \case
+    ownInVal <- pletC $ pfromData $ pfield @"value" # (pfield @"resolved" # ownIn) -- FIXME: nonAda!
+    pmatchC (pto ownInVal) >>= \case
       PMap elems ->
         pure $
           pmap

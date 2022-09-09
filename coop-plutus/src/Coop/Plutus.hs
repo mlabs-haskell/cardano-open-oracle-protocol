@@ -38,6 +38,7 @@ fsV = phoistAcyclic $
   plam $ \_ _ ctx -> unTermCont do
     ptraceC "@FsV"
 
+    -- FIXME: Use pmustHandleSpentWithMp
     ctx' <- pletFieldsC @'["txInfo"] ctx
     txInfo <- pletFieldsC @'["mint"] ctx'.txInfo
 
@@ -480,7 +481,7 @@ and it's sole purpose is to hold some information about $AUTH that the
 vertifying scripts can MUST use a reference input to validate $AUTH inputs.
 -}
 
--- | WIP
+-- | Delegates spending to corresponding minting policies
 certV :: ClosedTerm PValidator
 certV = phoistAcyclic $
   plam $ \_ _ ctx -> unTermCont do
