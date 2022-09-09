@@ -5,14 +5,14 @@
 
   inputs = {
     # Plutip maintains a compatible Plutus/Cardano derivation set
-    plutip.url = "github:mlabs-haskell/plutip/gergely/vasil-with-latest-wallet";
+    plutip.url = "github:mlabs-haskell/plutip/f8f9e4650f09b448ffc5825434eb6f1714f9ddca"; # https://github.com/mlabs-haskell/plutip/releases/tag/vasil-compliant-v1.0.0
 
     nixpkgs.follows = "plutip/nixpkgs";
     haskell-nix.follows = "plutip/haskell-nix";
 
     flake-utils = {
       url = "github:numtide/flake-utils";
-      inputs.nixpkgs.follows = "haskell-nix/nixpkgs-unstable";
+      inputs.nixpkgs.follows = "haskell-nix/nixpkgs";
     };
 
     pre-commit-hooks.url = "github:cachix/pre-commit-hooks.nix";
