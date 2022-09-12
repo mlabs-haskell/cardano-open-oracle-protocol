@@ -210,7 +210,7 @@ pdatumFromTxOut = phoistAcyclic $
       pmaybeDataC
         (fail "pDatumFromTxOut: no datum with a given hash present in the transaction datums")
         pure
-        (pfindDatum # getField @"datums" txInfo # outDatumHash)
+        (pfindDatum # txInfo.datums # outDatumHash)
 
     pure $ pfromData (ptryFromData @a (pto datum))
 

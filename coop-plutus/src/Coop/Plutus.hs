@@ -410,8 +410,8 @@ caParseRef ::
 caParseRef = phoistAcyclic $
   plam $ \params ctx acc txInInfo -> unTermCont do
     ptraceC "caParseRef"
-    txInOut <- pletC $ pfield @"resolved" # txInInfo
-    txInVal <- pletC $ pfield @"value" # txInOut
+    txIn <- pletC $ pfield @"resolved" # txInInfo
+    txInVal <- pletC $ pfield @"value" # txIn
     certTokenCs <- pletC $ pfield @"ap'certTokenCs" # params
     certVal <- pletC $ pcurrencyValue # certTokenCs # txInVal
     pboolC
