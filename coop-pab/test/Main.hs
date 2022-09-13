@@ -7,7 +7,7 @@ import BotPlutusInterface.Types (LogContext (ContractLog), LogLevel (Debug), Log
 import Control.Monad.Reader (ReaderT)
 import Coop.Pab (burnAuths, burnCerts, deployCoop, findOutsAtCertVWithCERT, findOutsAtHoldingAa, mintCertRedeemers, mkMintAuthTrx, mkMintCertTrx, mkMintFsTrx)
 import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), ciValueOf, datumFromTxOut, findOutsAt', findOutsAtHolding, findOutsAtHolding', interval', loadCoopPlutus, mkMintNftTrx, submitTrx)
-import Coop.Types (AuthDeployment (ad'authorityAc, ad'certV), CertDatum (cert'validity), CoopDeployment (cd'auth, cd'coopAc), CoopPlutus (cp'mkNftMp), FsDatum (FsDatum))
+import Coop.Types (AuthDeployment (ad'authorityAc, ad'certV), CertDatum (cert'validity), CoopDeployment (cd'auth, cd'coopAc, cd'fsV), CoopPlutus (cp'mkNftMp), FsDatum (FsDatum))
 import Data.Bool (bool)
 import Data.Default (def)
 import Data.Foldable (Foldable (toList))
@@ -297,7 +297,7 @@ tests coopPlutus =
                     now <- currentTime
                     let (UpperBound toExt _) = ivTo . cert'validity $ certDatum
                     let fsDatum = FsDatum "aa" "aa" NegInf (unPaymentPubKeyHash submitterWallet)
-                        (mintFsTrx, _) =
+                        (mintFsTrx, fsAc) =
                           mkMintFsTrx
                             coopDeployment
                             self
@@ -308,9 +308,11 @@ tests coopPlutus =
                             submitterWallet
                     -- FIXME: This test passes allthough it shouldn't
                     submitTrx @Void mintFsTrx
+                    fsOuts <- findOutsAtHolding (mkValidatorAddress . cd'fsV $ coopDeployment) fsAc
+                    return [ciValueOf fsAc out | out <- toList fsOuts]
                 )
           )
-          [shouldSucceed]
+          [shouldSucceed, shouldYield [1]]
     ]
 
 godDeploysCoop :: CoopPlutus -> ReaderT (ClusterEnv, NonEmpty BpiWallet) IO (CoopDeployment, AssetClass)
