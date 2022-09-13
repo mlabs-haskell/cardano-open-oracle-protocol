@@ -6,8 +6,8 @@ import Aux (runAfter, withSuccessContract)
 import BotPlutusInterface.Types (LogContext (ContractLog), LogLevel (Debug), LogType (AnyLog, CollateralLog))
 import Control.Monad.Reader (ReaderT)
 import Coop.Pab (burnAuths, burnCerts, deployCoop, findOutsAtCertVWithCERT, findOutsAtHoldingAa, mintCertRedeemers, mkMintAuthTrx, mkMintCertTrx, mkMintFsTrx)
-import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), ciValueOf, datumFromTxOut, findOutsAt', findOutsAtHolding, findOutsAtHolding', loadCoopPlutus, mkMintNftTrx, submitTrx)
-import Coop.Types (AuthDeployment (ad'authorityAc, ad'certV), CoopDeployment (cd'auth, cd'coopAc), CoopPlutus (cp'mkNftMp), FsDatum (FsDatum))
+import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), ciValueOf, datumFromTxOut, findOutsAt', findOutsAtHolding, findOutsAtHolding', interval', loadCoopPlutus, mkMintNftTrx, submitTrx)
+import Coop.Types (AuthDeployment (ad'authorityAc, ad'certV), CertDatum (cert'validity), CoopDeployment (cd'auth, cd'coopAc), CoopPlutus (cp'mkNftMp), FsDatum (FsDatum))
 import Data.Bool (bool)
 import Data.Default (def)
 import Data.Foldable (Foldable (toList))
@@ -20,7 +20,7 @@ import Ledger (PaymentPubKeyHash (unPaymentPubKeyHash), interval)
 import Ledger.Value (AssetClass)
 import Plutus.Contract (currentTime, logInfo, ownFirstPaymentPubKeyHash, throwError, waitNSlots)
 import Plutus.Script.Utils.V2.Address (mkValidatorAddress)
-import Plutus.V2.Ledger.Api (Extended (NegInf))
+import Plutus.V2.Ledger.Api (Extended (Finite, NegInf, PosInf), Interval (ivTo), UpperBound (UpperBound))
 import Test.Plutip.Contract (assertExecutionWith, initAda, withCollateral, withContract, withContractAs)
 import Test.Plutip.Internal.Types (ClusterEnv)
 import Test.Plutip.LocalCluster (BpiWallet, withConfiguredCluster)
@@ -267,8 +267,8 @@ tests coopPlutus =
                       self <- ownFirstPaymentPubKeyHash
                       aaOuts <- findOutsAtHoldingAa self coopDeployment
                       now <- currentTime
-                      let validityInterval = interval now (now + 100_000)
-                      let (mintAuthTrx, authAc) = mkMintAuthTrx coopDeployment self [authWallet] 10 aaOuts
+                      let validityInterval = interval' (Finite now) PosInf
+                      let (mintAuthTrx, authAc) = mkMintAuthTrx coopDeployment self [authWallet] 1 aaOuts -- TODO: Enable $AUTH outputs with more than 1 Q
                           (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRedeemerAc validityInterval aaOuts
                       submitTrx @Void (mintAuthTrx <> mintCertTrx)
                       return (authAc, certAc)
@@ -294,11 +294,20 @@ tests coopPlutus =
                         (throwError "Must find a CertDatum")
                         pure
                         mayCertDatum
-                    logInfo @String (show certDatum)
+                    now <- currentTime
+                    let (UpperBound toExt _) = ivTo . cert'validity $ certDatum
                     let fsDatum = FsDatum "aa" "aa" NegInf (unPaymentPubKeyHash submitterWallet)
-                        (mintFsTrx, _) = mkMintFsTrx coopDeployment self fsDatum authOut (certOut, certDatum) submitterWallet
+                        (mintFsTrx, _) =
+                          mkMintFsTrx
+                            coopDeployment
+                            self
+                            (interval' (Finite now) toExt)
+                            fsDatum
+                            authOut
+                            (certOut, certDatum)
+                            submitterWallet
+                    -- FIXME: This test passes allthough it shouldn't
                     submitTrx @Void mintFsTrx
-                    waitNSlots 15
                 )
           )
           [shouldSucceed]

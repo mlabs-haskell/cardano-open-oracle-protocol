@@ -360,8 +360,8 @@ caParseInputWithAuth = phoistAcyclic $
                   ( \authTn ->
                       pif
                         (0 #< (pvalueOf # txInVal # authTokenCs # authTn)) -- NOTE: Contains at least 1 $AUTH
-                        pdnothing
                         (pdjust authTn)
+                        pdnothing
                   )
             )
           # certs
@@ -408,12 +408,12 @@ caParseRef = phoistAcyclic $
     certVal <- pletC $ pcurrencyValue # certTokenCs # txInVal
     pboolC
       ( do
-          ptraceC "caParseRef: Skipping non $CERT input"
-          pure acc
-      )
-      ( do
           ptraceC "caParseRef: Found $CERT input"
           pure $ caParseRefWithCert # ctx # certTokenCs # (passertPositive # certVal) # acc # txInInfo
+      )
+      ( do
+          ptraceC "caParseRef: Skipping non $CERT input"
+          pure acc
       )
       (certVal #== mempty)
 
@@ -484,7 +484,7 @@ certV = phoistAcyclic $
     ptraceC "@CertV"
 
     _ <- pletC $ pmustHandleSpentWithMp # ctx
-    ptraceC "@CertV: Spending delegated to AuthMp"
+    ptraceC "@CertV: Spending delegated to CertMp"
 
     pure $ popaque $ pconstant ()
 

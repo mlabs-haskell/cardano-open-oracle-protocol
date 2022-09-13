@@ -12,7 +12,7 @@ module Coop.Pab (
 ) where
 
 import Control.Lens ((^.))
-import Coop.Pab.Aux (Trx (Trx), currencyValue, findOutsAt, findOutsAt', findOutsAtHolding', hasCurrency, hashTxOutRefs, minUtxoAdaValue, mkMintNftTrx, submitTrx, toDatum, toRedeemer)
+import Coop.Pab.Aux (Trx (Trx), currencyValue, findOutsAt, findOutsAt', findOutsAtHolding', hasCurrency, hashTxOutRefs, interval', minUtxoAdaValue, mkMintNftTrx, submitTrx, toDatum, toRedeemer)
 import Coop.Types (
   AuthDeployment (AuthDeployment, ad'authMp, ad'authorityAc, ad'certMp, ad'certV),
   AuthMpParams (AuthMpParams),
@@ -54,7 +54,7 @@ import Plutus.V1.Ledger.Api (
  )
 import Plutus.V1.Ledger.Value (AssetClass, assetClass)
 import Plutus.V1.Ledger.Value qualified as Value
-import Plutus.V2.Ledger.Api (Extended (Finite, PosInf), Interval (Interval), LowerBound (LowerBound), POSIXTimeRange, UpperBound (UpperBound))
+import Plutus.V2.Ledger.Api (Extended (Finite, PosInf), POSIXTimeRange)
 import PlutusTx.Prelude (Group (inv))
 import Test.Plutip.Internal.BotPlutusInterface.Setup ()
 import Test.Plutip.Internal.LocalCluster ()
@@ -169,7 +169,7 @@ burnCerts coopDeployment self certOuts redeemerOuts = do
       certOrefs = Map.keys certOuts
       certCs = scriptCurrencySymbol certMp
       certVal = foldMap (\out -> inv $ currencyValue (out ^. ciTxOutValue) certCs) (toList certOuts)
-      timeRange = Interval (LowerBound (Finite now) False) (UpperBound PosInf False)
+      timeRange = interval' (Finite now) PosInf
 
   let lookups =
         plutusV2MintingPolicy certMp
@@ -257,8 +257,8 @@ findOutsAtHoldingAa wallet coopDeployment = do
   return found
 
 -- TODO
-mkMintFsTrx :: CoopDeployment -> PaymentPubKeyHash -> FsDatum -> (TxOutRef, ChainIndexTxOut) -> ((TxOutRef, ChainIndexTxOut), CertDatum) -> PaymentPubKeyHash -> (Trx i o a, AssetClass)
-mkMintFsTrx coopDeployment self fsDatum authOut (certOut, certDatum) submitterPpkh = do
+mkMintFsTrx :: CoopDeployment -> PaymentPubKeyHash -> POSIXTimeRange -> FsDatum -> (TxOutRef, ChainIndexTxOut) -> ((TxOutRef, ChainIndexTxOut), CertDatum) -> PaymentPubKeyHash -> (Trx i o a, AssetClass)
+mkMintFsTrx coopDeployment self trxValidRange fsDatum authOut (certOut, certDatum) submitterPpkh = do
   let fsMp = cd'fsMp coopDeployment
       fsV = cd'fsV coopDeployment
       fsVAddr = validatorHash fsV
@@ -282,8 +282,8 @@ mkMintFsTrx coopDeployment self fsDatum authOut (certOut, certDatum) submitterPp
           <> mustBeSignedBy self
           <> mustBeSignedBy submitterPpkh
           <> mustPayToOtherScript fsVAddr (toDatum fsDatum) (fsVal <> minUtxoAdaValue)
+          <> mustValidateIn trxValidRange
       mintFsTrx =
         mkBurnAuthsTrx coopDeployment self (Map.fromList [authOut])
           <> Trx lookups constraints
-   in -- <> mkBurnCertsTrx
-      (mintFsTrx, assetClass fsCs fsTn)
+   in (mintFsTrx, assetClass fsCs fsTn)

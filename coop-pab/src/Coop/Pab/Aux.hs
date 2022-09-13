@@ -23,6 +23,7 @@ module Coop.Pab.Aux (
   submitTrx,
   findOutsAt',
   findOutsAtHolding',
+  interval',
 ) where
 
 import BotPlutusInterface.Contract (runContract)
@@ -58,6 +59,7 @@ import Plutus.Script.Utils.V2.Scripts (scriptCurrencySymbol, validatorHash)
 import Plutus.V1.Ledger.Api (Address, BuiltinByteString, CurrencySymbol, Datum (Datum, getDatum), DatumHash, FromData (fromBuiltinData), MintingPolicy (MintingPolicy), Script, ToData, TokenName (TokenName), TxId (getTxId), TxOutRef (txOutRefId, txOutRefIdx), Validator, adaSymbol, adaToken, fromBuiltin, toBuiltin, toBuiltinData, toData)
 import Plutus.V1.Ledger.Value (AssetClass (unAssetClass), assetClass, valueOf)
 import Plutus.V1.Ledger.Value qualified as Value
+import Plutus.V2.Ledger.Api (Extended, Interval (Interval), LowerBound (LowerBound), UpperBound (UpperBound))
 import PlutusTx.AssocMap qualified as AssocMap
 import System.Directory (getTemporaryDirectory)
 import System.FilePath ((</>))
@@ -266,3 +268,6 @@ submitTrx (Trx lookups constraints) = do
   logInfo @String $ show (getCardanoTxData tx)
   logInfo @String $ show (getCardanoTxInputs tx)
   awaitTxConfirmed (getCardanoTxId tx)
+
+interval' :: forall a. Extended a -> Extended a -> Interval a
+interval' from to = Interval (LowerBound from False) (UpperBound to False)
