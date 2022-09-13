@@ -128,6 +128,7 @@ test-suite coop-pab-tests
     , plutip
     , plutus-contract
     , plutus-ledger
+    , plutus-ledger-api
     , plutus-script-utils
     , tasty
     , tasty-hunit
@@ -148,13 +149,16 @@ executable coop-pab-cli
     , aeson
     , base
     , bot-plutus-interface
+    , bytestring
     , containers
     , coop-hs-types
     , coop-pab
     , directory
     , filepath
+    , hex
     , optparse-applicative
     , plutus-contract
+    , plutus-ledger
     , plutus-ledger-api
     , plutus-pab
     , process

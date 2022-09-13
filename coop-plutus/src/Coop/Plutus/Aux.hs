@@ -17,15 +17,11 @@ module Coop.Plutus.Aux (
   pcurrencyTokens,
   pdjust,
   pdnothing,
-  pmustSpendFromAddress,
-  pmustMintCurrency,
-  pvalueOfCurrency,
   pmustSpend,
   pmustPayTo,
   pfindOwnInput',
   pfoldTxOutputs,
   pfoldTxInputs,
-  pmustBurnWhatIsSpent,
   pmustHandleSpentWithMp,
   pcurrencyValue,
   pmustSpendAtLeast,
@@ -33,25 +29,23 @@ module Coop.Plutus.Aux (
 
 import Control.Monad.Fail (MonadFail (fail))
 import Plutarch (TermCont, popaque, pto)
-import Plutarch.Api.V1 (AmountGuarantees (NonZero, Positive), KeyGuarantees (Sorted), PAddress, PCurrencySymbol, PDatum, PDatumHash, PMap (PMap), PMaybeData (PDJust, PDNothing), PMintingPolicy, PPOSIXTime, PPubKeyHash, PScriptContext, PScriptPurpose (PMinting, PSpending), PTokenName, PTuple, PTxInInfo, PTxOut, PTxOutRef, PValue (PValue))
 import Plutarch.Api.V1.AssocMap (pempty, plookup, psingleton)
-import Plutarch.Api.V1.Value (pforgetPositive, pnoAdaValue, pnormalize, pvalueOf)
+import Plutarch.Api.V1.Value (pnoAdaValue, pnormalize, pvalueOf)
 import Plutarch.Api.V1.Value qualified as PValue
+import Plutarch.Api.V2 (AmountGuarantees (NonZero), KeyGuarantees (Sorted), PAddress, PCurrencySymbol, PDatum, PDatumHash, PExtended, PInterval (PInterval), PLowerBound (PLowerBound), PMap (PMap), PMaybeData (PDJust, PDNothing), PMintingPolicy, POutputDatum (PNoOutputDatum, POutputDatum, POutputDatumHash), PPOSIXTime, PPubKeyHash, PScriptContext, PScriptPurpose (PMinting, PSpending), PTokenName, PTuple, PTxInInfo, PTxOut, PTxOutRef, PUpperBound, PValue (PValue))
 import Plutarch.Bool (PBool (PTrue))
 import Plutarch.DataRepr (pdcons)
-import Plutarch.Extra.Api (pfindOwnInput)
-import Plutarch.Extra.Interval (pbefore)
+import Plutarch.Extra.Interval (pcontains)
 import Plutarch.Extra.TermCont (pletC, pletFieldsC, pmatchC, ptraceC)
-import Plutarch.List (PIsListLike, PListLike (pelimList, pnil), pany, pfoldr)
+import Plutarch.List (PIsListLike, PListLike (pelimList), pany)
 import Plutarch.Num (PNum ((#+)))
-import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PEq ((#==)), PInteger (), PIsData, PMaybe (PJust, PNothing), PPartialOrd ((#<=)), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pdata, pdnil, pelem, pfield, pfix, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pmap, pmatch, psndBuiltin, ptraceError, ptryFrom, (#), (#$), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PEq ((#==)), PInteger (), PIsData, PMaybe (PJust, PNothing), PPartialOrd ((#<=)), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pconstantData, pdata, pdnil, pelem, pfield, pfind, pfix, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pmap, pmatch, ptraceError, ptryFrom, (#), (#$), type (:-->))
 import Plutarch.TermCont (TermCont (runTermCont), tcont, unTermCont)
-import PlutusTx.Prelude (Group (inv))
-import Prelude (Applicative (pure), Monad ((>>)), Monoid (mempty), Semigroup ((<>)), fst, ($), (<$>), (>>=))
+import PlutusLedgerApi.V1 (Extended (PosInf), UpperBound (UpperBound))
+import Prelude (Applicative (pure), Bool (False, True), Monad ((>>)), Monoid (mempty), fst, ($), (<$>), (>>=))
 
 {- | Check if a 'PValue' contains the given currency symbol.
 NOTE: MangoIV says the plookup should be inlined here
-TODO: Implement in terms of pcurrencyTokens
 -}
 phasCurrency :: forall (q :: AmountGuarantees) (s :: S). Term s (PCurrencySymbol :--> PValue 'PValue.Sorted q :--> PBool)
 phasCurrency = phoistAcyclic $
@@ -105,6 +99,16 @@ pownCurrencySymbol = phoistAcyclic $
       PMinting cs -> pfield @"_0" # cs
       _ -> ptraceError "pownCurrencySymbol: Script purpose is not 'Minting'!"
 
+pfindOwnInputV2 :: Term s (PBuiltinList PTxInInfo :--> PTxOutRef :--> PMaybe PTxInInfo)
+pfindOwnInputV2 = phoistAcyclic $
+  plam $ \inputs outRef ->
+    pfind # (matches # outRef) # inputs
+  where
+    matches :: Term s (PTxOutRef :--> PTxInInfo :--> PBool)
+    matches = phoistAcyclic $
+      plam $ \outref txininfo ->
+        outref #== pfield @"outRef" # txininfo
+
 pfindOwnInput' :: Term s (PScriptContext :--> PTxInInfo)
 pfindOwnInput' = phoistAcyclic $
   plam $ \ctx -> unTermCont do
@@ -114,7 +118,7 @@ pfindOwnInput' = phoistAcyclic $
     pmatchC ctx'.purpose >>= \case
       PSpending txOutRef ->
         pmatchC
-          (pfindOwnInput # txInfo.inputs # (pfield @"_0" # txOutRef))
+          (pfindOwnInputV2 # txInfo.inputs # (pfield @"_0" # txOutRef))
           >>= \case
             PNothing -> fail "pfindOwnInput': Script purpose is not 'Spending'!"
             PJust txInInfo -> pure txInInfo
@@ -201,16 +205,17 @@ pdatumFromTxOut = phoistAcyclic $
     ctx' <- pletFieldsC @'["txInfo"] ctx
     txInfo <- pletFieldsC @'["datums"] ctx'.txInfo
 
-    outDatumHash <-
-      pmaybeDataC
-        (fail "pDatumFromTxOut: no datum present in the output")
-        pure
-        (pfield @"datumHash" # txOut)
     datum <-
-      pmaybeDataC
-        (fail "pDatumFromTxOut: no datum with a given hash present in the transaction datums")
-        pure
-        (pfindDatum # txInfo.datums # outDatumHash)
+      pmatchC (pfield @"datum" # txOut) >>= \case
+        PNoOutputDatum _ -> fail "pDatumFromTxOut: Must have a datum present in the output"
+        POutputDatumHash r -> do
+          ptraceC "pDatumFromTxOut: Got a datum hash"
+          pmatchC (plookup # pfromData (pfield @"datumHash" # r) # txInfo.datums) >>= \case
+            PNothing -> (fail "pDatumFromTxOut: no datum with a given hash present in the transaction datums")
+            PJust datum -> pure datum
+        POutputDatum r -> do
+          ptraceC "pDatumFromTxOut: Got a datum"
+          pure (pfield @"outputDatum" # r)
 
     pure $ pfromData (ptryFromData @a (pto datum))
 
@@ -226,30 +231,43 @@ pmustMint = phoistAcyclic $
       (ptraceC "pmustMint: minted specified quantity" >> pure punit)
       (pvalueOf # mint # cs # tn #== q)
 
-pmustMintCurrency :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PInteger :--> PUnit)
-pmustMintCurrency = phoistAcyclic $
-  plam $ \ctx cs q -> unTermCont do
-    ptraceC "mustMintCurrency"
-    ctx' <- pletFieldsC @'["txInfo"] ctx
-    txInfo <- pletFieldsC @'["mint"] ctx'.txInfo
-    mayMintQ <- pletC $ pvalueOfCurrency # cs # txInfo.mint
-    pboolC
-      (fail "mustMintCurrency: didn't mint the specified quantity")
-      (ptraceC "mustMintCurrency: minted specified quantity" >> pure punit)
-      (pdjust q #== mayMintQ)
-
-pmustValidateAfter :: ClosedTerm (PScriptContext :--> PPOSIXTime :--> PUnit)
+pmustValidateAfter :: ClosedTerm (PScriptContext :--> PExtended PPOSIXTime :--> PUnit)
 pmustValidateAfter = phoistAcyclic $
   plam $ \ctx after -> unTermCont do
     ptraceC "mustValidateAfter"
     ctx' <- pletFieldsC @'["txInfo"] ctx
     txInfo <- pletFieldsC @'["validRange"] (getField @"txInfo" ctx')
 
+    -- (pcontains # certDat.cert'validity # txInfo.validRange)
+
     txValidRange <- pletC $ pfromData $ getField @"validRange" txInfo
     pboolC
       (fail "pmustValidateAfter: transaction validation range is not after 'after'")
       (ptraceC "pmustValidateAfter: transaction validation range is after 'after'" >> pure punit)
-      (pbefore # after # txValidRange)
+      (pcontains # (pinterval' # pdata (plowerBound # after) # pdata pposInf) # txValidRange)
+
+-- | interval from upper and lower
+pinterval' ::
+  forall a (s :: S).
+  PIsData a =>
+  Term
+    s
+    ( PAsData (PLowerBound a)
+        :--> PAsData (PUpperBound a)
+        :--> PInterval a
+    )
+pinterval' = phoistAcyclic $
+  plam $ \lower upper ->
+    pcon $
+      PInterval $
+        pdcons @"from" # lower
+          #$ pdcons @"to" # upper # pdnil
+
+plowerBound :: Term s (PExtended a :--> PLowerBound a)
+plowerBound = phoistAcyclic $ plam \start -> pcon $ PLowerBound $ pdcons @"_0" # pdata start #$ pdcons @"_1" # pconstantData False # pdnil
+
+pposInf :: Term s (PUpperBound PPOSIXTime)
+pposInf = pconstant $ UpperBound PosInf True
 
 pmustBeSignedBy :: ClosedTerm (PScriptContext :--> PPubKeyHash :--> PUnit)
 pmustBeSignedBy = phoistAcyclic $
@@ -262,19 +280,6 @@ pmustBeSignedBy = phoistAcyclic $
       (fail "mustBeSignedBy: pkh didn't sign the transaction")
       (ptraceC "mustBeSignedBy: pkh signed the transaction" >> pure punit)
       (pelem # pdata pkh # sigs)
-
--- | Sums all token quantities for a given currency if it exists in the given value.
-pvalueOfCurrency :: forall (q :: AmountGuarantees). ClosedTerm (PCurrencySymbol :--> PValue 'Sorted q :--> PMaybeData PInteger)
-pvalueOfCurrency = phoistAcyclic $
-  plam $ \cs val -> unTermCont do
-    tokens <- pletC $ pto (pcurrencyTokens # cs # val)
-    pboolC
-      ( do
-          ptraceC "pvalueOfCurrency: currency found"
-          pure $ pdjust $ pfoldr # plam (#+) # 0 # (pmap # plam (\t -> pfromData $ psndBuiltin # t) # tokens)
-      )
-      (ptraceC "pvalueOfCurrency: currency not found" >> pure pdnothing)
-      (tokens #== pnil)
 
 -- | Foldl over transaction outputs
 pfoldTxOutputs :: ClosedTerm (PScriptContext :--> (a :--> PTxOut :--> a) :--> a :--> a)
@@ -364,62 +369,6 @@ pmustSpendAtLeast = phoistAcyclic $
     ptraceC "pmustSpend"
     pure $ pmustSpendPred # ctx # cs # tn # plam (mustSpendAtLeastQ #<=)
 
--- | Checks and sums tokens spend from a given address
-pmustSpendFromAddress :: ClosedTerm (PScriptContext :--> (PValue 'Sorted 'Positive :--> PMaybeData PInteger) :--> PAddress :--> PInteger)
-pmustSpendFromAddress = phoistAcyclic $
-  plam $ \ctx valPred addr -> unTermCont do
-    ptraceC "mustSpendFromAddress"
-    ctx' <- pletFieldsC @'["txInfo"] ctx
-    txInfo <- pletFieldsC @'["inputs"] ctx'.txInfo
-
-    pure $
-      pfoldl
-        # plam
-          ( \spent txInInfo -> unTermCont do
-              resolved <- pletFieldsC @'["value", "address"] $ pfield @"resolved" # txInInfo
-              mayValQ <- pletC $ valPred # resolved.value
-
-              pmaybeDataC
-                (pure spent)
-                ( \q ->
-                    pboolC
-                      (fail "")
-                      (pure $ spent #+ q)
-                      (resolved.address #== addr)
-                )
-                mayValQ
-          )
-        # 0
-        # pfromData txInfo.inputs
-
-pmustBurnWhatIsSpent :: ClosedTerm (PScriptContext :--> PBool)
-pmustBurnWhatIsSpent = phoistAcyclic $
-  plam $ \ctx -> unTermCont do
-    ptraceC "@pmustBurnWhatIsSpent"
-
-    totalSpent <-
-      pletC $
-        pfoldTxInputs # ctx
-          # plam
-            ( \spent txInInfo -> unTermCont do
-                txInOut <- pletC $ pfield @"resolved" # txInInfo
-                txInVal <- pletC $ pfromData $ pfield @"value" # txInOut
-                pure $ spent <> txInVal
-            )
-          # mempty
-
-    ctx' <- pletFieldsC @'["txInfo"] ctx
-    txInfo <- pletFieldsC @'["mint"] ctx'.txInfo
-
-    mintedNoAda <- pletC $ pnoAdaValue # txInfo.mint
-    spentNoAdaInv <- pletC $ inv (pnoAdaValue #$ pforgetPositive totalSpent)
-    spentIsBurned <- pletC $ mintedNoAda #== spentNoAdaInv
-
-    pboolC
-      (fail "pmustBurnWhatIsSpent: Spent is not burned.")
-      (pure $ pcon PTrue)
-      spentIsBurned
-
 pmustHandleSpentWithMp :: ClosedTerm (PScriptContext :--> PBool)
 pmustHandleSpentWithMp = phoistAcyclic $
   plam $ \ctx -> unTermCont do
@@ -430,7 +379,7 @@ pmustHandleSpentWithMp = phoistAcyclic $
     mint <- pletC $ pto $ pfromData txInfo.mint
 
     ownIn <- pletC $ pfindOwnInput' # ctx
-    ownInVal <- pletC $ pfromData $ pfield @"value" # (pfield @"resolved" # ownIn) -- FIXME: nonAda!
+    ownInVal <- pletC $ pnoAdaValue #$ pfield @"value" # (pfield @"resolved" # ownIn)
     pmatchC (pto ownInVal) >>= \case
       PMap elems ->
         pure $

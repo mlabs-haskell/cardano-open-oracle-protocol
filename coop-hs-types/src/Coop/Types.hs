@@ -24,10 +24,10 @@ import GHC.Generics (Generic)
 import PlutusTx qualified
 
 #ifdef NEW_LEDGER_NAMESPACE
-import PlutusLedgerApi.V1 (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, POSIXTimeRange, PubKeyHash)
+import PlutusLedgerApi.V2 (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, Extended, POSIXTimeRange, PubKeyHash)
 import PlutusLedgerApi.V1.Value (AssetClass)
 #else
-import Plutus.V1.Ledger.Api (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, POSIXTimeRange, PubKeyHash)
+import Plutus.V2.Ledger.Api (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, Extended, POSIXTimeRange, PubKeyHash)
 import Plutus.V1.Ledger.Value (AssetClass)
 #endif
 
@@ -57,7 +57,7 @@ type FactStatement = LedgerBytes
 data FsDatum = FsDatum
   { fd'fs :: FactStatement
   , fd'fsId :: LedgerBytes
-  , fs'gcAfter :: POSIXTime
+  , fs'gcAfter :: Extended POSIXTime
   , fs'submitter :: PubKeyHash
   }
   deriving stock (Show, Generic, Eq)

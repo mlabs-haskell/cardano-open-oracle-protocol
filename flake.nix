@@ -5,10 +5,17 @@
 
   inputs = {
     # Plutip maintains a compatible Plutus/Cardano derivation set
+    bot-plutus-interface.url = "github:bladyjoker/bot-plutus-interface/bladyjoker/vasil-use-v2-scripts"; # "git+file:/home/bladyjoker/Desktop/bot-plutus-interface";
+
     plutip.url = "github:mlabs-haskell/plutip/f8f9e4650f09b448ffc5825434eb6f1714f9ddca"; # https://github.com/mlabs-haskell/plutip/releases/tag/vasil-compliant-v1.0.0
+    plutip.inputs.bot-plutus-interface.follows = "bot-plutus-interface";
+    plutip.inputs.haskell-nix.follows = "bot-plutus-interface/haskell-nix";
+    plutip.inputs.iohk-nix.follows = "bot-plutus-interface/iohk-nix";
+    plutip.inputs.nixpkgs.follows = "bot-plutus-interface/nixpkgs";
 
     nixpkgs.follows = "plutip/nixpkgs";
     haskell-nix.follows = "plutip/haskell-nix";
+
 
     flake-utils = {
       url = "github:numtide/flake-utils";
@@ -22,7 +29,8 @@
       flake = false;
     };
 
-    plutarch.url = "github:Plutonomicon/plutarch-plutus/staging";
+    plutarch.url = "github:bladyjoker/plutarch-plutus/bladyjoker/complete-v2-api-reexports";
+    plutarch.inputs.nixpkgs.follows = "nixpkgs";
 
     iohk-nix.follows = "plutip/iohk-nix";
 
@@ -40,6 +48,7 @@
     , iohk-nix
     , plutip
     , nixpkgs-fourmolu
+    , ...
     }:
     flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" ]
       (system:

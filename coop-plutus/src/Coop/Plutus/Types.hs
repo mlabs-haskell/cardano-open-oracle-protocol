@@ -18,7 +18,7 @@ import Data.Typeable (Typeable)
 import GHC.Generics qualified as GHC
 import Generics.SOP (Generic)
 import Plutarch (DerivePlutusType (DPTStrat))
-import Plutarch.Api.V1 (
+import Plutarch.Api.V2 (
   PAddress,
   PCurrencySymbol,
   PExtended,
@@ -48,7 +48,7 @@ newtype PFsDatum s
           ( PDataRecord
               '[ "fd'fs" ':= PByteString
                , "fd'fsId" ':= PByteString
-               , "fd'gcAfter" ':= PPOSIXTime
+               , "fd'gcAfter" ':= PExtended PPOSIXTime
                , "fd'submitter" ':= PPubKeyHash
                ]
           )

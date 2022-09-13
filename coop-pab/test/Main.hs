@@ -19,7 +19,8 @@ import GHC.Natural (Natural)
 import Ledger (PaymentPubKeyHash (unPaymentPubKeyHash), interval)
 import Ledger.Value (AssetClass)
 import Plutus.Contract (currentTime, logInfo, ownFirstPaymentPubKeyHash, throwError, waitNSlots)
-import Plutus.Script.Utils.V1.Address (mkValidatorAddress)
+import Plutus.Script.Utils.V2.Address (mkValidatorAddress)
+import Plutus.V2.Ledger.Api (Extended (NegInf))
 import Test.Plutip.Contract (assertExecutionWith, initAda, withCollateral, withContract, withContractAs)
 import Test.Plutip.Internal.Types (ClusterEnv)
 import Test.Plutip.LocalCluster (BpiWallet, withConfiguredCluster)
@@ -121,7 +122,8 @@ tests coopPlutus =
                       self <- ownFirstPaymentPubKeyHash
                       aaOuts <- findOutsAtHoldingAa self coopDeployment
                       now <- currentTime
-                      let validityInterval = interval now (now + 100_000)
+                      let certValidUntil = now + 5
+                          validityInterval = interval now certValidUntil
                           (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRedeemerAc validityInterval aaOuts
                       submitTrx @Void mintCertTrx
                       return certAc
@@ -131,6 +133,7 @@ tests coopPlutus =
                 2
                 ( \[_god, _aa] -> do
                     logInfo @String "Running as certRedeemerWallet"
+                    _ <- waitNSlots 5 -- NOTE: Should be enough for the $CERT to invalidate
                     self <- ownFirstPaymentPubKeyHash
                     certRedeemerOuts <- findOutsAtHolding' self certRedeemerAc
                     certOuts <- findOutsAtHolding (mkValidatorAddress . ad'certV . cd'auth $ coopDeployment) certAc
@@ -292,9 +295,10 @@ tests coopPlutus =
                         pure
                         mayCertDatum
                     logInfo @String (show certDatum)
-                    let fsDatum = FsDatum "aa" "aa" 0 (unPaymentPubKeyHash submitterWallet)
+                    let fsDatum = FsDatum "aa" "aa" NegInf (unPaymentPubKeyHash submitterWallet)
                         (mintFsTrx, _) = mkMintFsTrx coopDeployment self fsDatum authOut (certOut, certDatum) submitterWallet
                     submitTrx @Void mintFsTrx
+                    waitNSlots 15
                 )
           )
           [shouldSucceed]

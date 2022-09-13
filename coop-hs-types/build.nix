@@ -28,7 +28,7 @@ haskell-nix.cabalProject' {
       hlint
     ];
 
-    additional = ps: [ ps.plutus-ledger-api ];
+    additional = ps: [ ps.plutus-ledger-api ps.plutus-tx ps.serialise ];
 
     tools = {
       cabal = { };
