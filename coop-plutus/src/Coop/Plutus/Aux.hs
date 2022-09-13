@@ -238,8 +238,6 @@ pmustValidateAfter = phoistAcyclic $
     ctx' <- pletFieldsC @'["txInfo"] ctx
     txInfo <- pletFieldsC @'["validRange"] (getField @"txInfo" ctx')
 
-    -- (pcontains # certDat.cert'validity # txInfo.validRange)
-
     txValidRange <- pletC $ pfromData $ getField @"validRange" txInfo
     pboolC
       (fail "pmustValidateAfter: transaction validation range is not after 'after'")
@@ -357,17 +355,12 @@ pmustSpendPred = phoistAcyclic $
 -- | Checks total tokens spent
 pmustSpend :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PBool)
 pmustSpend = phoistAcyclic $
-  plam $ \ctx cs tn mustSpendQ -> unTermCont do
-    ptraceC "pmustSpend"
-    pure $ pmustSpendPred # ctx # cs # tn # plam (#== mustSpendQ)
+  plam $ \ctx cs tn mustSpendQ -> pmustSpendPred # ctx # cs # tn # plam (#== mustSpendQ)
 
 -- | Checks total tokens spent
 pmustSpendAtLeast :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PBool)
 pmustSpendAtLeast = phoistAcyclic $
-  plam $ \ctx cs tn mustSpendAtLeastQ -> unTermCont do
-    ptraceC "pmustSpendAtLeast"
-    ptraceC "pmustSpend"
-    pure $ pmustSpendPred # ctx # cs # tn # plam (mustSpendAtLeastQ #<=)
+  plam $ \ctx cs tn mustSpendAtLeastQ -> pmustSpendPred # ctx # cs # tn # plam (mustSpendAtLeastQ #<=)
 
 pmustHandleSpentWithMp :: ClosedTerm (PScriptContext :--> PBool)
 pmustHandleSpentWithMp = phoistAcyclic $
@@ -382,7 +375,7 @@ pmustHandleSpentWithMp = phoistAcyclic $
     ownInVal <- pletC $ pnoAdaValue #$ pfield @"value" # (pfield @"resolved" # ownIn)
     pmatchC (pto ownInVal) >>= \case
       PMap elems ->
-        pure $
+        pletC $
           pmap
             # plam
               ( \kv -> unTermCont do
