@@ -25,9 +25,8 @@ import Test.Plutip.Contract (assertExecutionWith, initAda, withCollateral, withC
 import Test.Plutip.Internal.Types (ClusterEnv)
 import Test.Plutip.LocalCluster (BpiWallet, withConfiguredCluster)
 import Test.Plutip.Options (TraceOption (ShowBudgets, ShowTraceButOnlyContext))
-import Test.Plutip.Predicate (shouldSucceed, shouldYield)
+import Test.Plutip.Predicate (shouldFail, shouldSucceed, shouldYield)
 import Test.Tasty (TestTree, defaultMain)
-import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Text.Printf (printf)
 
 main :: IO ()
@@ -86,7 +85,7 @@ tests coopPlutus =
         assertExecutionWith
           testOpts
           "mint-cert"
-          -- god <> aa <> certR
+          -- WALLETS: god <> aa <> certR
           (withCollateral $ initAda [50, 50, 50] <> initAda [200] <> initAda [200])
           ( do
               (coopDeployment, certRedeemerAc) <- godDeploysCoop coopPlutus
@@ -110,7 +109,7 @@ tests coopPlutus =
         assertExecutionWith
           testOpts
           "burn-cert"
-          -- god <> aa <> certR
+          -- WALLETS: god <> aa <> certR
           (withCollateral $ initAda [50, 50, 50] <> initAda [200] <> initAda [200])
           ( do
               (coopDeployment, certRedeemerAc) <- godDeploysCoop coopPlutus
@@ -151,7 +150,7 @@ tests coopPlutus =
         assertExecutionWith
           testOpts
           "mint-auth"
-          -- god <> aa <> certR <> authGeorge <> authPeter
+          -- WALLETS: god <> aa <> certR <> authGeorge <> authPeter
           (withCollateral $ initAda [50, 50, 50] <> initAda [200] <> initAda [200] <> initAda [200] <> initAda [200])
           ( do
               (coopDeployment, _) <- godDeploysCoop coopPlutus
@@ -176,7 +175,7 @@ tests coopPlutus =
         assertExecutionWith @_ @Text
           testOpts
           "burn-auth"
-          -- god <> aa <> certR <> authGeorge <> authPeter
+          -- WALLETS: god <> aa <> certR <> authGeorge <> authPeter
           (withCollateral $ initAda [50, 50, 50] <> initAda [200] <> initAda [200] <> initAda [200] <> initAda [200])
           ( do
               (coopDeployment, _) <- godDeploysCoop coopPlutus
@@ -224,7 +223,7 @@ tests coopPlutus =
         assertExecutionWith
           testOpts
           "mint-combined-cert-auth"
-          -- god <> aa <> certR <> authGeorge <> authPeter
+          -- WALLETS: god <> aa <> certR <> authGeorge <> authPeter
           (withCollateral $ initAda [50, 50, 50] <> initAda [200] <> initAda [200] <> initAda [200] <> initAda [200])
           ( do
               (coopDeployment, certRedeemerAc) <- godDeploysCoop coopPlutus
@@ -251,70 +250,69 @@ tests coopPlutus =
           )
           [shouldSucceed, shouldYield [10, 10, 1]]
     , runAfter "mint-combined-cert-auth" $
-        (ignoreTestBecause "Still no reference inputs support" .)
-          <$> assertExecutionWith
-            testOpts
-            "mint-fs"
-            -- god <> aa <> certRedeemer <> authWallet <> submitterWallet
-            (withCollateral $ initAda [50, 50, 50] <> initAda [200] <> initAda [200] <> initAda [200] <> initAda [200])
-            ( do
-                (coopDeployment, certRedeemerAc) <- godDeploysCoop coopPlutus
+        assertExecutionWith -- FIXME: This test shouldSucceed
+          testOpts
+          "mint-fs"
+          -- WALLETS: god <> aa <> certRedeemer <> authWallet <> submitterWallet
+          (withCollateral $ initAda [50, 50, 50] <> initAda [200] <> initAda [200] <> initAda [200] <> initAda [200])
+          ( do
+              (coopDeployment, certRedeemerAc) <- godDeploysCoop coopPlutus
 
-                (authAc, certAc) <-
-                  withSuccessContract @String
-                    1
-                    ( \[_god, _certR, authWallet, _sub] -> do
-                        logInfo @String "Running as aaWallet"
-                        _ <- waitNSlots slotsToWait
-                        self <- ownFirstPaymentPubKeyHash
-                        aaOuts <- findOutsAtHoldingAa self coopDeployment
-                        now <- currentTime
-                        let validityInterval = interval' (Finite now) PosInf
-                        let (mintAuthTrx, authAc) = mkMintAuthTrx coopDeployment self [authWallet] 1 aaOuts -- TODO: Enable $AUTH outputs with more than 1 Q
-                            (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRedeemerAc validityInterval aaOuts
-                        submitTrx @Void (mintAuthTrx <> mintCertTrx)
-                        return (authAc, certAc)
-                    )
-
-                withContractAs @String
-                  3
-                  ( \[_god, _aa, _certR, submitterWallet] -> do
-                      logInfo @String "Running as authWallet"
+              (authAc, certAc) <-
+                withSuccessContract @String
+                  1
+                  ( \[_god, _certR, authWallet, _sub] -> do
+                      logInfo @String "Running as aaWallet"
+                      _ <- waitNSlots slotsToWait
                       self <- ownFirstPaymentPubKeyHash
-                      authOuts <- findOutsAtHolding' self authAc
-                      authOut <- case Map.toList authOuts of
-                        [] -> throwError "Must find at least one $AUTH token"
-                        (out : _) -> return out
-
-                      certOuts <- findOutsAtHolding (mkValidatorAddress . ad'certV . cd'auth $ coopDeployment) certAc
-                      certOut <- case Map.toList certOuts of
-                        [] -> throwError "Must find at least one $CERT token"
-                        (out : _) -> return out
-                      mayCertDatum <- datumFromTxOut $ snd certOut
-                      certDatum <-
-                        maybe
-                          (throwError "Must find a CertDatum")
-                          pure
-                          mayCertDatum
+                      aaOuts <- findOutsAtHoldingAa self coopDeployment
                       now <- currentTime
-                      let (UpperBound toExt _) = ivTo . cert'validity $ certDatum
-                      let fsDatum = FsDatum "aa" "aa" NegInf (unPaymentPubKeyHash submitterWallet)
-                          (mintFsTrx, fsAc) =
-                            mkMintFsTrx
-                              coopDeployment
-                              self
-                              (interval' (Finite now) toExt)
-                              fsDatum
-                              authOut
-                              (certOut, certDatum)
-                              submitterWallet
-                      -- FIXME: This test passes allthough it shouldn't
-                      submitTrx @Void mintFsTrx
-                      fsOuts <- findOutsAtHolding (mkValidatorAddress . cd'fsV $ coopDeployment) fsAc
-                      return [ciValueOf fsAc out | out <- toList fsOuts]
+                      let validityInterval = interval' (Finite now) PosInf
+                      let (mintAuthTrx, authAc) = mkMintAuthTrx coopDeployment self [authWallet] 1 aaOuts -- TODO: Enable $AUTH outputs with more than 1 Q
+                          (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRedeemerAc validityInterval aaOuts
+                      submitTrx @Void (mintAuthTrx <> mintCertTrx)
+                      return (authAc, certAc)
                   )
-            )
-            [shouldSucceed, shouldYield [1]]
+
+              withContractAs @String
+                3
+                ( \[_god, _aa, _certR, submitterWallet] -> do
+                    logInfo @String "Running as authWallet"
+                    self <- ownFirstPaymentPubKeyHash
+                    authOuts <- findOutsAtHolding' self authAc
+                    authOut <- case Map.toList authOuts of
+                      [] -> throwError "Must find at least one $AUTH token"
+                      (out : _) -> return out
+
+                    certOuts <- findOutsAtHolding (mkValidatorAddress . ad'certV . cd'auth $ coopDeployment) certAc
+                    certOut <- case Map.toList certOuts of
+                      [] -> throwError "Must find at least one $CERT token"
+                      (out : _) -> return out
+                    mayCertDatum <- datumFromTxOut $ snd certOut
+                    certDatum <-
+                      maybe
+                        (throwError "Must find a CertDatum")
+                        pure
+                        mayCertDatum
+                    now <- currentTime
+                    let (UpperBound toExt _) = ivTo . cert'validity $ certDatum
+                    let fsDatum = FsDatum "aa" "aa" NegInf (unPaymentPubKeyHash submitterWallet)
+                        (mintFsTrx, fsAc) =
+                          mkMintFsTrx
+                            coopDeployment
+                            self
+                            (interval' (Finite now) toExt)
+                            fsDatum
+                            authOut
+                            (certOut, certDatum)
+                            submitterWallet
+                    -- FIXME: This test passes allthough it shouldn't
+                    submitTrx @Void mintFsTrx
+                    fsOuts <- findOutsAtHolding (mkValidatorAddress . cd'fsV $ coopDeployment) fsAc
+                    return [ciValueOf fsAc out | out <- toList fsOuts]
+                )
+          )
+          [shouldFail] -- TODO: , shouldYield [1]
     ]
 
 godDeploysCoop :: CoopPlutus -> ReaderT (ClusterEnv, NonEmpty BpiWallet) IO (CoopDeployment, AssetClass)
