@@ -70,3 +70,7 @@ Legend:
 ### $AUTH and $CERT-RDMR wallet
 
 ### $FEE wallet
+
+## References
+
+- [Eternal keys considered harmful #34](https://github.com/mlabs-haskell/cardano-open-oracle-protocol/issues/34)
