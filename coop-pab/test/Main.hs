@@ -27,7 +27,7 @@ import Test.Plutip.LocalCluster (BpiWallet, withConfiguredCluster)
 import Test.Plutip.Options (TraceOption (ShowBudgets, ShowTraceButOnlyContext))
 import Test.Plutip.Predicate (shouldSucceed, shouldYield)
 import Test.Tasty (TestTree, defaultMain)
-import Test.Tasty.ExpectedFailure (expectFailBecause)
+import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Text.Printf (printf)
 
 main :: IO ()
@@ -251,7 +251,7 @@ tests coopPlutus =
           )
           [shouldSucceed, shouldYield [10, 10, 1]]
     , runAfter "mint-combined-cert-auth" $
-        (expectFailBecause "Still no reference inputs support" .)
+        (ignoreTestBecause "Still no reference inputs support" .)
           <$> assertExecutionWith
             testOpts
             "mint-fs"
