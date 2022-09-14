@@ -55,6 +55,28 @@ deployOpts =
           <> value "coop-deployment.json"
           <> showDefault
       )
+    <*> strOption
+      ( long "god-wallet-file"
+          <> metavar "GOD_WALLET_FILE"
+          <> help "God wallet"
+          <> value "TODO: Sort out wallet management"
+          <> showDefault
+      )
+    <*> strOption
+      ( long "aa-wallet-file"
+          <> metavar "AA_WALLET_FILE"
+          <> help "AA wallet"
+          <> value "TODO: Sort out wallet management"
+          <> showDefault
+      )
+    <*> option
+      auto
+      ( long "aa-to-mint"
+          <> metavar "AA_Q"
+          <> help "$AA (authentication authority) tokens to mint"
+          <> value 1
+          <> showDefault
+      )
 
 options :: Parser Command
 options =

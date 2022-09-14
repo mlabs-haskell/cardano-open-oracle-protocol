@@ -7,37 +7,38 @@ data Arity
   | Multiple
 
 data UTXOData (arity :: Arity) (isSequential :: Bool) = MkUTXOData
-  { -- | specifies whether you have a primitive datum or a composition
-    --   of them
-    isPrimitive :: Bool
-  , -- | function(s) from the URI of the Datum, see URI type
-    --   to the NFT identifying the UTXOData
-    typeId :: MkTypeId arity
+  { isPrimitive :: Bool
+  -- ^ specifies whether you have a primitive datum or a composition
+  --   of them
+  , typeId :: MkTypeId arity
+  -- ^ function(s) from the URI of the Datum, see URI type
+  --   to the NFT identifying the UTXOData
   , metadata :: MetaData
-  , -- | the actual data attached to the UTXOData
-    datum :: [(URIHash, Data)]
-  , -- | optional link back to predecessor nodes
-    --   TODO: Is this necessary? Maybe it could be derived from the URI
-    predecessors :: MkPredecessor arity isSequential
+  , datum :: [(URIHash, Data)]
+  -- ^ the actual data attached to the UTXOData
+  , predecessors :: MkPredecessor arity isSequential
+  -- ^ optional link back to predecessor nodes
+  --   TODO: Is this necessary? Maybe it could be derived from the URI
   }
 
 data MetaData = MkMetaData
-  { -- | datum is valid from, until
-    validityInterval :: POSIXInterval
-  , -- | to gain back a part of the spent money for the locked
-    --   UTXOs, onChainUntil >= validityInterval.upperBound
-    timeToLive :: Extended POSIXTime
-    -- NOTE: this can also be `UpperBound` to include Closure information
+  { validityInterval :: POSIXInterval
+  -- ^ datum is valid from, until
+  , timeToLive :: Extended POSIXTime
+  -- ^ to gain back a part of the spent money for the locked
+  --   UTXOs, onChainUntil >= validityInterval.upperBound
   }
+
+-- NOTE: this can also be `UpperBound` to include Closure information
 
 -- | The URI of a specific Datum
 data URI = MkURI
-  { -- | the ID of a stream, e.g. the orcfax specific currency symbol
-    streamID :: CurrencySymbol
-  , -- | semantical category of the stream, e.g. "cardano/coin/prices"
-    categorization :: ByteString
-  , -- | the UID specialising the instance of a category of `dataStreamName`
-    dataUid :: ByteString
+  { streamID :: CurrencySymbol
+  -- ^ the ID of a stream, e.g. the orcfax specific currency symbol
+  , categorization :: ByteString
+  -- ^ semantical category of the stream, e.g. "cardano/coin/prices"
+  , dataUid :: ByteString
+  -- ^ the UID specialising the instance of a category of `dataStreamName`
   }
 
 -- | The (onchain-computable) hash of a datum-URI

@@ -1,127 +1,151 @@
 {-# LANGUAGE CPP #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Coop.Types (
   CoopPlutus (..),
   CoopDeployment (..),
   FsMpParams (..),
-  FsVParams (..),
-  FsDescription (),
+  FsMpRedeemer (..),
   FactStatement (),
   FsDatum (..),
+  CertDatum (..),
+  AuthParams (..),
+  AuthMpParams (..),
+  AuthMpRedeemer (..),
+  CertMpParams (..),
+  CertMpRedeemer (..),
+  AuthDeployment (..),
 ) where
 
-import Codec.Serialise (deserialise, serialise)
-import Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON))
-import Data.Aeson.Types (prependFailure, typeMismatch)
-import Data.Aeson.Types qualified as Aeson
-import Data.ByteString (ByteString)
-import Data.ByteString.Base16 qualified as Base16S
-import Data.ByteString.Lazy (fromStrict, toStrict)
-import Data.Text.Encoding (decodeUtf8, encodeUtf8)
+import Control.Lens (makeFields)
+import Coop.PlutusOrphans ()
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import PlutusTx qualified
 
 #ifdef NEW_LEDGER_NAMESPACE
-import PlutusLedgerApi.V1 (Script, LedgerBytes(LedgerBytes), PubKeyHash, CurrencySymbol, Address, BuiltinByteString, fromBuiltin, toBuiltin, Credential, StakingCredential, ValidatorHash, Validator, MintingPolicy)
+import PlutusLedgerApi.V2 (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, Extended, POSIXTimeRange, PubKeyHash)
+import PlutusLedgerApi.V1.Value (AssetClass)
 #else
-import Plutus.V1.Ledger.Api (Script, LedgerBytes(LedgerBytes), PubKeyHash, CurrencySymbol, Address, BuiltinByteString, fromBuiltin, toBuiltin, Credential, StakingCredential, ValidatorHash, Validator, MintingPolicy)
+import Plutus.V2.Ledger.Api (Script, LedgerBytes, CurrencySymbol, Address, Validator, MintingPolicy, POSIXTime, Extended, POSIXTimeRange, PubKeyHash)
+import Plutus.V1.Ledger.Value (AssetClass)
 #endif
 
 data CoopPlutus = CoopPlutus
-  { cp'mkCoopInstanceMp :: Script
+  { cp'mkNftMp :: Script
+  , cp'mkAuthMp :: Script
+  , cp'mkCertMp :: Script
+  , cp'certV :: Script
   , cp'mkFsMp :: Script
-  , cp'mkFsV :: Script
+  , cp'fsV :: Script
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
 data CoopDeployment = CoopDeployment
-  { cd'fsMpParams :: FsMpParams
+  { cd'coopAc :: AssetClass
   , cd'fsMp :: MintingPolicy
-  , cd'fsVParams :: FsVParams
   , cd'fsV :: Validator
+  , cd'auth :: AuthDeployment
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
--- Plutus types
-type FsDescription = LedgerBytes
+-- | Plutus types
 type FactStatement = LedgerBytes
 
 data FsDatum = FsDatum
-  { fd'submittedBy :: PubKeyHash
-  , fd'publishedBy :: PubKeyHash
-  , fd'description :: FsDescription
-  , fd'fs :: FactStatement
+  { fd'fs :: FactStatement
+  , fd'fsId :: LedgerBytes
+  , fs'gcAfter :: Extended POSIXTime
+  , fs'submitter :: PubKeyHash
   }
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
 
 data FsMpParams = FsMpParams
-  { fmp'coopInstance :: CurrencySymbol -- provided by the one shot mp,
+  { fmp'coopAc :: AssetClass -- provided by the one shot mp,
   , fmp'fsVAddress :: Address
+  , fmp'authParams :: AuthParams
   }
   deriving stock (Show, Generic, Eq, Typeable)
   deriving anyclass (ToJSON, FromJSON)
 
-newtype FsVParams = FsVParams
-  { fvp'coopInstance :: CurrencySymbol -- provided by the one shot mp
+data FsMpRedeemer = FsMpBurn | FsMpMint
+  deriving stock (Show, Generic, Eq, Typeable)
+  deriving anyclass (ToJSON, FromJSON)
+
+-- | Authentication Tokens and Certificates
+data AuthDeployment = AuthDeployment
+  { ad'authorityAc :: AssetClass
+  , ad'certV :: Validator
+  , ad'certMp :: MintingPolicy
+  , ad'authMp :: MintingPolicy
   }
   deriving stock (Show, Generic, Eq, Typeable)
   deriving anyclass (ToJSON, FromJSON)
 
--- Missing instances
-instance ToJSON Script where
-  toJSON = toJSON . toStrict . serialise
+data AuthParams = AuthParams
+  { ap'authTokenCs :: CurrencySymbol
+  , ap'certTokenCs :: CurrencySymbol
+  }
+  deriving stock (Show, Generic, Eq)
+  deriving anyclass (ToJSON, FromJSON)
 
-instance FromJSON Script where
-  parseJSON json = deserialise . fromStrict <$> parseJSON json
+data CertDatum = CertDatum
+  { cert'id :: LedgerBytes
+  , cert'validity :: POSIXTimeRange
+  , cert'redeemerAc :: AssetClass
+  }
+  deriving stock (Show, Generic, Eq)
+  deriving anyclass (ToJSON, FromJSON)
 
-instance ToJSON ByteString where
-  toJSON = toJSON . decodeUtf8 . Base16S.encode
+data CertMpRedeemer = CertMpBurn | CertMpMint
+  deriving stock (Show, Generic, Eq, Typeable)
+  deriving anyclass (ToJSON, FromJSON)
 
-instance FromJSON ByteString where
-  parseJSON (Aeson.String text) = either fail pure (Base16S.decode . encodeUtf8 $ text)
-  parseJSON invalid =
-    prependFailure
-      "parsing ByteString failed, "
-      (typeMismatch "base16 encoded bytes" invalid)
+data CertMpParams = CertMpParams
+  { cmp'authAuthorityAc :: AssetClass
+  , cmp'requiredAtLeastAaQ :: Integer -- How many $AA tokens required at least?
+  , cmp'certVAddress :: Address
+  }
+  deriving stock (Show, Generic, Eq)
+  deriving anyclass (ToJSON, FromJSON)
 
-instance ToJSON MintingPolicy
-instance FromJSON MintingPolicy
+data AuthMpRedeemer = AuthMpBurn | AuthMpMint
+  deriving stock (Show, Generic, Eq, Typeable)
+  deriving anyclass (ToJSON, FromJSON)
 
-instance ToJSON Validator
-instance FromJSON Validator
+data AuthMpParams = AuthMpParams
+  { amp'authAuthorityAc :: AssetClass
+  , amp'requiredAtLeastAaQ :: Integer -- How many $AA tokens required at least?
+  }
+  deriving stock (Show, Generic, Eq)
+  deriving anyclass (ToJSON, FromJSON)
 
-instance ToJSON PubKeyHash
-instance FromJSON PubKeyHash
-
-instance ToJSON Address
-instance FromJSON Address
-
-instance ToJSON CurrencySymbol
-instance FromJSON CurrencySymbol
-
-instance ToJSON Credential
-instance FromJSON Credential
-
-instance ToJSON StakingCredential
-instance FromJSON StakingCredential
-
-instance ToJSON ValidatorHash
-instance FromJSON ValidatorHash
-
-deriving newtype instance ToJSON LedgerBytes
-deriving newtype instance FromJSON LedgerBytes
-
-instance ToJSON BuiltinByteString where
-  toJSON = toJSON . fromBuiltin @_ @ByteString
-
-instance FromJSON BuiltinByteString where
-  parseJSON v = toBuiltin <$> parseJSON @ByteString v
+-- | Plutus ToData/FromData instances
+PlutusTx.unstableMakeIsData ''CertDatum
+PlutusTx.unstableMakeIsData ''AuthParams
+PlutusTx.unstableMakeIsData ''CertMpParams
+PlutusTx.unstableMakeIsData ''CertMpRedeemer
+PlutusTx.unstableMakeIsData ''AuthMpParams
+PlutusTx.unstableMakeIsData ''AuthMpRedeemer
 
 PlutusTx.unstableMakeIsData ''FsMpParams
-PlutusTx.unstableMakeIsData ''FsVParams
 PlutusTx.unstableMakeIsData ''FsDatum
+PlutusTx.unstableMakeIsData ''FsMpRedeemer
+
+-- | Lenses
+makeFields ''CoopPlutus
+makeFields ''CoopDeployment
+makeFields ''FsMpParams
+makeFields ''FsDatum
+makeFields ''FsMpRedeemer
+
+makeFields ''AuthDeployment
+makeFields ''CertDatum
+makeFields ''AuthParams
+makeFields ''CertMpParams
+makeFields ''CertMpRedeemer
+makeFields ''AuthMpParams
+makeFields ''AuthMpRedeemer

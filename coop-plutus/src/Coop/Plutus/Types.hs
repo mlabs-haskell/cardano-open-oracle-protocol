@@ -3,33 +3,42 @@
 
 module Coop.Plutus.Types (
   PFsMpParams (..),
-  PFsVParams (..),
+  PFsMpRedeemer (..),
   PFsDatum (..),
+  PCertDatum (..),
+  PAuthParams (..),
+  PAuthMpParams (..),
+  PAuthMpRedeemer (..),
+  PCertMpParams (..),
+  PCertMpRedeemer (..),
 ) where
 
-import Coop.Types (FsMpParams, FsVParams)
+import Coop.Types (AuthMpParams, AuthMpRedeemer, AuthParams, CertDatum, CertMpParams, CertMpRedeemer, FsDatum, FsMpParams, FsMpRedeemer)
 import Data.Typeable (Typeable)
 import GHC.Generics qualified as GHC
 import Generics.SOP (Generic)
 import Plutarch (DerivePlutusType (DPTStrat))
-import Plutarch.Api.V1 (
+import Plutarch.Api.V2 (
   PAddress,
-  PCurrencySymbol (PCurrencySymbol),
-  PPubKeyHash (PPubKeyHash),
+  PCurrencySymbol,
+  PExtended,
+  PInterval,
+  PLowerBound,
+  PPOSIXTime,
+  PPOSIXTimeRange,
+  PPubKeyHash,
+  PTokenName,
+  PTuple,
+  PUpperBound,
  )
-import Plutarch.Bool ((#||))
-import Plutarch.ByteString (PByteString, plengthBS)
+import Plutarch.ByteString (PByteString)
 import Plutarch.DataRepr (
   DerivePConstantViaData (DerivePConstantViaData),
   PDataFields,
   PlutusTypeData,
  )
 import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
-import Plutarch.Prelude (PAsData, PData, PDataRecord, PEq ((#==)), PIsData, PLabeledType ((:=)), PTryFrom, PlutusType, Term, pcon, pif, plet, ptraceError, ptryFrom, (#))
-import Plutarch.TermCont (TermCont (runTermCont), tcont)
-import Plutarch.TryFrom (PTryFrom (PTryFromExcess, ptryFrom'))
-import Plutarch.Unsafe (punsafeCoerce)
-import Prelude (Applicative (pure), snd, ($), (.))
+import Plutarch.Prelude (PAsData, PBool, PData, PDataRecord, PEq, PInteger, PIsData, PLabeledType ((:=)), PTryFrom, PlutusType, S, Term)
 
 -- TODO: Add Plutarch type plumbage for FactStatement
 newtype PFsDatum s
@@ -37,36 +46,40 @@ newtype PFsDatum s
       ( Term
           s
           ( PDataRecord
-              '[ "fd'submittedBy" ':= PPubKeyHash
-               , "fd'publishedBy" ':= PPubKeyHash
-               , "fd'description" ':= PByteString
-               , "fd'factStatement" ':= PByteString
+              '[ "fd'fs" ':= PByteString
+               , "fd'fsId" ':= PByteString
+               , "fd'gcAfter" ':= PExtended PPOSIXTime
+               , "fd'submitter" ':= PPubKeyHash
                ]
           )
       )
-  deriving stock (GHC.Generic)
+  deriving stock (GHC.Generic, Typeable)
   deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
 
 instance DerivePlutusType PFsDatum where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PFsDatum where type PLifted PFsDatum = FsDatum
+deriving via (DerivePConstantViaData FsDatum PFsDatum) instance (PConstantDecl FsDatum)
 instance PTryFrom PData (PAsData PFsDatum)
 
--- FIXME: Integrate https://github.com/Plutonomicon/plutarch-plutus/pull/520
-instance PTryFrom PData (PAsData PPubKeyHash) where
-  type PTryFromExcess PData (PAsData PPubKeyHash) = Flip Term PPubKeyHash
-  ptryFrom' opq = runTermCont $ do
-    unwrapped <- tcont . plet $ ptryFrom @(PAsData PByteString) opq snd
-    tcont $ \f -> pif (plengthBS # unwrapped #== 28) (f ()) (ptraceError "a PubKeyHash must be 28 bytes long")
-    pure (punsafeCoerce opq, pcon . PPubKeyHash $ unwrapped)
+data PFsMpRedeemer s
+  = PFsMpBurn (Term s (PDataRecord '[]))
+  | PFsMpMint (Term s (PDataRecord '[]))
+  deriving stock (GHC.Generic, Typeable)
+  deriving anyclass (Generic, PlutusType, PIsData, PEq)
 
-newtype Flip f a b = Flip (f b a) deriving stock (GHC.Generic)
+instance DerivePlutusType PFsMpRedeemer where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PFsMpRedeemer where type PLifted PFsMpRedeemer = FsMpRedeemer
+deriving via (DerivePConstantViaData FsMpRedeemer PFsMpRedeemer) instance (PConstantDecl FsMpRedeemer)
+instance PTryFrom PData (PAsData PFsMpRedeemer)
 
 newtype PFsMpParams s
   = PFsMpParams
       ( Term
           s
           ( PDataRecord
-              '[ "fmp'coopInstance" ':= PCurrencySymbol
+              '[ "fmp'coopAc" ':= PTuple PCurrencySymbol PTokenName
                , "fmp'fsVAddress" ':= PAddress
+               , "fmp'authParams" ':= PAuthParams
                ]
           )
       )
@@ -76,28 +89,112 @@ newtype PFsMpParams s
 instance DerivePlutusType PFsMpParams where type DPTStrat _ = PlutusTypeData
 instance PUnsafeLiftDecl PFsMpParams where type PLifted PFsMpParams = FsMpParams
 deriving via (DerivePConstantViaData FsMpParams PFsMpParams) instance (PConstantDecl FsMpParams)
+instance PTryFrom PData (PAsData PFsMpParams)
 
-instance PTryFrom PData (PAsData PCurrencySymbol) where
-  type PTryFromExcess PData (PAsData PCurrencySymbol) = Flip Term PCurrencySymbol
-  ptryFrom' opq = runTermCont $ do
-    unwrapped <- tcont . plet $ ptryFrom @(PAsData PByteString) opq snd
-    len <- tcont . plet $ plengthBS # unwrapped
-    tcont $ \f ->
-      pif (len #== 0 #|| len #== 28) (f ()) (ptraceError "a CurrencySymbol must be 28 bytes long or empty")
-    pure (punsafeCoerce opq, pcon . PCurrencySymbol $ unwrapped)
-
-newtype PFsVParams s
-  = PFsVParams
+newtype PAuthParams s
+  = PAuthParams
       ( Term
           s
           ( PDataRecord
-              '[ "fvp'coopInstance" ':= PCurrencySymbol
+              '[ "ap'authTokenCs" ':= PCurrencySymbol
+               , "ap'certTokenCs" ':= PCurrencySymbol
                ]
           )
       )
   deriving stock (GHC.Generic, Typeable)
-  deriving anyclass (Generic, PlutusType, PIsData, PEq, PDataFields)
+  deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
 
-instance DerivePlutusType PFsVParams where type DPTStrat _ = PlutusTypeData
-instance PUnsafeLiftDecl PFsVParams where type PLifted PFsVParams = FsVParams
-deriving via (DerivePConstantViaData FsVParams PFsVParams) instance (PConstantDecl FsVParams)
+instance DerivePlutusType PAuthParams where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PAuthParams where type PLifted PAuthParams = AuthParams
+deriving via (DerivePConstantViaData AuthParams PAuthParams) instance (PConstantDecl AuthParams)
+instance PTryFrom PData (PAsData PAuthParams)
+
+newtype PCertDatum (s :: S)
+  = PCertDatum
+      ( Term
+          s
+          ( PDataRecord
+              '[ "cert'id" ':= PByteString
+               , "cert'validity" ':= PPOSIXTimeRange
+               , "cert'redeemerAc" ':= PTuple PCurrencySymbol PTokenName
+               ]
+          )
+      )
+  deriving stock (GHC.Generic)
+  deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
+
+instance DerivePlutusType PCertDatum where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PCertDatum where type PLifted PCertDatum = CertDatum
+deriving via (DerivePConstantViaData CertDatum PCertDatum) instance (PConstantDecl CertDatum)
+instance PTryFrom PData (PAsData PCertDatum)
+
+newtype PAuthMpParams (s :: S)
+  = PAuthMpParams
+      ( Term
+          s
+          ( PDataRecord
+              '[ "amp'authAuthorityAc" ':= PTuple PCurrencySymbol PTokenName
+               , "amp'requiredAtLeastAaQ" ':= PInteger
+               ]
+          )
+      )
+  deriving stock (GHC.Generic)
+  deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
+
+instance DerivePlutusType PAuthMpParams where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PAuthMpParams where type PLifted PAuthMpParams = AuthMpParams
+deriving via (DerivePConstantViaData AuthMpParams PAuthMpParams) instance (PConstantDecl AuthMpParams)
+instance PTryFrom PData (PAsData PAuthMpParams)
+
+data PAuthMpRedeemer s
+  = PAuthMpBurn (Term s (PDataRecord '[]))
+  | PAuthMpMint (Term s (PDataRecord '[]))
+  deriving stock (GHC.Generic, Typeable)
+  deriving anyclass (Generic, PlutusType, PIsData, PEq)
+
+instance DerivePlutusType PAuthMpRedeemer where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PAuthMpRedeemer where type PLifted PAuthMpRedeemer = AuthMpRedeemer
+deriving via (DerivePConstantViaData AuthMpRedeemer PAuthMpRedeemer) instance (PConstantDecl AuthMpRedeemer)
+instance PTryFrom PData (PAsData PAuthMpRedeemer)
+
+newtype PCertMpParams (s :: S)
+  = PCertMpParams
+      ( Term
+          s
+          ( PDataRecord
+              '[ "cmp'authAuthorityAc" ':= PTuple PCurrencySymbol PTokenName
+               , "cmp'requiredAtLeastAaQ" ':= PInteger
+               , "cmp'certVAddress" ':= PAddress
+               ]
+          )
+      )
+  deriving stock (GHC.Generic)
+  deriving anyclass (Generic, PlutusType, PIsData, PEq, PTryFrom PData, PDataFields)
+
+instance DerivePlutusType PCertMpParams where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PCertMpParams where type PLifted PCertMpParams = CertMpParams
+deriving via (DerivePConstantViaData CertMpParams PCertMpParams) instance (PConstantDecl CertMpParams)
+instance PTryFrom PData (PAsData PCertMpParams)
+
+data PCertMpRedeemer s
+  = PCertMpBurn (Term s (PDataRecord '[]))
+  | PCertMpMint (Term s (PDataRecord '[]))
+  deriving stock (GHC.Generic, Typeable)
+  deriving anyclass (Generic, PlutusType, PIsData, PEq)
+
+instance DerivePlutusType PCertMpRedeemer where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PCertMpRedeemer where type PLifted PCertMpRedeemer = CertMpRedeemer
+deriving via (DerivePConstantViaData CertMpRedeemer PCertMpRedeemer) instance (PConstantDecl CertMpRedeemer)
+instance PTryFrom PData (PAsData PCertMpRedeemer)
+
+-- FIXME: Purge this when Plutarch supports it
+instance PTryFrom PData (PAsData PBool)
+instance PTryFrom PData (PExtended PPOSIXTime)
+instance PTryFrom PData (PUpperBound PPOSIXTime)
+instance PTryFrom PData (PLowerBound PPOSIXTime)
+instance PTryFrom PData (PInterval PPOSIXTime)
+
+instance PTryFrom PData (PAsData (PExtended PPOSIXTime))
+instance PTryFrom PData (PAsData (PUpperBound PPOSIXTime))
+instance PTryFrom PData (PAsData (PLowerBound PPOSIXTime))
+instance PTryFrom PData (PAsData (PInterval PPOSIXTime))

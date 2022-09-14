@@ -2,9 +2,9 @@
 
 module Coop.Cli.Compile (CompileOpts (..), CompileMode (..), compile) where
 
-import Coop.Plutus (mkFsMp, mkFsV)
+import Coop.Plutus (certV, fsV, mkAuthMp, mkCertMp, mkFsMp)
 import Coop.Plutus.Aux (mkOneShotMintingPolicy)
-import Coop.Types (CoopPlutus (CoopPlutus, cp'mkCoopInstanceMp, cp'mkFsMp, cp'mkFsV))
+import Coop.Types (CoopPlutus (CoopPlutus, cp'certV, cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkNftMp))
 import Data.Aeson (encode)
 import Data.ByteString.Lazy (writeFile)
 import Plutarch (Config (Config), TracingMode (DoTracing, NoTracing))
@@ -23,15 +23,21 @@ compile opts = do
   let cfg = case co'Mode opts of
         COMPILE_PROD -> Config NoTracing
         COMPILE_DEBUG -> Config DoTracing
-  instMp <- either (\err -> fail $ "Failed compiling mkCoopInstanceMp with " <> show err) pure (Plutarch.compile cfg mkOneShotMintingPolicy)
-  resMp <- either (\err -> fail $ "Failed compiling mkFsMp with " <> show err) pure (Plutarch.compile cfg mkFsMp)
-  resV <- either (\err -> fail $ "Failed compiling mkFsV with " <> show err) pure (Plutarch.compile cfg mkFsV)
+  mkNftMp' <- either (\err -> fail $ "Failed compiling mkNftMp with " <> show err) pure (Plutarch.compile cfg mkOneShotMintingPolicy)
+  mkAuthMp' <- either (\err -> fail $ "Failed compiling mkAuthMp with " <> show err) pure (Plutarch.compile cfg mkAuthMp)
+  mkCertMp' <- either (\err -> fail $ "Failed compiling mkCertMp with " <> show err) pure (Plutarch.compile cfg mkCertMp)
+  certV' <- either (\err -> fail $ "Failed compiling certV with " <> show err) pure (Plutarch.compile cfg certV)
+  mkFsMp' <- either (\err -> fail $ "Failed compiling mkFsMp with " <> show err) pure (Plutarch.compile cfg mkFsMp)
+  fsV' <- either (\err -> fail $ "Failed compiling fsV with " <> show err) pure (Plutarch.compile cfg fsV)
 
   let cs =
         CoopPlutus
-          { cp'mkCoopInstanceMp = instMp
-          , cp'mkFsMp = resMp
-          , cp'mkFsV = resV
+          { cp'mkNftMp = mkNftMp'
+          , cp'mkAuthMp = mkAuthMp'
+          , cp'mkCertMp = mkCertMp'
+          , cp'certV = certV'
+          , cp'mkFsMp = mkFsMp'
+          , cp'fsV = fsV'
           }
   Data.ByteString.Lazy.writeFile (co'File opts) (encode cs)
   return ()

@@ -93,16 +93,21 @@ library
     , aeson
     , base
     , bot-plutus-interface
+    , bytestring
     , containers
     , coop-hs-types
+    , cryptonite
     , directory
     , filepath
+    , lens
+    , memory
     , plutip
     , plutus-contract
     , plutus-ledger
     , plutus-ledger-api
     , plutus-pab
     , plutus-script-utils
+    , plutus-tx
     , process
     , stm
     , text
@@ -111,18 +116,27 @@ library
 test-suite coop-pab-tests
   import:         common-language
   build-depends:
+    , aeson
     , base
+    , bot-plutus-interface
+    , containers
     , coop-hs-types
     , coop-pab
     , data-default
+    , lens
+    , mtl
     , plutip
     , plutus-contract
     , plutus-ledger
+    , plutus-ledger-api
+    , plutus-script-utils
     , tasty
+    , tasty-hunit
     , text
 
   hs-source-dirs: test
   main-is:        Main.hs
+  other-modules:  Aux
   ghc-options:    -Wall -threaded -rtsopts
   type:           exitcode-stdio-1.0
 
@@ -135,13 +149,16 @@ executable coop-pab-cli
     , aeson
     , base
     , bot-plutus-interface
+    , bytestring
     , containers
     , coop-hs-types
     , coop-pab
     , directory
     , filepath
+    , hex
     , optparse-applicative
     , plutus-contract
+    , plutus-ledger
     , plutus-ledger-api
     , plutus-pab
     , process
