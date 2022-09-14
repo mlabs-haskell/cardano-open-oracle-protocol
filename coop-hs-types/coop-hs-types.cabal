@@ -19,11 +19,13 @@ flag dev
 
 common common-language
   ghc-options:
-    -Wall -Wcompat -Wincomplete-uni-patterns -Wno-unused-do-bind
-    -Wno-partial-type-signatures -Wmissing-export-lists
+    -Wall -Wcompat -Wincomplete-uni-patterns -Wunused-do-bind
+    -Wpartial-type-signatures -Wmissing-export-lists
     -Wincomplete-record-updates -Wmissing-deriving-strategies
-    -Wno-name-shadowing -Wunused-foralls -fprint-explicit-foralls
+    -Wname-shadowing -Wunused-foralls -fprint-explicit-foralls
     -fprint-explicit-kinds -fwarn-missing-import-lists
+    -Wredundant-constraints -Wmissing-export-lists
+    -Wmissing-deriving-strategies
 
   if !flag(dev)
     ghc-options: -Werror

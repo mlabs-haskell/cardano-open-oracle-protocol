@@ -131,6 +131,7 @@ test-suite coop-pab-tests
     , plutus-ledger-api
     , plutus-script-utils
     , tasty
+    , tasty-expected-failure
     , tasty-hunit
     , text
 
