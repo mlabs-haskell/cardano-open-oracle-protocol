@@ -45,6 +45,10 @@ import Prelude (Bool (False, True), Monoid (mempty), fst, ($), (<$>))
 {- | Check if a 'PValue' contains the given currency symbol.
 NOTE: MangoIV says the plookup should be inlined here
 -}
+
+-- WARN[Andrea]: on a 'NoGuarantees value like `v = psingleton # cs # tn # 0` we have
+--               `phasCurrency # cs # tn # v #== pcon PTrue` which could be misleading.
+--               For values from `TxInfo` the only case where this is relevant is if `v` is the mint field and cs:tk is Ada.
 phasCurrency :: forall (q :: AmountGuarantees) (s :: S). Term s (PCurrencySymbol :--> PValue 'PValue.Sorted q :--> PBool)
 phasCurrency = phoistAcyclic $
   plam $ \cs val ->
@@ -75,6 +79,8 @@ pcurrencyValue = phoistAcyclic $
           PJust tokens -> pnormalize # pcon (PValue $ psingleton # cs # tokens)
       )
 
+-- PERF[Andrea]: I believe `PMaybe a` is more efficient to interact
+-- with and PMaybeData is mostly useful for UTxO datums.
 pmaybeData :: PIsData a => Term s (PMaybeData a) -> Term s b -> (Term s a -> Term s b) -> Term s b
 pmaybeData m l r = pmatch m \case
   PDNothing _ -> l
@@ -176,6 +182,8 @@ mkOneShotMintingPolicy = phoistAcyclic $
           (ptrace "oneShotMp: Consumes the specified outref" punit)
           (ptraceError "oneShotMp: Must consume the specified utxo")
 
+    -- WARN[Andrea]: allows minting/burning other token names too.
+    --               although the whole check is maybe redundant since this can only run once?
     pif
       (pvalueOf # mint # cs # pfromData tn #== pfromData q)
       (ptrace "oneShotMp: Mints the specified quantity of tokens" $ popaque punit)
@@ -204,6 +212,7 @@ pdatumFromTxOut = phoistAcyclic $
 
     pfromData (ptryFromData @a (pto datum))
 
+-- WARN[Andrea]: leaves you vulnerable to `other tokenname` attacks.
 pmustMint :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PUnit)
 pmustMint = phoistAcyclic $
   plam $ \ctx cs tn q -> ptrace "mustMint" P.do
@@ -335,6 +344,8 @@ pmustSpendAtLeast :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PToken
 pmustSpendAtLeast = phoistAcyclic $
   plam $ \ctx cs tn mustSpendAtLeastQ -> pmustSpendPred # ctx # cs # tn # plam (mustSpendAtLeastQ #<=)
 
+-- WARN[Andrea]: this is very permissive, maybe you should have
+-- different versions that check for either burning or minting the tokens.
 pmustHandleSpentWithMp :: ClosedTerm (PScriptContext :--> PUnit)
 pmustHandleSpentWithMp = phoistAcyclic $
   plam $ \ctx -> ptrace "pmustHandleSpentWithMp" P.do
