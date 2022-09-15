@@ -43,7 +43,8 @@ data CoopPlutus = CoopPlutus
   deriving anyclass (ToJSON, FromJSON)
 
 data CoopDeployment = CoopDeployment
-  { cd'coopAc :: AssetClass
+  { -- COOP token
+    cd'coopAc :: AssetClass
   , cd'fsMp :: MintingPolicy
   , cd'fsV :: Validator
   , cd'auth :: AuthDeployment
@@ -77,7 +78,8 @@ data FsMpRedeemer = FsMpBurn | FsMpMint
 
 -- | Authentication Tokens and Certificates
 data AuthDeployment = AuthDeployment
-  { ad'authorityAc :: AssetClass
+  { -- AA token
+    ad'authorityAc :: AssetClass
   , ad'certV :: Validator
   , ad'certMp :: MintingPolicy
   , ad'authMp :: MintingPolicy
