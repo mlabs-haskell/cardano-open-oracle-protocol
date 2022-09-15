@@ -283,6 +283,7 @@ mkMintFsTrx coopDeployment self trxValidRange fsDatum authOut (certOut, certDatu
           <> mustBeSignedBy submitterPpkh
           <> mustPayToOtherScript fsVAddr (toDatum fsDatum) (fsVal <> minUtxoAdaValue)
           <> mustValidateIn trxValidRange
+      -- TODO[Andrea]: add fee output?
       mintFsTrx =
         mkBurnAuthsTrx coopDeployment self (Map.fromList [authOut])
           <> Trx lookups constraints
