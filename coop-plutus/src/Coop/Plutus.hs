@@ -39,6 +39,8 @@ import Prelude (Monoid (mempty), Semigroup ((<>)), const, ($))
 fsV :: ClosedTerm PValidator
 fsV = phoistAcyclic $
   plam $ \_ _ ctx -> ptrace "@FsV" P.do
+    -- ERR[Andrea]: should we be allowed to spend a fsV input as we mint a new $FS token?
+    --              fsMpMint does not check we are after "fd'gcAfter" for any fsV inputs.
     _ <- plet $ pmustHandleSpentWithMp # ctx
     ptrace "@FsV: Spending delegated to FsMp" $ popaque punit
 
@@ -82,6 +84,7 @@ fsMpBurn = phoistAcyclic $
                 ptrace "FsMp burn: Submitter signed"
 
                 -- TODO(Andrea): Please check that I didn't mess up interval handling
+                -- INFO[Andrea]: looks good to me.
                 _ <- plet $ pmustValidateAfter # ctx # fsDatum.fd'gcAfter
                 ptrace "FsMp burn: Time validates"
 
@@ -91,6 +94,8 @@ fsMpBurn = phoistAcyclic $
             (ptrace "FsMp burn: Skipping foreign input" shouldBurn)
 
     -- Contains negative quantities
+    -- WARN[Andrea]: will fail parsing a `fsDatum` if non-fsV inputs are present.
+    --               It's possible extra pure Ada ones are needed to pay fees?
     shouldBurnTotal <- plet $ pfoldTxInputs # ctx # plam foldFn # mempty
     ownMinted <- plet $ pcurrencyValue # ownCs # minted
     pif
@@ -112,6 +117,7 @@ fsMpMint = phoistAcyclic $
 
     ctx' <- pletFields @'["purpose"] ctx
     ownCs <- plet $ pownCurrencySymbol # ctx'.purpose
+    -- MINOR[Andrea]: could be made into a `let`
     fsMintParseOutput' <- plet $ fsMintParseOutput # params # ctx # ownCs
 
     restAuths <- plet $ pfoldTxOutputs # ctx # fsMintParseOutput' # validAuthInputs
@@ -207,6 +213,12 @@ fsMintParseOutputWithFs = phoistAcyclic $
       (ptraceError "fsMintParseOutputWithFs: $FS must have a token name formed from a matching $AUTH input")
       ( \fsTn -> ptrace "fsMintParseOutputWithFs: $FS validated" P.do
           -- NOTE: This check is sufficient as $FS are unique
+          -- INFO[Andrea]: I would say this is sufficient to prevent unwanted mints because you
+          --               also check _all outputs_ for $FS tokens, and would error if
+          --               you found ones with unapproved token names.
+          -- ERR[Andrea]: allows $FS with other token names to be
+          --              burned at the same time, without checking `fd'gcAfter`.
+          --              Would be safer to accumulate a `shouldBeMinted` value and check it all at once.
           _ <- plet $ pmustMint # ctx # ownCs # fsTn # 1
           ptrace "fsMintParseOutputWithFs: $FS minted" restAuthInputs
       )
@@ -286,6 +298,7 @@ caParseInput = phoistAcyclic $
     txInOut <- plet $ pfield @"resolved" # txIn
     txInVal <- plet $ pnormalize # (pfield @"value" # txInOut)
 
+    -- PERF[Andrea]: lookup field in `caParseInputs` so it's done only once?
     authTokenCs <- plet $ pfield @"ap'authTokenCs" # params
     hasAuthCs <- plet $ phasCurrency # authTokenCs # txInVal
     pif
@@ -340,6 +353,12 @@ caParseInputWithAuth = phoistAcyclic $
           shouldBeBurned' <- plet $ shouldBeBurned <> PValue.psingleton # authTokenCs # authTn # (pnegate # 1)
           pcon $ PPair validAuthInputs' shouldBeBurned'
       )
+
+-- WARN[Andrea]: what should happen with multiple $AUTH tokens on
+--               a single utxo?  currently the $AUTH matching the
+--               first `cert` in `certs` has to be burned, and the
+--               other $AUTH tokens are sent back in the outputs I
+--               presume.
 
 -- TODO: Migrate to reference inputs
 caParseRefs ::
@@ -435,6 +454,7 @@ authenticating scripts CAN use to validate $AUTH inputs. These are locked @CertV
 certV :: ClosedTerm PValidator
 certV = phoistAcyclic $
   plam $ \_ _ ctx -> ptrace "@CertV" P.do
+    -- WARN[Andrea]: Allows spending CertV input while minting $CERT without checking validity range.
     _ <- plet $ pmustHandleSpentWithMp # ctx
     ptrace "@CertV: Spending delegated to CertMp" $ popaque punit
 
@@ -479,6 +499,7 @@ certMpBurn = phoistAcyclic $
                 ptrace "CertMp burn: Parsed the CertDatum"
 
                 -- TODO(Andrea): Please check that I didn't mess up interval handling
+                -- INFO[Andrea]: looks good.
                 certValidUntil <- plet $ pfield @"_0" #$ pfield @"to" # certDatum.cert'validity
                 _ <- plet $ pmustValidateAfter # ctx # certValidUntil
                 ptrace "CertMp burn: Can collect invalid cert"
@@ -495,6 +516,7 @@ certMpBurn = phoistAcyclic $
                       (ptrace "CertMp burn: Spent a single $CERT token" punit)
                       (ptraceError "CertMp burn: Must spend a single $CERT token")
 
+                -- ERR[Andrea]: allows actually minting $CERT for other token names, and leaking it.
                 _ <- plet $ pmustMint # ctx # ownCs # certTn # (pnegate # 1)
                 ptrace "CertMp burn: $CERT spent and burned" acc
             )
@@ -523,9 +545,13 @@ certMpMint = phoistAcyclic $
     ptrace "CertMp mint: Spent at least a specified quantity of $AA tokens"
 
     certTn <- plet $ pcon $ PTokenName tnBytes
+    -- ERR[Andrea]: can mint/burn $CERT for other token names.
     _ <- plet $ pmustMint # ctx # ownCs # certTn # 1
     ptrace "CertMp mint: Minted 1 $CERT"
     -- TODO: Verify datum by parsing it?
+    --       Andrea: Yes, if you don't trust the $AA holder.
+
+    -- WARN[Andrea]: allows leaking $CERT with other token name to any address.
     _ <- plet $ pmustPayTo # ctx # ownCs # certTn # 1 # certParams.cmp'certVAddress
     ptrace "CertMp mint: Paid 1 $CERT to @CertV" $ popaque punit
 
@@ -558,6 +584,8 @@ authMpMint = phoistAcyclic $
 
     tnBytes <- plet $ pmustSpendAtLeastAa # ctx # aaCs # aaTn # authParams.amp'requiredAtLeastAaQ
     authTn <- plet $ pcon $ PTokenName tnBytes
+
+    -- WARN[Andrea]: allows minting/burning at other token names.
     pif
       (0 #< (pvalueOf # minted # ownCs # authTn))
       (ptrace "AuthMp mint: At least one $AUTH token is minted" $ popaque punit)
@@ -587,6 +615,8 @@ authMpBurn = phoistAcyclic $
             )
             (ptrace "AuthMp burn $AUTH: Skipping foreign input" shouldBurn)
 
+    -- INFO[Andrea]: this is actually safe against trying to mint/burn
+    --               for other TokenNames, certMpBurn should be changed to something similar.
     shouldBurnTotal <- plet $ pfoldTxInputs # ctx # plam foldFn # mempty
     ownMinted <- plet $ pcurrencyValue # ownCs # minted
     pif
