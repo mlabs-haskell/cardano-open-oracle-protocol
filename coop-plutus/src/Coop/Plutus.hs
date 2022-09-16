@@ -75,6 +75,8 @@ fsMpBurn = phoistAcyclic $
     let foldFn shouldBurn txInInfo = P.do
           txOut <- plet $ pfield @"resolved" # txInInfo
           txIn <- pletFields @'["value", "address"] $ pfield @"resolved" # txInInfo
+          -- WARN[Andrea]: this will error out on non-FsDatum inputs, such as wallet ones to cover fees.
+          --               The comment below refers to this line.
           fsDatum <- pletFields @'["fd'submitter", "fd'gcAfter", "fd'fsId"] $ pdatumFromTxOut @PFsDatum # ctx # txOut
 
           pif
@@ -169,13 +171,19 @@ fsMintParseOutputWithFs ::
     )
 fsMintParseOutputWithFs = phoistAcyclic $
   plam $ \params ctx ownCs validAuthInputs txOut -> ptrace "fsMintParseOutputWithFs" P.do
+    -- WARN[Andrea]: no checks on the datum? I guess if it's malformed
+    -- it will just mean the submitter can't use it or recyle it.
     txOut' <- pletFields @'["value", "address"] txOut
+    -- PERF[Andrea]: In cardax I have found value normalizations to be
+    -- quite expensive, something to keep in mind if you have budget
+    -- problems.
     outVal <- plet $ pnormalize # txOut'.value
     outAddr <- plet $ txOut'.address
 
     _ <-
       plet $
         pif
+          -- PERF[Andrea]: the field projection could be done outside the fold.
           (outAddr #== (pfield @"fmp'fsVAddress" # params))
           (ptrace "fsMintParseOutputWithFs: Output sent to FsV" $ popaque punit)
           (ptraceError "fsMintParseOutputWithFs: Output must be sent to FsV")
@@ -505,6 +513,9 @@ certMpBurn = phoistAcyclic $
                 ptrace "CertMp burn: Can collect invalid cert"
 
                 redeemerAc <- pletFields @'["_0", "_1"] certDatum.cert'redeemerAc
+                -- PERF[Andrea]: If `PCertMpBurn` had a field with the
+                -- TxOutRef of the utxo holding `redeemerAc` this
+                -- check could be cheaper.
                 _ <- plet $ pmustSpendAtLeast # ctx # redeemerAc._0 # redeemerAc._1 # 1
                 ptrace "CertMp burn: At least 1 $CERT-RDMR spent"
 
@@ -551,7 +562,7 @@ certMpMint = phoistAcyclic $
     -- TODO: Verify datum by parsing it?
     --       Andrea: Yes, if you don't trust the $AA holder.
 
-    -- WARN[Andrea]: allows leaking $CERT with other token name to any address.
+    -- ERR[Andrea]: allows leaking $CERT with other token name to any address.
     _ <- plet $ pmustPayTo # ctx # ownCs # certTn # 1 # certParams.cmp'certVAddress
     ptrace "CertMp mint: Paid 1 $CERT to @CertV" $ popaque punit
 
@@ -585,7 +596,7 @@ authMpMint = phoistAcyclic $
     tnBytes <- plet $ pmustSpendAtLeastAa # ctx # aaCs # aaTn # authParams.amp'requiredAtLeastAaQ
     authTn <- plet $ pcon $ PTokenName tnBytes
 
-    -- WARN[Andrea]: allows minting/burning at other token names.
+    -- ERR[Andrea]: allows minting/burning at other token names.
     pif
       (0 #< (pvalueOf # minted # ownCs # authTn))
       (ptrace "AuthMp mint: At least one $AUTH token is minted" $ popaque punit)
