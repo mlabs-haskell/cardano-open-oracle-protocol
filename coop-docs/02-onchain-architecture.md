@@ -45,6 +45,12 @@ Legend:
 
 ### Certificate redeemer token - $CERT-RDMR
 
+> INFO[Andrea]: instead of a $CERT-RDMR token you could just have a
+> PKH in the @CertV datum, and check the burn $CERT transaction is
+> signed by that, like you do for burning $FS tokens and submitters.
+> This would only grant the PKH access to a small amount of Ada, so it
+> does not seem like the extra token indirection is warranted.
+
 ### Authentication token - $AUTH
 
 ### Fact statement token - $FS
