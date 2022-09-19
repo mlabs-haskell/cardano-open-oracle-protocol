@@ -116,3 +116,19 @@ executable coop-plutus-cli
     , optparse-applicative
     , plutarch
     , plutus-ledger-api
+
+test-suite coop-plutus-tests
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is:        Main.hs
+  other-modules:  Coop.Test.Plutus
+  build-depends:
+    , base
+    , containers
+    , data-default
+    , hspec
+    , hspec-core
+    , plutarch
+    , plutarch-test
+    , plutus-ledger-api
+    , QuickCheck
