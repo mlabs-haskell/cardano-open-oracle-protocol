@@ -16,7 +16,7 @@ module Coop.Plutus.Aux (
   pdjust,
   pdnothing,
   pmustSpend,
-  pmustPayTo,
+  pmustPayCurrencyWithDatumTo,
   pfindOwnInput',
   pfoldTxOutputs,
   pfoldTxInputs,
@@ -25,7 +25,7 @@ module Coop.Plutus.Aux (
   pmustSpendAtLeast,
   pmaybeData,
   hashTxInputs,
-  pmustMintEx,
+  pmustMintCurrency,
 ) where
 
 import Crypto.Hash (SHA3_256 (SHA3_256), hashWith)
@@ -46,7 +46,7 @@ import Plutarch.Num (PNum ((#+)))
 import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PEq ((#==)), PInteger (), PIsData, PMaybe (PJust, PNothing), PPartialOrd ((#<=)), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pconstantData, pdata, pdnil, pelem, pfield, pfind, pfix, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pletFields, pmap, pmatch, ptrace, ptraceError, ptryFrom, (#), (#$), type (:-->))
 import Plutarch.TermCont (tcont, unTermCont)
 import PlutusLedgerApi.V2 (Extended (PosInf), TxId (getTxId), TxInInfo (TxInInfo), TxOutRef (txOutRefId, txOutRefIdx), UpperBound (UpperBound), fromBuiltin)
-import Prelude (Bool (False, True), Functor (fmap), Monoid (mconcat, mempty), Num (fromInteger), fst, reverse, ($), (.), (<$>))
+import Prelude (Bool (False, True), Functor (fmap), Monoid (mconcat, mempty), Num (fromInteger), Semigroup ((<>)), fst, reverse, ($), (.), (<$>))
 
 {- | Check if a 'PValue' contains the given currency symbol.
 NOTE: MangoIV says the plookup should be inlined here
@@ -229,13 +229,14 @@ pmustMint = phoistAcyclic $
       (ptrace "pmustMint: Minted specified quantity" punit)
       (ptraceError "pmustMint: Must mint the specified quantity")
 
-pmustMintEx :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PUnit)
-pmustMintEx = phoistAcyclic $
-  plam $ \ctx cs tn q -> ptrace "pmustMintEx" P.do
+-- | Checks total value of a specified CurrencySymbol minted.
+pmustMintCurrency :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PValue 'Sorted 'NonZero :--> PUnit)
+pmustMintCurrency = phoistAcyclic $
+  plam $ \ctx cs val -> ptrace "pmustMintEx" P.do
     ctx' <- pletFields @'["txInfo"] ctx
     txInfo <- pletFields @'["mint"] ctx'.txInfo
     pif
-      (pcurrencyValue # cs # txInfo.mint #== PValue.psingleton # cs # tn # q)
+      (pcurrencyValue # cs # txInfo.mint #== val)
       (ptrace "pmustMintEx: Minted specified token name and quantity exclusively" punit)
       (ptraceError "pmustMintEx: Must mint the specified token name exclusively")
 
@@ -251,7 +252,7 @@ pmustValidateAfter = phoistAcyclic $
       (ptrace "pmustValidateAfter: Transaction validation range is after 'after'" punit)
       (ptraceError "pmustValidateAfter: Transaction validation range must come after 'after'")
 
--- | interval from upper and lower
+-- | Interval from upper and lower bounds.
 pinterval' ::
   forall a (s :: S).
   Term
@@ -284,7 +285,7 @@ pmustBeSignedBy = phoistAcyclic $
       (ptrace "mustBeSignedBy: Specified pkh signed the transaction" punit)
       (ptraceError "mustBeSignedBy: Specified pkh must sign the transaction")
 
--- | Foldl over transaction outputs
+-- | Foldl over transaction outputs.
 pfoldTxOutputs :: ClosedTerm (PScriptContext :--> (a :--> PTxOut :--> a) :--> a :--> a)
 pfoldTxOutputs = phoistAcyclic $
   plam $ \ctx foldFn initial -> ptrace "pfoldTxInputs" P.do
@@ -296,28 +297,34 @@ pfoldTxOutputs = phoistAcyclic $
       # initial
       # pfromData txInfo.outputs
 
--- | Checks total tokens spent
-pmustPayTo :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PAddress :--> PUnit)
-pmustPayTo = phoistAcyclic $
-  plam $ \ctx cs tn mustPayQ addr -> ptrace "pmustPayTo" P.do
-    paidQ <-
+-- | Checks total value of a specified CurrencySymbol paid to an Address and checks whether attached datums are valid.
+pmustPayCurrencyWithDatumTo :: forall a. (PIsData a, PTryFrom PData (PAsData a)) => ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PValue 'Sorted 'NonZero :--> (a :--> PBool) :--> PAddress :--> PUnit)
+pmustPayCurrencyWithDatumTo = phoistAcyclic $
+  plam $ \ctx cs mustPayVal datumPred addr -> ptrace "pmustPayCurrencyWithDatumTo" P.do
+    let foldFn paid txOut = P.do
+          txOut' <- pletFields @'["value", "address"] txOut
+
+          pif
+            ((txOut'.address) #== pdata addr)
+            ( P.do
+                dat <- plet $ pdatumFromTxOut @a # ctx # txOut
+                pif
+                  (datumPred # dat)
+                  (ptrace "pmustPayCurrencyWithDatumTo: Valid datum attached" (paid <> (pcurrencyValue # cs # txOut'.value)))
+                  (ptraceError "pmustPayCurrencyWithDatumTo: Must attach a valid datum")
+            )
+            paid
+
+    paidVal <-
       plet $
         pfoldTxOutputs # ctx
-          # plam
-            ( \paid txOut -> P.do
-                txOut' <- pletFields @'["value", "address"] txOut
-
-                pif
-                  (txOut'.address #== addr)
-                  (paid #+ (pvalueOf # txOut'.value # cs # tn))
-                  paid
-            )
-          # 0
+          # plam foldFn
+          # mempty
 
     pif
-      (mustPayQ #== paidQ)
-      (ptrace "pmustPayTo: Paid the specified quantity" punit)
-      (ptraceError "pmustPayTo: Must pay the specified quantity")
+      (mustPayVal #== paidVal)
+      (ptrace "pmustPayExWithDatumTo: Paid the specified value" punit)
+      (ptraceError "pmustPayExWithDatumTo: Must pay the specified value")
 
 -- | Foldl over transaction inputs
 pfoldTxInputs :: ClosedTerm (PScriptContext :--> (a :--> PTxInInfo :--> a) :--> a :--> a)

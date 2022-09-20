@@ -10,7 +10,7 @@ module Coop.Plutus (
   pmustSpendAtLeastAa,
 ) where
 
-import Coop.Plutus.Aux (pcurrencyValue, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfoldTxInputs, pfoldTxOutputs, phasCurrency, pmaybeData, pmustBeSignedBy, pmustHandleSpentWithMp, pmustMint, pmustMintEx, pmustPayTo, pmustSpendAtLeast, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
+import Coop.Plutus.Aux (pcurrencyValue, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfoldTxInputs, pfoldTxOutputs, phasCurrency, pmaybeData, pmustBeSignedBy, pmustHandleSpentWithMp, pmustMint, pmustMintCurrency, pmustPayCurrencyWithDatumTo, pmustSpendAtLeast, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
 import Coop.Plutus.Types (PAuthMpParams, PAuthMpRedeemer (PAuthMpBurn, PAuthMpMint), PAuthParams, PCertDatum, PCertMpParams, PCertMpRedeemer (PCertMpBurn, PCertMpMint), PFsDatum, PFsMpParams, PFsMpRedeemer (PFsMpBurn, PFsMpMint))
 import Plutarch (POpaque, pmatch, popaque)
 import Plutarch.Api.V1.Value (passertPositive, pnormalize, pvalueOf)
@@ -544,6 +544,7 @@ certMpBurn = phoistAcyclic $
 - check that the $AA quantity as specified in the CertMpParams is spent
 - accumulate the $AA inputs into a unique token name to use for the $CERT token minted
 - check that 1 $CERT is paid to @CertV
+- check that the $CERT outputs at @CertV has a valid CertDatum.cert'id
 -}
 certMpMint :: ClosedTerm (PCertMpParams :--> PScriptContext :--> POpaque)
 certMpMint = phoistAcyclic $
@@ -556,14 +557,17 @@ certMpMint = phoistAcyclic $
     ptrace "CertMp mint: Spent at least a specified quantity of $AA tokens"
 
     certTn <- plet $ pcon $ PTokenName tnBytes
-    _ <- plet $ pmustMintEx # ctx # ownCs # certTn # 1
+    _ <- plet $ pmustMintCurrency # ctx # ownCs # (PValue.psingleton # ownCs # certTn # 1)
     ptrace "CertMp mint: Minted 1 $CERT"
-    -- TODO: Verify datum by parsing it?
-    --       Andrea: Yes, if you don't trust the $AA holder.
 
-    -- ERR[Andrea]: allows leaking $CERT with other token name to any address.
-    _ <- plet $ pmustPayTo # ctx # ownCs # certTn # 1 # certParams.cmp'certVAddress
-    ptrace "CertMp mint: Paid 1 $CERT to @CertV" $ popaque punit
+    _ <-
+      plet $
+        pmustPayCurrencyWithDatumTo # ctx
+          # ownCs
+          # (PValue.psingleton # ownCs # certTn # 1)
+          # plam (\(certDatum :: Term s PCertDatum) -> (pfield @"cert'id" # certDatum) #== tnBytes)
+          # certParams.cmp'certVAddress
+    ptrace "CertMp mint: Paid 1 $CERT to @CertV and attached a valid datum" $ popaque punit
 
 mkAuthMp :: ClosedTerm (PAsData PAuthMpParams :--> PMintingPolicy)
 mkAuthMp = phoistAcyclic $
