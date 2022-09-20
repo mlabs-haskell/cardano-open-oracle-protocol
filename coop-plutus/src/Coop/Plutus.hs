@@ -484,7 +484,9 @@ For each $CERT input
 - check that $CERT-RDMR token as specified in the CertDatum is spent
 - check that the spent $CERT is also burned
 
-For others just skip.
+Notes:
+ - skips foreign inputs
+ - can burn multiple $CERT tokens
 -}
 certMpBurn :: ClosedTerm (PScriptContext :--> POpaque)
 certMpBurn = phoistAcyclic $
@@ -508,16 +510,12 @@ certMpBurn = phoistAcyclic $
                     $ certDatum'
                 ptrace "CertMp burn: Parsed the CertDatum"
 
-                -- TODO(Andrea): Please check that I didn't mess up interval handling
-                -- INFO[Andrea]: looks good.
                 certValidUntil <- plet $ pfield @"_0" #$ pfield @"to" # certDatum.cert'validity
                 _ <- plet $ pmustValidateAfter # ctx # certValidUntil
                 ptrace "CertMp burn: Can collect invalid cert"
 
                 redeemerAc <- pletFields @'["_0", "_1"] certDatum.cert'redeemerAc
-                -- PERF[Andrea]: If `PCertMpBurn` had a field with the
-                -- TxOutRef of the utxo holding `redeemerAc` this
-                -- check could be cheaper.
+                -- TODO(perf): Consider adding a TxOutRef to the redeemer as it would make it more efficient to find the $CERT-RDMR input
                 _ <- plet $ pmustSpendAtLeast # ctx # redeemerAc._0 # redeemerAc._1 # 1
                 ptrace "CertMp burn: At least 1 $CERT-RDMR spent"
 
@@ -537,7 +535,7 @@ certMpBurn = phoistAcyclic $
 
     _ <- plet $ pfoldTxInputs # ctx # plam foldFn # punit
 
-    popaque punit
+    ptrace "CertMp burn: All $CERTs spent and burned" $ popaque punit
 
 {- | Validates minting of $CERT tokens
 
@@ -545,6 +543,9 @@ certMpBurn = phoistAcyclic $
 - accumulate the $AA inputs into a unique token name to use for the $CERT token minted
 - check that 1 $CERT is paid to @CertV
 - check that the $CERT outputs at @CertV has a valid CertDatum.cert'id
+
+Notes:
+- can mint only 1 $CERT token per transaction
 -}
 certMpMint :: ClosedTerm (PCertMpParams :--> PScriptContext :--> POpaque)
 certMpMint = phoistAcyclic $

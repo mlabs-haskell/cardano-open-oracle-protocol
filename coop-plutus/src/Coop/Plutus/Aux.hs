@@ -49,10 +49,6 @@ import Plutarch.TermCont (tcont, unTermCont)
 import PlutusLedgerApi.V2 (Extended (PosInf), TxId (getTxId), TxInInfo (TxInInfo), TxOutRef (txOutRefId, txOutRefIdx), UpperBound (UpperBound), fromBuiltin)
 import Prelude (Bool (False, True), Functor (fmap), Monoid (mconcat, mempty), Num (fromInteger), Semigroup ((<>)), fst, reverse, ($), (.), (<$>))
 
-{- | Check if a 'PValue' contains the given currency symbol.
-NOTE: MangoIV says the plookup should be inlined here
--}
-
 -- WARN[Andrea]: on a 'NoGuarantees value like `v = psingleton # cs # tn # 0` we have
 --               `phasCurrency # cs # tn # v #== pcon PTrue` which could be misleading.
 --               For values from `TxInfo` the only case where this is relevant is if `v` is the mint field and cs:tk is Ada.

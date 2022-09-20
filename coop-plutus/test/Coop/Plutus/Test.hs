@@ -7,9 +7,9 @@ import Test.QuickCheck (NonEmptyList (getNonEmpty), Positive (getPositive), choo
 
 import Coop.Plutus (mkAuthMp, mkCertMp, pmustSpendAtLeastAa)
 import Coop.Plutus.Aux (hashTxInputs)
-import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCorrectAuthMpMintingArgs, genCorrectCertMpMintingArgs, genCorruptAuthMpMintingArgs, genCorruptCertMpMintingArgs)
+import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpMintingCtx)
 import Coop.Plutus.Types (PAuthMpParams, PCertMpParams)
-import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpMint), CertMpParams (CertMpParams), CertMpRedeemer (CertMpMint))
+import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpMint), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint))
 import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (fold))
 import Data.List (sortOn)
@@ -88,7 +88,7 @@ spec = do
         forAll (choose (1, 10)) $
           \aaQ ->
             let certMpParams = CertMpParams aaAc aaQ certVAddr
-             in forAll (genCorrectCertMpMintingArgs certMpParams certCs) $
+             in forAll (genCorrectCertMpMintingCtx certMpParams certCs) $
                   \ctx ->
                     psucceeds
                       ( mkCertMp
@@ -96,12 +96,24 @@ spec = do
                           # pdataImpl (pconstant CertMpMint)
                           # pconstant ctx
                       )
+      prop "burn $CERT" $
+        forAll (choose (1, 10)) $
+          \aaQ ->
+            let certMpParams = CertMpParams aaAc aaQ certVAddr
+             in forAll (genCorrectCertMpBurningCtx certMpParams certCs) $
+                  \ctx ->
+                    psucceeds
+                      ( mkCertMp
+                          # pconstantData @PCertMpParams certMpParams
+                          # pdataImpl (pconstant CertMpBurn)
+                          # pconstant ctx
+                      )
     describe "should-fail" $ do
       prop "mint $CERT" $
         forAll (choose (1, 10)) $
           \aaQ ->
             let certMpParams = CertMpParams aaAc aaQ certVAddr
-             in forAll (genCorruptCertMpMintingArgs certMpParams certCs) $
+             in forAll (genCorruptCertMpMintingCtx certMpParams certCs) $
                   \ctx ->
                     pfails
                       ( mkCertMp
@@ -116,7 +128,7 @@ spec = do
         forAll (choose (1, 10)) $
           \aaQ ->
             let authMpParams = AuthMpParams aaAc aaQ
-             in forAll (genCorrectAuthMpMintingArgs authMpParams authCs) $
+             in forAll (genCorrectAuthMpMintingCtx authMpParams authCs) $
                   \ctx ->
                     psucceeds
                       ( mkAuthMp
@@ -129,7 +141,7 @@ spec = do
         forAll (choose (1, 10)) $
           \aaQ ->
             let authMpParams = AuthMpParams aaAc aaQ
-             in forAll (genCorruptAuthMpMintingArgs authMpParams authCs) $
+             in forAll (genCorruptAuthMpMintingCtx authMpParams authCs) $
                   \ctx ->
                     pfails
                       ( mkAuthMp
