@@ -7,12 +7,11 @@ import Test.QuickCheck (NonEmptyList (getNonEmpty), Positive (getPositive), choo
 
 import Coop.Plutus (mkAuthMp, mkCertMp, pmustSpendAtLeastAa)
 import Coop.Plutus.Aux (hashTxInputs)
-import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx)
+import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, mkScriptContext)
 import Coop.Plutus.Types (PAuthMpParams, PCertMpParams)
 import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint))
 import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (fold))
-import Data.List (sortOn)
 import Data.Map qualified as Map
 import Data.Set qualified as Set
 import Data.Text (Text, unpack)
@@ -22,8 +21,7 @@ import Plutarch.Evaluate (evalScript)
 import Plutarch.Test (pfails, psucceeds)
 import PlutusLedgerApi.V1.Address (scriptHashAddress)
 import PlutusLedgerApi.V1.Value (AssetClass, TokenName (TokenName), assetClass, currencySymbol)
-import PlutusLedgerApi.V2 (Address, BuiltinByteString, CurrencySymbol, PubKeyHash, Script, ScriptContext (ScriptContext), ScriptPurpose (Minting), TxInInfo (TxInInfo), TxInfo (TxInfo, txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl), TxOut, ValidatorHash (ValidatorHash), Value, always, toBuiltin)
-import PlutusTx.AssocMap qualified as AssocMap
+import PlutusLedgerApi.V2 (Address, BuiltinByteString, CurrencySymbol, Script, ScriptPurpose (Minting), ValidatorHash (ValidatorHash), toBuiltin)
 
 aaAc :: AssetClass
 aaAc = assetClass (currencySymbol "$AA CurrencySymbol") (TokenName "$AA TokenName")
@@ -36,27 +34,6 @@ authCs = currencySymbol "AuthMp hash"
 
 certVAddr :: Address
 certVAddr = scriptHashAddress . ValidatorHash $ toBuiltin @ByteString @BuiltinByteString "@CertV hash"
-
-mkScriptContext :: ScriptPurpose -> [TxInInfo] -> [TxInInfo] -> Value -> [TxOut] -> [PubKeyHash] -> ScriptContext
-mkScriptContext purpose ins refs mints outs sigs =
-  ScriptContext (mkTxInfo ins refs mints outs sigs) purpose
-
-mkTxInfo :: [TxInInfo] -> [TxInInfo] -> Value -> [TxOut] -> [PubKeyHash] -> TxInfo
-mkTxInfo ins refs mints outs sigs =
-  TxInfo
-    { txInfoFee = mempty
-    , txInfoDCert = mempty
-    , txInfoWdrl = AssocMap.empty
-    , txInfoValidRange = always
-    , txInfoData = AssocMap.empty
-    , txInfoId = ""
-    , txInfoRedeemers = AssocMap.empty
-    , txInfoInputs = sortOn (\(TxInInfo i _) -> i) ins
-    , txInfoReferenceInputs = sortOn (\(TxInInfo i _) -> i) refs
-    , txInfoMint = mints
-    , txInfoOutputs = outs
-    , txInfoSignatories = sigs
-    }
 
 spec :: Spec
 spec = do
@@ -171,6 +148,18 @@ spec = do
                       ( mkAuthMp
                           # pconstantData @PAuthMpParams authMpParams
                           # pdataImpl (pconstant AuthMpMint)
+                          # pconstant ctx
+                      )
+      prop "burn $AUTH" $
+        forAll (choose (1, 10)) $
+          \aaQ ->
+            let authMpParams = AuthMpParams aaAc aaQ
+             in forAll (genCorruptAuthMpBurningCtx authCs) $
+                  \ctx -> do
+                    pfails
+                      ( mkAuthMp
+                          # pconstantData @PAuthMpParams authMpParams
+                          # pdataImpl (pconstant AuthMpBurn)
                           # pconstant ctx
                       )
 

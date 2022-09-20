@@ -1,4 +1,4 @@
-module Coop.Plutus.Test.Generators (genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx) where
+module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx) where
 
 import Test.QuickCheck (Arbitrary (arbitrary), Gen, choose, chooseAny, chooseEnum, chooseInt, chooseInteger, vectorOf)
 
@@ -252,6 +252,25 @@ genCorrectAuthMpBurningCtx authCs = do
   authIns <- genAuthInputs authCs
   let authTokensToBurn = inv . fold $ [txOutValue authInOut | TxInInfo _ authInOut <- authIns]
   return $ mkScriptContext (Minting authCs) authIns [] authTokensToBurn [] []
+
+genCorruptAuthMpBurningCtx :: CurrencySymbol -> Gen ScriptContext
+genCorruptAuthMpBurningCtx authCs = do
+  ctx <- genCorrectAuthMpBurningCtx authCs
+
+  -- Randomly pick a corruption
+  (mintAndPayOtherTokenNameAddr :: Bool) <- arbitrary
+
+  otherAddr <- genAddress
+  let corrupt =
+        mkCorrupt
+          [ (mintAndPayOtherTokenNameAddr, doMintAndPayOtherTokenNameAddr authCs otherAddr)
+          ]
+
+  -- If we didn't manage to corrupt anything, do it again
+  let corruptedCtx = corrupt ctx
+  if corruptedCtx == ctx
+    then genCorruptAuthMpBurningCtx authCs
+    else return corruptedCtx
 
 genAddress :: Gen Address
 genAddress = do
