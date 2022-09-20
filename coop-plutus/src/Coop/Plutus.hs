@@ -156,8 +156,6 @@ fsMintParseOutput = phoistAcyclic $
 - check that 1 $FS is minted and associated with a valid $AUTH
   - $FS token name is formed by hashing TxOutRef+Num of the associated $AUTH input
 - check that 1 $FS is sent to FsV
-
-NOTE: Fails hard
 -}
 fsMintParseOutputWithFs ::
   Term
@@ -224,7 +222,7 @@ fsMintParseOutputWithFs = phoistAcyclic $
           -- INFO[Andrea]: I would say this is sufficient to prevent unwanted mints because you
           --               also check _all outputs_ for $FS tokens, and would error if
           --               you found ones with unapproved token names.
-          -- ERR[Andrea]: allows $FS with other token names to be
+          -- ERROR(@Saizan): allows $FS with other token names to be
           --              burned at the same time, without checking `fd'gcAfter`.
           --              Would be safer to accumulate a `shouldBeMinted` value and check it all at once.
           _ <- plet $ pmustMint # ctx # ownCs # fsTn # 1
@@ -306,7 +304,7 @@ caParseInput = phoistAcyclic $
     txInOut <- plet $ pfield @"resolved" # txIn
     txInVal <- plet $ pnormalize # (pfield @"value" # txInOut)
 
-    -- PERF[Andrea]: lookup field in `caParseInputs` so it's done only once?
+    -- PERF(@Saizan): lookup field in `caParseInputs` so it's done only once?
     authTokenCs <- plet $ pfield @"ap'authTokenCs" # params
     hasAuthCs <- plet $ phasCurrency # authTokenCs # txInVal
     pif
@@ -318,8 +316,6 @@ caParseInput = phoistAcyclic $
 
 - check that there's at least one $AUTH token that's associated with a valid Certificate
 - accumulates 1 $AUTH token to burn
-
-NOTE: Fails hard
 -}
 caParseInputWithAuth ::
   Term
@@ -362,7 +358,7 @@ caParseInputWithAuth = phoistAcyclic $
           pcon $ PPair validAuthInputs' shouldBeBurned'
       )
 
--- WARN[Andrea]: what should happen with multiple $AUTH tokens on
+-- WARN(@Saizan): what should happen with multiple $AUTH tokens on
 --               a single utxo?  currently the $AUTH matching the
 --               first `cert` in `certs` has to be burned, and the
 --               other $AUTH tokens are sent back in the outputs I

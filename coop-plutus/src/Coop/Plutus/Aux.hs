@@ -55,7 +55,7 @@ import PlutusLedgerApi.V2 (Extended (PosInf), TxId (getTxId), TxInInfo (TxInInfo
 import PlutusTx.Prelude (Group (inv))
 import Prelude (Bool (False, True), Functor (fmap), Monoid (mconcat, mempty), Num (fromInteger), Semigroup ((<>)), fst, reverse, ($), (.), (<$>))
 
--- WARN[Andrea]: on a 'NoGuarantees value like `v = psingleton # cs # tn # 0` we have
+-- WARN(@Saizan): on a 'NoGuarantees value like `v = psingleton # cs # tn # 0` we have
 --               `phasCurrency # cs # tn # v #== pcon PTrue` which could be misleading.
 --               For values from `TxInfo` the only case where this is relevant is if `v` is the mint field and cs:tk is Ada.
 phasCurrency :: forall (q :: AmountGuarantees) (s :: S). Term s (PCurrencySymbol :--> PValue 'PValue.Sorted q :--> PBool)
@@ -234,13 +234,11 @@ pconsumesRef = phoistAcyclic $
 pdatumFromTxOut :: forall a (s :: S). (PIsData a, PTryFrom PData (PAsData a)) => Term s (PScriptContext :--> PTxOut :--> a)
 pdatumFromTxOut = phoistAcyclic $
   plam $ \ctx txOut -> ptrace "pdatumFromTxOut" P.do
-    -- TODO: Migrate to inline datums
-    ctx' <- pletFields @'["txInfo"] ctx
-    txInfo <- pletFields @'["datums"] ctx'.txInfo
-
     datum <- plet $ pmatch (pfield @"datum" # txOut) \case
       PNoOutputDatum _ -> ptraceError "pDatumFromTxOut: Must have a datum present in the output"
       POutputDatumHash r -> ptrace "pDatumFromTxOut: Got a datum hash" P.do
+        ctx' <- pletFields @'["txInfo"] ctx
+        txInfo <- pletFields @'["datums"] ctx'.txInfo
         pmatch (plookup # pfromData (pfield @"datumHash" # r) # txInfo.datums) \case
           PNothing -> ptraceError "pDatumFromTxOut: Datum with a given hash must be present in the transaction datums"
           PJust datum -> ptrace "pDatumFromTxOut: Found a datum" datum
@@ -248,7 +246,7 @@ pdatumFromTxOut = phoistAcyclic $
 
     pfromData (ptryFromData @a (pto datum))
 
--- WARN[Andrea]: leaves you vulnerable to `other tokenname` attacks.
+-- WARN(@Saizan): leaves you vulnerable to `other tokenname` attacks.
 pmustMint :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PUnit)
 pmustMint = phoistAcyclic $
   plam $ \ctx cs tn q -> ptrace "mustMint" P.do

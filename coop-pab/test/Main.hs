@@ -306,7 +306,6 @@ tests coopPlutus =
                             authOut
                             (certOut, certDatum)
                             submitterWallet
-                    -- FIXME: This test passes allthough it shouldn't
                     submitTrx @Void mintFsTrx
                     fsOuts <- findOutsAtHolding (mkValidatorAddress . cd'fsV $ coopDeployment) fsAc
                     return [ciValueOf fsAc out | out <- toList fsOuts]
