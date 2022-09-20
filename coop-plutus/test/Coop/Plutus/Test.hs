@@ -5,11 +5,11 @@ import Test.Hspec (Expectation, Spec, describe, shouldBe)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (NonEmptyList (getNonEmpty), Positive (getPositive), choose, forAll, generate)
 
-import Coop.Plutus (mkCertMp, pmustSpendAtLeastAa)
+import Coop.Plutus (mkAuthMp, mkCertMp, pmustSpendAtLeastAa)
 import Coop.Plutus.Aux (hashTxInputs)
-import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCorrectCertMpMintingArgs, genCorruptCertMpMintingArgs)
-import Coop.Plutus.Types (PCertMpParams)
-import Coop.Types (CertMpParams (CertMpParams), CertMpRedeemer (CertMpMint))
+import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCorrectAuthMpMintingArgs, genCorrectCertMpMintingArgs, genCorruptAuthMpMintingArgs, genCorruptCertMpMintingArgs)
+import Coop.Plutus.Types (PAuthMpParams, PCertMpParams)
+import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpMint), CertMpParams (CertMpParams), CertMpRedeemer (CertMpMint))
 import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (fold))
 import Data.List (sortOn)
@@ -30,6 +30,9 @@ aaAc = assetClass (currencySymbol "$AA CurrencySymbol") (TokenName "$AA TokenNam
 
 certCs :: CurrencySymbol
 certCs = currencySymbol "CertMp hash"
+
+authCs :: CurrencySymbol
+authCs = currencySymbol "AuthMp hash"
 
 certVAddr :: Address
 certVAddr = scriptHashAddress . ValidatorHash $ toBuiltin @ByteString @BuiltinByteString "@CertV hash"
@@ -107,7 +110,34 @@ spec = do
                           # pconstant ctx
                       )
   describe "@CertV" $ do return ()
-  describe "AuthMp" $ do return ()
+  describe "AuthMp" $ do
+    describe "should-succeed" $ do
+      prop "mint $AUTH" $
+        forAll (choose (1, 10)) $
+          \aaQ ->
+            let authMpParams = AuthMpParams aaAc aaQ
+             in forAll (genCorrectAuthMpMintingArgs authMpParams authCs) $
+                  \ctx ->
+                    psucceeds
+                      ( mkAuthMp
+                          # pconstantData @PAuthMpParams authMpParams
+                          # pdataImpl (pconstant AuthMpMint)
+                          # pconstant ctx
+                      )
+    describe "should-fail" $ do
+      prop "mint $AUTH" $
+        forAll (choose (1, 10)) $
+          \aaQ ->
+            let authMpParams = AuthMpParams aaAc aaQ
+             in forAll (genCorruptAuthMpMintingArgs authMpParams authCs) $
+                  \ctx ->
+                    pfails
+                      ( mkAuthMp
+                          # pconstantData @PAuthMpParams authMpParams
+                          # pdataImpl (pconstant AuthMpMint)
+                          # pconstant ctx
+                      )
+
   describe "FsMp" $ do return ()
   describe "@FsV" $ do return ()
 

@@ -26,6 +26,7 @@ module Coop.Plutus.Aux (
   pmaybeData,
   hashTxInputs,
   pmustMintCurrency,
+  pcurrencyTokenQuantity,
 ) where
 
 import Crypto.Hash (SHA3_256 (SHA3_256), hashWith)
@@ -40,10 +41,10 @@ import Plutarch.Api.V2 (AmountGuarantees (NonZero), KeyGuarantees (Sorted), PAdd
 import Plutarch.Bool (PBool (PTrue))
 import Plutarch.DataRepr (pdcons)
 import Plutarch.Extra.Interval (pcontains)
-import Plutarch.List (PIsListLike, PListLike (pelimList), pany)
+import Plutarch.List (PIsListLike, PListLike (pelimList, pnil), pany)
 import Plutarch.Monadic qualified as P
 import Plutarch.Num (PNum ((#+)))
-import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PEq ((#==)), PInteger (), PIsData, PMaybe (PJust, PNothing), PPartialOrd ((#<=)), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pconstantData, pdata, pdnil, pelem, pfield, pfind, pfix, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pletFields, pmap, pmatch, ptrace, ptraceError, ptryFrom, (#), (#$), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList (PCons, PNil), PData, PEq ((#==)), PInteger (), PIsData, PMaybe (PJust, PNothing), PPartialOrd ((#<=)), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pconstantData, pdata, pdnil, pelem, pfield, pfind, pfix, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pletFields, pmap, pmatch, psndBuiltin, ptrace, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
 import Plutarch.TermCont (tcont, unTermCont)
 import PlutusLedgerApi.V2 (Extended (PosInf), TxId (getTxId), TxInInfo (TxInInfo), TxOutRef (txOutRefId, txOutRefIdx), UpperBound (UpperBound), fromBuiltin)
 import Prelude (Bool (False, True), Functor (fmap), Monoid (mconcat, mempty), Num (fromInteger), Semigroup ((<>)), fst, reverse, ($), (.), (<$>))
@@ -75,15 +76,37 @@ pcurrencyTokens = phoistAcyclic $
           PJust tokens -> tokens
       )
 
+-- | Retrieves a Value of a specified CurrencySymbol or fails otherwise
 pcurrencyValue :: forall (q :: AmountGuarantees) (s :: S). Term s (PCurrencySymbol :--> PValue 'Sorted q :--> PValue 'Sorted 'NonZero)
 pcurrencyValue = phoistAcyclic $
   plam $ \cs val ->
-    pmatch
-      (plookup # cs # pto val)
-      ( \case
-          PNothing -> mempty @(Term _ (PValue 'Sorted 'NonZero))
-          PJust tokens -> pnormalize # pcon (PValue $ psingleton # cs # tokens)
-      )
+    ptrace "pcurrencyValue" $
+      pmatch
+        (plookup # cs # pto val)
+        ( \case
+            PNothing -> ptraceError "pcurrencyValue: Must have a specified CurrencySymbol in the Value"
+            PJust tokens -> pnormalize # pcon (PValue $ psingleton # cs # tokens)
+        )
+
+-- | Retrieves a quantity of a specified AssetClass only if it's a singleton or fails otherwise
+pcurrencyTokenQuantity :: forall (q :: AmountGuarantees) (s :: S). Term s (PCurrencySymbol :--> PTokenName :--> PValue 'PValue.Sorted q :--> PInteger)
+pcurrencyTokenQuantity = phoistAcyclic $
+  plam $ \cs tn val ->
+    ptrace "pcurrencyTokenQuantity" $
+      pmatch
+        (plookup # cs # pto val)
+        ( \case
+            PNothing -> ptraceError "pcurrencyTokenQuantity: Must have a specified CurrencySymbol in the Value"
+            PJust tokens -> pmatch
+              (pto tokens)
+              \case
+                PNil -> ptraceError "pcurrencyTokenQuantity: Must have a specified TokenName in the Value under a specified CurrencySymbol"
+                PCons entry rest ->
+                  pif
+                    (rest #== pnil #&& pfromData (pfstBuiltin # entry) #== tn)
+                    (pfromData $ psndBuiltin # entry)
+                    (ptraceError "pcurrencyTokenQuantity: Must have only as single Token Name under a specified CurrencySymbol")
+        )
 
 -- PERF[Andrea]: I believe `PMaybe a` is more efficient to interact
 -- with and PMaybeData is mostly useful for UTxO datums.

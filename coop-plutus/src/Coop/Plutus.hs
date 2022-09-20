@@ -10,7 +10,7 @@ module Coop.Plutus (
   pmustSpendAtLeastAa,
 ) where
 
-import Coop.Plutus.Aux (pcurrencyValue, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfoldTxInputs, pfoldTxOutputs, phasCurrency, pmaybeData, pmustBeSignedBy, pmustHandleSpentWithMp, pmustMint, pmustMintCurrency, pmustPayCurrencyWithDatumTo, pmustSpendAtLeast, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
+import Coop.Plutus.Aux (pcurrencyTokenQuantity, pcurrencyValue, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfoldTxInputs, pfoldTxOutputs, phasCurrency, pmaybeData, pmustBeSignedBy, pmustHandleSpentWithMp, pmustMint, pmustMintCurrency, pmustPayCurrencyWithDatumTo, pmustSpendAtLeast, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
 import Coop.Plutus.Types (PAuthMpParams, PAuthMpRedeemer (PAuthMpBurn, PAuthMpMint), PAuthParams, PCertDatum, PCertMpParams, PCertMpRedeemer (PCertMpBurn, PCertMpMint), PFsDatum, PFsMpParams, PFsMpRedeemer (PFsMpBurn, PFsMpMint))
 import Plutarch (POpaque, pmatch, popaque)
 import Plutarch.Api.V1.Value (passertPositive, pnormalize, pvalueOf)
@@ -554,7 +554,7 @@ certMpMint = phoistAcyclic $
     certParams <- pletFields @'["cmp'authAuthorityAc", "cmp'requiredAtLeastAaQ", "cmp'certVAddress"] params
 
     tnBytes <- plet $ pmustSpendAtLeastAa # ctx # certParams.cmp'authAuthorityAc # certParams.cmp'requiredAtLeastAaQ
-    ptrace "CertMp mint: Spent at least a specified quantity of $AA tokens"
+    ptrace "CertMp mint: Spent at least a required quantity of $AA tokens"
 
     certTn <- plet $ pcon $ PTokenName tnBytes
     _ <- plet $ pmustMintCurrency # ctx # ownCs # (PValue.psingleton # ownCs # certTn # 1)
@@ -581,10 +581,8 @@ mkAuthMp = phoistAcyclic $
 {- | Validates minting of $AUTH tokens
 
 - check that at least N $AA tokens are spent
-- hash spent $AA inputs and create a unique token name for $AUTH token
-- check if M $AUTH tokens with the same unique token name have been minted and paid
-
-NOTE: One transaction can yield ($AUTH, <unique_token_name>, M)
+- hash spent $AA inputs and create a unique token name for $AUTH token being minted
+- check if >1 $AUTH tokens with the same unique token name have been minted (exclusively)
 -}
 authMpMint :: ClosedTerm (PAuthMpParams :--> PScriptContext :--> POpaque)
 authMpMint = phoistAcyclic $
@@ -595,11 +593,11 @@ authMpMint = phoistAcyclic $
     authMpParams <- pletFields @'["amp'authAuthorityAc", "amp'requiredAtLeastAaQ", "amp'certVAddress"] params
 
     tnBytes <- plet $ pmustSpendAtLeastAa # ctx # authMpParams.amp'authAuthorityAc # authMpParams.amp'requiredAtLeastAaQ
+    ptrace "AuthMp mint: Spent at least a required quantity of $AA tokens"
     authTn <- plet $ pcon $ PTokenName tnBytes
 
-    -- ERR[Andrea]: allows minting/burning at other token names.
     pif
-      (0 #< (pvalueOf # minted # ownCs # authTn))
+      (0 #< (pcurrencyTokenQuantity # ownCs # authTn # minted))
       (ptrace "AuthMp mint: At least one $AUTH token is minted" $ popaque punit)
       (ptraceError "AuthMp mint: Must mint at least one $AUTH token")
 

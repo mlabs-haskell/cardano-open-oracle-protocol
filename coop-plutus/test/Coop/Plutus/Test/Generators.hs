@@ -1,6 +1,6 @@
-module Coop.Plutus.Test.Generators (distribute, genCorruptCertMpMintingArgs, genAaInputs, genCorrectCertMpMintingArgs) where
+module Coop.Plutus.Test.Generators (distribute, genCorruptCertMpMintingArgs, genAaInputs, genCorrectCertMpMintingArgs, genCorrectAuthMpMintingArgs, genCorruptAuthMpMintingArgs) where
 
-import Test.QuickCheck (Arbitrary (arbitrary), Gen, choose, chooseAny)
+import Test.QuickCheck (Arbitrary (arbitrary), Gen, choose, chooseAny, vectorOf)
 
 import Control.Monad (foldM)
 import Coop.Plutus.Aux (hashTxInputs)
@@ -13,11 +13,14 @@ import Data.Set qualified as Set
 import Data.Traversable (for)
 import PlutusLedgerApi.V1.Address (pubKeyHashAddress, scriptHashAddress)
 import PlutusLedgerApi.V1.Value (AssetClass, CurrencySymbol (CurrencySymbol), TokenName (TokenName), assetClass, assetClassValue, assetClassValueOf)
-import PlutusLedgerApi.V2 (Datum (Datum), LedgerBytes (LedgerBytes), OutputDatum (NoOutputDatum, OutputDatum), PubKeyHash (PubKeyHash), ScriptContext (ScriptContext, scriptContextTxInfo), ScriptPurpose (Minting), TxId (TxId), TxInInfo (TxInInfo), TxInfo (TxInfo, txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl), TxOut (TxOut, txOutAddress, txOutDatum), TxOutRef (TxOutRef), ValidatorHash (ValidatorHash), Value, always, toBuiltin, toBuiltinData)
+import PlutusLedgerApi.V2 (Address, Datum (Datum), LedgerBytes (LedgerBytes), OutputDatum (NoOutputDatum, OutputDatum), PubKeyHash (PubKeyHash), ScriptContext (ScriptContext, scriptContextTxInfo), ScriptPurpose (Minting), TxId (TxId), TxInInfo (TxInInfo), TxInfo (TxInfo, txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl), TxOut (TxOut, txOutAddress, txOutDatum, txOutValue), TxOutRef (TxOutRef), ValidatorHash (ValidatorHash), Value, always, toBuiltin, toBuiltinData)
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
-import Coop.Types (CertDatum (CertDatum), CertMpParams (cmp'authAuthorityAc, cmp'certVAddress, cmp'requiredAtLeastAaQ))
+import Coop.Types (AuthMpParams (amp'authAuthorityAc, amp'requiredAtLeastAaQ), CertDatum (CertDatum), CertMpParams (cmp'authAuthorityAc, cmp'certVAddress, cmp'requiredAtLeastAaQ))
+import Data.ByteString (ByteString)
+import Data.ByteString qualified as ByteString
+import Data.Word (Word8)
 import PlutusLedgerApi.V1.Interval (interval)
 
 mkScriptContext :: ScriptPurpose -> [TxInInfo] -> [TxInInfo] -> Value -> [TxOut] -> [PubKeyHash] -> ScriptContext
@@ -68,10 +71,11 @@ genCorrectCertMpMintingArgs certMpParams certCs = do
       aaQ = cmp'requiredAtLeastAaQ certMpParams
       certVAddr = cmp'certVAddress certMpParams
   aaIns <- genAaInputs aaAc aaQ
+  certRdmrCs <- genCurrencySymbol
   let certId = toBuiltin . hashTxInputs $ aaIns
       certTn = TokenName certId
       certToken = assetClassValue (assetClass certCs certTn) 1
-      certRdmrAc = assetClass (CurrencySymbol "$CERT-RDMR CS---------------") (TokenName "$CERT-RDMR TN")
+      certRdmrAc = assetClass certRdmrCs (TokenName "$CERT-RDMR TN")
       certDatum = CertDatum (LedgerBytes certId) (interval 0 100) certRdmrAc
       certOut = TxOut certVAddr certToken (OutputDatum . Datum . toBuiltinData $ certDatum) Nothing
   return $
@@ -88,8 +92,8 @@ genCorruptCertMpMintingArgs certMpParams certCs = do
 
   let corruptions =
         mkCorruptions
-          [ (addOtherTokenName, doAddOtherTokenName certVAddr)
-          , (removeOutputDatum, doRemoveOutputDatum certVAddr)
+          [ (addOtherTokenName, doAddOtherTokenName certCs)
+          , (removeOutputDatum, doRemoveOutputDatum)
           , (sendToOtherAddress, doSendToOtherAddress certVAddr)
           ]
 
@@ -101,38 +105,56 @@ genCorruptCertMpMintingArgs certMpParams certCs = do
   where
     mkCorruptions = foldl' (\rest (b, act) -> if b then act . rest else rest) id
 
-    -- Mints a $CERT token with 'other token name' and pays it to @CertV
-    doAddOtherTokenName certVAddr ctx =
-      let otherCertToken = assetClassValue (assetClass certCs (TokenName "other token name")) 1
-          ScriptContext txInfo _ = ctx
-       in ctx
-            { scriptContextTxInfo =
-                txInfo
-                  { txInfoMint = txInfoMint txInfo <> otherCertToken
-                  , txInfoOutputs = txInfoOutputs txInfo <> [TxOut certVAddr otherCertToken NoOutputDatum Nothing]
-                  }
-            }
+genAddress :: Gen Address
+genAddress = do
+  scriptOrWallet :: Bool <- arbitrary
+  if scriptOrWallet
+    then do
+      bs :: ByteString <- ByteString.pack <$> vectorOf 28 (arbitrary :: Gen Word8)
+      return . scriptHashAddress . ValidatorHash . toBuiltin $ bs
+    else do
+      bs :: ByteString <- ByteString.pack <$> vectorOf 28 (arbitrary :: Gen Word8)
+      return . pubKeyHashAddress . PubKeyHash . toBuiltin $ bs
 
-    -- Removes datums from all @CertV outputs
-    doRemoveOutputDatum certVAddr ctx =
-      let ScriptContext txInfo _ = ctx
-       in ctx
-            { scriptContextTxInfo =
-                txInfo
-                  { txInfoOutputs = [out {txOutDatum = NoOutputDatum} | out <- txInfoOutputs txInfo, txOutAddress out == certVAddr]
-                  }
-            }
+genCurrencySymbol :: Gen CurrencySymbol
+genCurrencySymbol = do
+  bs :: ByteString <- ByteString.pack <$> vectorOf 28 (arbitrary :: Gen Word8)
+  return . CurrencySymbol . toBuiltin $ bs
 
-    doSendToOtherAddress certVAddr ctx =
-      let otherAddr = scriptHashAddress . ValidatorHash $ "other addr"
-          ScriptContext txInfo _ = ctx
-       in ctx
-            { scriptContextTxInfo =
-                txInfo
-                  { txInfoOutputs = [out {txOutAddress = otherAddr} | out <- txInfoOutputs txInfo, txOutAddress out == certVAddr]
-                  }
-            }
+genCorrectAuthMpMintingArgs :: AuthMpParams -> CurrencySymbol -> Gen ScriptContext
+genCorrectAuthMpMintingArgs authMpParams authCs = do
+  let aaAc = amp'authAuthorityAc authMpParams
+      aaQ = amp'requiredAtLeastAaQ authMpParams
+  aaIns <- genAaInputs aaAc aaQ
+  addr <- genAddress
+  let authId = toBuiltin . hashTxInputs $ aaIns
+      authTn = TokenName authId
+      authToken = assetClassValue (assetClass authCs authTn) 1
+      authOut = TxOut addr authToken NoOutputDatum Nothing
+  return $
+    mkScriptContext (Minting authCs) aaIns [] authToken [authOut] []
 
+genCorruptAuthMpMintingArgs :: AuthMpParams -> CurrencySymbol -> Gen ScriptContext
+genCorruptAuthMpMintingArgs authMpParams authCs = do
+  ctx <- genCorrectAuthMpMintingArgs authMpParams authCs
+
+  -- Randomly pick a corruption
+  (addOtherTokenName :: Bool) <- arbitrary
+
+  let corruptions =
+        mkCorruptions
+          [ (addOtherTokenName, doAddOtherTokenName authCs)
+          ]
+
+  -- If we didn't manage to corrupt anything, do it again
+  let corruptedCtx = corruptions ctx
+  if corruptedCtx == ctx
+    then genCorruptAuthMpMintingArgs authMpParams authCs
+    else return corruptedCtx
+  where
+    mkCorruptions = foldl' (\rest (b, act) -> if b then act . rest else rest) id
+
+-- | Distributes elements in the first argument over the elements of the second
 distribute :: Ord a => [b] -> Set a -> Gen (Map a [b])
 distribute total xs = do
   (leftover, distributed) <- distributeSingle total xs
@@ -160,3 +182,41 @@ distributeSingle total =
       if b
         then take' ins (i : outs)
         else return (outs, i : ins)
+
+-- | Mutating functions to introduce corruptions
+
+-- | Mints a token with a specified CurrencySymbol and 'other token name' and pays it to same output
+doAddOtherTokenName :: CurrencySymbol -> ScriptContext -> ScriptContext
+doAddOtherTokenName cs ctx =
+  let ScriptContext txInfo _ = ctx
+      otherAc = assetClass cs (TokenName "other token name")
+   in ctx
+        { scriptContextTxInfo =
+            txInfo
+              { txInfoMint = txInfoMint txInfo <> assetClassValue otherAc (toInteger . length . txInfoOutputs $ txInfo)
+              , txInfoOutputs = txInfoOutputs txInfo <> [out {txOutValue = assetClassValue otherAc 1 <> txOutValue out} | out <- txInfoOutputs txInfo]
+              }
+        }
+
+-- | Removes datums from all outputs
+doRemoveOutputDatum :: ScriptContext -> ScriptContext
+doRemoveOutputDatum ctx =
+  let ScriptContext txInfo _ = ctx
+   in ctx
+        { scriptContextTxInfo =
+            txInfo
+              { txInfoOutputs = [out {txOutDatum = NoOutputDatum} | out <- txInfoOutputs txInfo]
+              }
+        }
+
+-- | Replaces original address with some other address
+doSendToOtherAddress :: Address -> ScriptContext -> ScriptContext
+doSendToOtherAddress originalAddr ctx =
+  let ScriptContext txInfo _ = ctx
+      otherAddr = scriptHashAddress . ValidatorHash $ "other addr"
+   in ctx
+        { scriptContextTxInfo =
+            txInfo
+              { txInfoOutputs = [out {txOutAddress = otherAddr} | out <- txInfoOutputs txInfo, txOutAddress out == originalAddr]
+              }
+        }
