@@ -2,7 +2,7 @@ module Main (main) where
 
 import Test.Hspec (Spec, describe, hspec)
 
-import Coop.Test.Plutus (spec)
+import Coop.Plutus.Test (spec)
 
 main :: IO ()
 main = do

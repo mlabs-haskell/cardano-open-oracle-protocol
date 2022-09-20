@@ -95,8 +95,11 @@ library
   hs-source-dirs:  src
   build-depends:
     , base
+    , bytestring
     , coop-hs-types
+    , cryptonite
     , generics-sop
+    , memory
     , plutarch
     , plutarch-extra
     , plutus-ledger-api
@@ -118,17 +121,26 @@ executable coop-plutus-cli
     , plutus-ledger-api
 
 test-suite coop-plutus-tests
+  import:         common-language
   type:           exitcode-stdio-1.0
   hs-source-dirs: test
   main-is:        Main.hs
-  other-modules:  Coop.Test.Plutus
+  other-modules:
+    Coop.Plutus.Test
+    Coop.Plutus.Test.Generators
+
   build-depends:
     , base
+    , bytestring
     , containers
+    , coop-hs-types
+    , coop-plutus
     , data-default
     , hspec
     , hspec-core
     , plutarch
     , plutarch-test
     , plutus-ledger-api
+    , plutus-tx
     , QuickCheck
+    , text

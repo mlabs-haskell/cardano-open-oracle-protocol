@@ -24,8 +24,14 @@ module Coop.Plutus.Aux (
   pcurrencyValue,
   pmustSpendAtLeast,
   pmaybeData,
+  hashTxInputs,
+  pmustMintEx,
 ) where
 
+import Crypto.Hash (SHA3_256 (SHA3_256), hashWith)
+import Data.ByteArray (convert)
+import Data.ByteString (ByteString, cons)
+import Data.List (sort, zipWith)
 import Plutarch (popaque, pto)
 import Plutarch.Api.V1.AssocMap (pempty, plookup, psingleton)
 import Plutarch.Api.V1.Value (pnoAdaValue, pnormalize, pvalueOf)
@@ -39,8 +45,8 @@ import Plutarch.Monadic qualified as P
 import Plutarch.Num (PNum ((#+)))
 import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList, PData, PEq ((#==)), PInteger (), PIsData, PMaybe (PJust, PNothing), PPartialOrd ((#<=)), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pconstantData, pdata, pdnil, pelem, pfield, pfind, pfix, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pletFields, pmap, pmatch, ptrace, ptraceError, ptryFrom, (#), (#$), type (:-->))
 import Plutarch.TermCont (tcont, unTermCont)
-import PlutusLedgerApi.V1 (Extended (PosInf), UpperBound (UpperBound))
-import Prelude (Bool (False, True), Monoid (mempty), fst, ($), (<$>))
+import PlutusLedgerApi.V2 (Extended (PosInf), TxId (getTxId), TxInInfo (TxInInfo), TxOutRef (txOutRefId, txOutRefIdx), UpperBound (UpperBound), fromBuiltin)
+import Prelude (Bool (False, True), Functor (fmap), Monoid (mconcat, mempty), Num (fromInteger), fst, reverse, ($), (.), (<$>))
 
 {- | Check if a 'PValue' contains the given currency symbol.
 NOTE: MangoIV says the plookup should be inlined here
@@ -223,6 +229,16 @@ pmustMint = phoistAcyclic $
       (ptrace "pmustMint: Minted specified quantity" punit)
       (ptraceError "pmustMint: Must mint the specified quantity")
 
+pmustMintEx :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PUnit)
+pmustMintEx = phoistAcyclic $
+  plam $ \ctx cs tn q -> ptrace "pmustMintEx" P.do
+    ctx' <- pletFields @'["txInfo"] ctx
+    txInfo <- pletFields @'["mint"] ctx'.txInfo
+    pif
+      (pcurrencyValue # cs # txInfo.mint #== PValue.psingleton # cs # tn # q)
+      (ptrace "pmustMintEx: Minted specified token name and quantity exclusively" punit)
+      (ptraceError "pmustMintEx: Must mint the specified token name exclusively")
+
 pmustValidateAfter :: ClosedTerm (PScriptContext :--> PExtended PPOSIXTime :--> PUnit)
 pmustValidateAfter = phoistAcyclic $
   plam $ \ctx after -> ptrace "mustValidateAfter" P.do
@@ -373,3 +389,12 @@ pdnothing = pcon $ PDNothing pdnil
 
 pdjust :: PIsData a => Term s a -> Term s (PMaybeData a)
 pdjust x = pcon $ PDJust $ pdcons # pdata x # pdnil
+
+hashTxInputs :: [TxInInfo] -> ByteString
+hashTxInputs inputs =
+  let orefs = [oref | TxInInfo oref _ <- inputs]
+      sortedOrefs = Prelude.reverse $ sort orefs -- TODO: Why the reverse works?
+      ixs = fmap (fromInteger . txOutRefIdx) sortedOrefs
+      txIds = fmap (fromBuiltin . getTxId . txOutRefId) sortedOrefs
+      hashedOref = convert @_ @ByteString . hashWith SHA3_256 . mconcat $ zipWith cons ixs txIds
+   in hashedOref

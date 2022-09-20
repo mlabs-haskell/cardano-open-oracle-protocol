@@ -7,9 +7,10 @@ module Coop.Plutus (
   mkAuthMp,
   certV,
   mkCertMp,
+  pmustSpendAtLeastAa,
 ) where
 
-import Coop.Plutus.Aux (pcurrencyValue, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfoldTxInputs, pfoldTxOutputs, phasCurrency, pmaybeData, pmustBeSignedBy, pmustHandleSpentWithMp, pmustMint, pmustPayTo, pmustSpendAtLeast, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
+import Coop.Plutus.Aux (pcurrencyValue, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfoldTxInputs, pfoldTxOutputs, phasCurrency, pmaybeData, pmustBeSignedBy, pmustHandleSpentWithMp, pmustMint, pmustMintEx, pmustPayTo, pmustSpendAtLeast, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
 import Coop.Plutus.Types (PAuthMpParams, PAuthMpRedeemer (PAuthMpBurn, PAuthMpMint), PAuthParams, PCertDatum, PCertMpParams, PCertMpRedeemer (PCertMpBurn, PCertMpMint), PFsDatum, PFsMpParams, PFsMpRedeemer (PFsMpBurn, PFsMpMint))
 import Plutarch (POpaque, pmatch, popaque)
 import Plutarch.Api.V1.Value (passertPositive, pnormalize, pvalueOf)
@@ -21,6 +22,7 @@ import Plutarch.Api.V2 (
   PMaybeData,
   PMintingPolicy,
   PTokenName (PTokenName),
+  PTuple,
   PTxInInfo,
   PTxOut,
   PValidator,
@@ -549,15 +551,12 @@ certMpMint = phoistAcyclic $
     ctx' <- pletFields @'["txInfo", "purpose"] ctx
     ownCs <- plet $ pownCurrencySymbol # ctx'.purpose
     certParams <- pletFields @'["cmp'authAuthorityAc", "cmp'requiredAtLeastAaQ", "cmp'certVAddress"] params
-    aaCs <- plet $ pfield @"_0" # certParams.cmp'authAuthorityAc
-    aaTn <- plet $ pfield @"_1" # certParams.cmp'authAuthorityAc
 
-    tnBytes <- plet $ pmustSpendAtLeastAa # ctx # aaCs # aaTn # certParams.cmp'requiredAtLeastAaQ
+    tnBytes <- plet $ pmustSpendAtLeastAa # ctx # certParams.cmp'authAuthorityAc # certParams.cmp'requiredAtLeastAaQ
     ptrace "CertMp mint: Spent at least a specified quantity of $AA tokens"
 
     certTn <- plet $ pcon $ PTokenName tnBytes
-    -- ERR[Andrea]: can mint/burn $CERT for other token names.
-    _ <- plet $ pmustMint # ctx # ownCs # certTn # 1
+    _ <- plet $ pmustMintEx # ctx # ownCs # certTn # 1
     ptrace "CertMp mint: Minted 1 $CERT"
     -- TODO: Verify datum by parsing it?
     --       Andrea: Yes, if you don't trust the $AA holder.
@@ -589,11 +588,9 @@ authMpMint = phoistAcyclic $
     ctx' <- pletFields @'["txInfo", "purpose"] ctx
     ownCs <- plet $ pownCurrencySymbol # ctx'.purpose
     minted <- plet $ pfield @"mint" # ctx'.txInfo
-    authParams <- pletFields @'["amp'authAuthorityAc", "amp'requiredAtLeastAaQ", "amp'certVAddress"] params
-    aaCs <- plet $ pfield @"_0" # authParams.amp'authAuthorityAc
-    aaTn <- plet $ pfield @"_1" # authParams.amp'authAuthorityAc
+    authMpParams <- pletFields @'["amp'authAuthorityAc", "amp'requiredAtLeastAaQ", "amp'certVAddress"] params
 
-    tnBytes <- plet $ pmustSpendAtLeastAa # ctx # aaCs # aaTn # authParams.amp'requiredAtLeastAaQ
+    tnBytes <- plet $ pmustSpendAtLeastAa # ctx # authMpParams.amp'authAuthorityAc # authMpParams.amp'requiredAtLeastAaQ
     authTn <- plet $ pcon $ PTokenName tnBytes
 
     -- ERR[Andrea]: allows minting/burning at other token names.
@@ -640,9 +637,12 @@ authMpBurn = phoistAcyclic $
 - accumulate all spent $AA tokens and check if totals are at least as specified
 - create unique bytestring from $AA inputs by hashing the concatenation of (idx,id) pairs
 -}
-pmustSpendAtLeastAa :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PByteString)
+pmustSpendAtLeastAa :: ClosedTerm (PScriptContext :--> PTuple PCurrencySymbol PTokenName :--> PInteger :--> PByteString)
 pmustSpendAtLeastAa = phoistAcyclic $
-  plam $ \ctx aaCs aaTn atLeastAaQ -> ptrace "pmustSpendAtLeastAa" P.do
+  plam $ \ctx aaAc atLeastAaQ -> ptrace "pmustSpendAtLeastAa" P.do
+    aaCs <- plet $ pfield @"_0" # aaAc
+    aaTn <- plet $ pfield @"_1" # aaAc
+
     let foldFn acc txIn = P.do
           -- check if $AA input
           txIn' <- pletFields @'["resolved", "outRef"] txIn
@@ -654,7 +654,7 @@ pmustSpendAtLeastAa = phoistAcyclic $
                 -- accumulate token name bytes
                 txId <- plet $ pfield @"_0" #$ pfield @"id" # txIn'.outRef
                 txIdx <- plet $ pfield @"idx" # txIn'.outRef
-                tnBytes' <- plet $ tnBytes <> pconsBS # txIdx # txId
+                tnBytes' <- plet $ pconsBS # txIdx # txId <> tnBytes
                 -- accumulate token quantities
                 aaVal' <- plet $ aaVal #+ (pvalueOf # txInVal # aaCs # aaTn)
 
