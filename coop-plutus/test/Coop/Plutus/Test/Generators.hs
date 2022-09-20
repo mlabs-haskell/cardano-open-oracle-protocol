@@ -13,12 +13,11 @@ import Data.Set qualified as Set
 import Data.Traversable (for)
 import PlutusLedgerApi.V1.Address (pubKeyHashAddress, scriptHashAddress)
 import PlutusLedgerApi.V1.Value (AssetClass, CurrencySymbol (CurrencySymbol), TokenName (TokenName), assetClass, assetClassValue, assetClassValueOf)
-import PlutusLedgerApi.V2 (CurrencySymbol, Datum (Datum), LedgerBytes (LedgerBytes), OutputDatum (NoOutputDatum, OutputDatum), PubKeyHash (PubKeyHash), ScriptContext (ScriptContext, scriptContextTxInfo), ScriptPurpose (Minting), TxId (TxId, getTxId), TxInInfo (TxInInfo), TxInfo (TxInfo, txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl), TxOut (TxOut, txOutAddress, txOutDatum), TxOutRef (TxOutRef, txOutRefId, txOutRefIdx), ValidatorHash (ValidatorHash), Value, always, toBuiltin, toBuiltinData)
+import PlutusLedgerApi.V2 (Datum (Datum), LedgerBytes (LedgerBytes), OutputDatum (NoOutputDatum, OutputDatum), PubKeyHash (PubKeyHash), ScriptContext (ScriptContext, scriptContextTxInfo), ScriptPurpose (Minting), TxId (TxId), TxInInfo (TxInInfo), TxInfo (TxInfo, txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl), TxOut (TxOut, txOutAddress, txOutDatum), TxOutRef (TxOutRef), ValidatorHash (ValidatorHash), Value, always, toBuiltin, toBuiltinData)
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
 import Coop.Types (CertDatum (CertDatum), CertMpParams (cmp'authAuthorityAc, cmp'certVAddress, cmp'requiredAtLeastAaQ))
-import Plutarch.Api.V2 (validatorHash)
 import PlutusLedgerApi.V1.Interval (interval)
 
 mkScriptContext :: ScriptPurpose -> [TxInInfo] -> [TxInInfo] -> Value -> [TxOut] -> [PubKeyHash] -> ScriptContext
