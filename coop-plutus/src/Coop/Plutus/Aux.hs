@@ -35,7 +35,11 @@ import Data.ByteString (ByteString, cons)
 import Data.List (sort, zipWith)
 import Plutarch (popaque, pto)
 import Plutarch.Api.V1.AssocMap (pempty, plookup, psingleton)
-import Plutarch.Api.V1.Value (pnoAdaValue, pnormalize, pvalueOf)
+import Plutarch.Api.V1.Value (
+  pnoAdaValue,
+  pnormalize,
+  pvalueOf,
+ )
 import Plutarch.Api.V1.Value qualified as PValue
 import Plutarch.Api.V2 (AmountGuarantees (NonZero), KeyGuarantees (Sorted), PAddress, PCurrencySymbol, PDatum, PDatumHash, PExtended, PInterval (PInterval), PLowerBound (PLowerBound), PMap (PMap), PMaybeData (PDJust, PDNothing), PMintingPolicy, POutputDatum (PNoOutputDatum, POutputDatum, POutputDatumHash), PPOSIXTime, PPubKeyHash, PScriptContext, PScriptPurpose (PMinting, PSpending), PTokenName, PTuple, PTxInInfo, PTxOut, PTxOutRef, PUpperBound, PValue (PValue))
 import Plutarch.Bool (PBool (PTrue))
@@ -254,10 +258,11 @@ pmustMintCurrency = phoistAcyclic $
   plam $ \ctx cs val -> ptrace "pmustMintCurrency" P.do
     ctx' <- pletFields @'["txInfo"] ctx
     txInfo <- pletFields @'["mint"] ctx'.txInfo
+
     pif
       (pcurrencyValue # cs # txInfo.mint #== val)
-      (ptrace "pmustMintCurrency: Minted specified token name and quantity exclusively" punit)
-      (ptraceError "pmustMintCurrency: Must mint the specified token name exclusively")
+      (ptrace "pmustMintCurrency: Minted specified value of currency exclusively" punit)
+      (ptraceError "pmustMintCurrency: Must mint the specified value of currency")
 
 pmustValidateAfter :: ClosedTerm (PScriptContext :--> PExtended PPOSIXTime :--> PUnit)
 pmustValidateAfter = phoistAcyclic $

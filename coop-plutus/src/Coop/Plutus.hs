@@ -524,8 +524,8 @@ certMpBurn = phoistAcyclic $
                   plet $
                     pif
                       (pcurrencyValue # ownCs # txInVal #== certVal)
-                      (ptrace "CertMp burn: Spent a single $CERT token" punit)
-                      (ptraceError "CertMp burn: Must spend a single $CERT token")
+                      (ptrace "CertMp burn: Spent 1 $CERT token" punit)
+                      (ptraceError "CertMp burn: Must spend a 1 $CERT token")
 
                 shouldBurn <> inv certVal
             )

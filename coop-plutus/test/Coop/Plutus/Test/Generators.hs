@@ -1,6 +1,6 @@
-module Coop.Plutus.Test.Generators (normalizeValue, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx) where
+module Coop.Plutus.Test.Generators (genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue) where
 
-import Test.QuickCheck (Arbitrary (arbitrary), Gen, arbitraryASCIIChar, choose, chooseAny, chooseInt, chooseInteger, vectorOf)
+import Test.QuickCheck (Arbitrary (arbitrary), Gen, choose, chooseAny, chooseEnum, chooseInt, chooseInteger, vectorOf)
 
 import Control.Monad (foldM, replicateM)
 import Coop.Plutus.Aux (hashTxInputs)
@@ -12,8 +12,8 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Traversable (for)
 import PlutusLedgerApi.V1.Address (pubKeyHashAddress, scriptHashAddress)
-import PlutusLedgerApi.V1.Value (AssetClass, CurrencySymbol (CurrencySymbol), TokenName (TokenName), Value (Value), assetClass, assetClassValue, assetClassValueOf)
-import PlutusLedgerApi.V2 (Address, BuiltinByteString, Datum (Datum), LedgerBytes (LedgerBytes), OutputDatum (NoOutputDatum, OutputDatum), POSIXTime (POSIXTime), PubKeyHash (PubKeyHash), ScriptContext (ScriptContext, scriptContextTxInfo), ScriptPurpose (Minting), ToData, TxId (TxId), TxInInfo (TxInInfo), TxInfo (TxInfo, txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl), TxOut (TxOut, txOutAddress, txOutDatum, txOutValue), TxOutRef (TxOutRef), ValidatorHash (ValidatorHash), Value (getValue), always, toBuiltin, toBuiltinData)
+import PlutusLedgerApi.V1.Value (AssetClass, CurrencySymbol (CurrencySymbol), TokenName (TokenName), assetClass, assetClassValue, assetClassValueOf)
+import PlutusLedgerApi.V2 (Address, BuiltinByteString, Datum (Datum), LedgerBytes (LedgerBytes), OutputDatum (NoOutputDatum, OutputDatum), POSIXTime (POSIXTime), PubKeyHash (PubKeyHash), ScriptContext (ScriptContext, scriptContextTxInfo), ScriptPurpose (Minting), ToData, TxId (TxId), TxInInfo (TxInInfo), TxInfo (TxInfo, txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl), TxOut (TxOut, txOutAddress, txOutDatum, txOutValue), TxOutRef (TxOutRef), ValidatorHash (ValidatorHash), Value (Value, getValue), always, toBuiltin, toBuiltinData)
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
@@ -41,7 +41,7 @@ mkTxInfo ins refs mints outs sigs =
     , txInfoRedeemers = AssocMap.empty
     , txInfoInputs = sortOn (\(TxInInfo i _) -> i) ins
     , txInfoReferenceInputs = sortOn (\(TxInInfo i _) -> i) refs
-    , txInfoMint = mints
+    , txInfoMint = normalizeValue mints
     , txInfoOutputs = outs
     , txInfoSignatories = sigs
     }
@@ -133,33 +133,6 @@ genCorrectCertMpMintingCtx certMpParams certCs = do
   return $
     mkScriptContext (Minting certCs) aaIns [] certToken [certOut] []
 
-normalizeValue :: Value -> Value
-normalizeValue v =
-  Value . AssocMap.fromList . Map.toAscList . (AssocMap.fromList . Map.toAscList <$>) $
-    Map.unionsWith
-      (Map.unionWith (+))
-      ( [ Map.singleton cs (Map.singleton tn q)
-        | (cs, tokens) <- AssocMap.toList . getValue $ v
-        , (tn, q) <- AssocMap.toList tokens
-        ]
-      )
-
-genCorrectCertMpBurningCtx :: CertMpParams -> CurrencySymbol -> Gen ScriptContext
-genCorrectCertMpBurningCtx certMpParams certCs = do
-  let certVAddr = cmp'certVAddress certMpParams
-  certRdmrAc <- genCertRdmrAc
-  certIns <- genCertInputs certVAddr certCs certRdmrAc 100
-  certRdmrIns <- genCertRdmrInputs certRdmrAc
-  let certTokensToBurn = inv . fold $ [txOutValue certInOut | TxInInfo _ certInOut <- certIns]
-      ctx = mkScriptContext (Minting certCs) (certIns <> certRdmrIns) [] certTokensToBurn [] []
-  return $
-    ctx
-      { scriptContextTxInfo =
-          (scriptContextTxInfo ctx)
-            { txInfoValidRange = interval 101 201
-            }
-      }
-
 genCorruptCertMpMintingCtx :: CertMpParams -> CurrencySymbol -> Gen ScriptContext
 genCorruptCertMpMintingCtx certMpParams certCs = do
   let certVAddr = cmp'certVAddress certMpParams
@@ -182,24 +155,40 @@ genCorruptCertMpMintingCtx certMpParams certCs = do
     then genCorruptCertMpMintingCtx certMpParams certCs
     else return corruptedCtx
 
-genCorruptCertMpBurningCtx :: CertMpParams -> CurrencySymbol -> Gen ScriptContext
-genCorruptCertMpBurningCtx certMpParams certCs = do
+genCorrectCertMpBurningCtx :: CertMpParams -> CurrencySymbol -> AssetClass -> Gen ScriptContext
+genCorrectCertMpBurningCtx certMpParams certCs certRdmrAc = do
+  let certVAddr = cmp'certVAddress certMpParams
+  certIns <- genCertInputs certVAddr certCs certRdmrAc 100
+  certRdmrIns <- genCertRdmrInputs certRdmrAc
+  let certTokensToBurn = inv . fold $ [txOutValue certInOut | TxInInfo _ certInOut <- certIns]
+      ctx = mkScriptContext (Minting certCs) (certIns <> certRdmrIns) [] certTokensToBurn [] []
+  return $
+    ctx
+      { scriptContextTxInfo =
+          (scriptContextTxInfo ctx)
+            { txInfoValidRange = interval 101 201
+            }
+      }
+
+genCorruptCertMpBurningCtx :: CertMpParams -> CurrencySymbol -> AssetClass -> Gen ScriptContext
+genCorruptCertMpBurningCtx certMpParams certCs certRdmrAc = do
   let certVAddr = cmp'certVAddress certMpParams
 
-  ctx <- genCorrectCertMpBurningCtx certMpParams certCs
+  ctx <- genCorrectCertMpBurningCtx certMpParams certCs certRdmrAc
 
   -- Randomly pick a corruption
-  (mintAndPayOtherTokenNameAddr :: Bool) <- arbitrary
+  ((mintAndPayOtherTokenNameAddr, removeCertRdmrInputs) :: (Bool, Bool)) <- arbitrary
 
   let corrupt =
         mkCorrupt
           [ (mintAndPayOtherTokenNameAddr, doMintAndPayOtherTokenNameAddr certCs certVAddr)
+          , (removeCertRdmrInputs, doRemoveInputsWithToken certRdmrAc)
           ]
 
   -- If we didn't manage to corrupt anything, do it again
   let corruptedCtx = corrupt ctx
   if corruptedCtx == ctx
-    then genCorruptCertMpBurningCtx certMpParams certCs
+    then genCorruptCertMpBurningCtx certMpParams certCs certRdmrAc
     else return corruptedCtx
 
 mkCorrupt :: forall {b}. [(Bool, b -> b)] -> b -> b
@@ -249,12 +238,12 @@ genAddress = do
 
 genCurrencySymbol :: Gen CurrencySymbol
 genCurrencySymbol = do
-  bs :: ByteString <- ByteString.pack <$> vectorOf 28 (arbitrary :: Gen Word8)
-  return . CurrencySymbol . toBuiltin $ bs
+  bs <- stringToBuiltinByteString <$> vectorOf 28 (chooseEnum ('a', 'z'))
+  return . CurrencySymbol $ bs
 
 genAuthenticatonId :: Gen BuiltinByteString
 genAuthenticatonId = do
-  bs <- stringToBuiltinByteString <$> vectorOf 21 arbitraryASCIIChar
+  bs <- stringToBuiltinByteString <$> vectorOf 21 (chooseEnum ('a', 'z'))
   return $ "authid-" <> bs
 
 -- | Distributes elements in the first argument over the elements of the second
@@ -336,3 +325,26 @@ doSendToOtherAddress originalAddr ctx =
               { txInfoOutputs = [out {txOutAddress = otherAddr} | out <- txInfoOutputs txInfo, txOutAddress out == originalAddr]
               }
         }
+
+-- | Replaces original address with some other address
+doRemoveInputsWithToken :: AssetClass -> ScriptContext -> ScriptContext
+doRemoveInputsWithToken ac ctx =
+  let ScriptContext txInfo _ = ctx
+   in ctx
+        { scriptContextTxInfo =
+            txInfo
+              { txInfoInputs = [inp | inp@(TxInInfo _ inOut) <- txInfoInputs txInfo, assetClassValueOf (txOutValue inOut) ac == 0]
+              }
+        }
+
+-- NOTE: That's why you want to use mlabs-haskell/plutus-simple-model
+normalizeValue :: Value -> Value
+normalizeValue v =
+  Value . AssocMap.fromList . Map.toAscList . (AssocMap.fromList . Map.toAscList <$>) $
+    Map.unionsWith
+      (Map.unionWith (+))
+      ( [ Map.singleton cs (Map.singleton tn q)
+        | (cs, tokens) <- AssocMap.toList . getValue $ v
+        , (tn, q) <- AssocMap.toList tokens
+        ]
+      )

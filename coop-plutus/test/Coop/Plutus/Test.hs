@@ -7,7 +7,7 @@ import Test.QuickCheck (NonEmptyList (getNonEmpty), Positive (getPositive), choo
 
 import Coop.Plutus (mkAuthMp, mkCertMp, pmustSpendAtLeastAa)
 import Coop.Plutus.Aux (hashTxInputs)
-import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx)
+import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx)
 import Coop.Plutus.Types (PAuthMpParams, PCertMpParams)
 import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpMint), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint))
 import Data.ByteString (ByteString)
@@ -100,7 +100,7 @@ spec = do
         forAll (choose (1, 10)) $
           \aaQ ->
             let certMpParams = CertMpParams aaAc aaQ certVAddr
-             in forAll (genCorrectCertMpBurningCtx certMpParams certCs) $
+             in forAll (genCertRdmrAc >>= genCorrectCertMpBurningCtx certMpParams certCs) $
                   \ctx -> do
                     psucceeds
                       ( mkCertMp
@@ -125,7 +125,7 @@ spec = do
         forAll (choose (1, 10)) $
           \aaQ ->
             let certMpParams = CertMpParams aaAc aaQ certVAddr
-             in forAll (genCorruptCertMpBurningCtx certMpParams certCs) $
+             in forAll (genCertRdmrAc >>= genCorruptCertMpBurningCtx certMpParams certCs) $
                   \ctx ->
                     pfails
                       ( mkCertMp
