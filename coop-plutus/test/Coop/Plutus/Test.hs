@@ -7,9 +7,9 @@ import Test.QuickCheck (NonEmptyList (getNonEmpty), Positive (getPositive), choo
 
 import Coop.Plutus (mkAuthMp, mkCertMp, pmustSpendAtLeastAa)
 import Coop.Plutus.Aux (hashTxInputs)
-import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx)
+import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx)
 import Coop.Plutus.Types (PAuthMpParams, PCertMpParams)
-import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpMint), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint))
+import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint))
 import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (fold))
 import Data.List (sortOn)
@@ -146,6 +146,18 @@ spec = do
                       ( mkAuthMp
                           # pconstantData @PAuthMpParams authMpParams
                           # pdataImpl (pconstant AuthMpMint)
+                          # pconstant ctx
+                      )
+      prop "burn $AUTH" $
+        forAll (choose (1, 10)) $
+          \aaQ ->
+            let authMpParams = AuthMpParams aaAc aaQ
+             in forAll (genCorrectAuthMpBurningCtx authCs) $
+                  \ctx -> do
+                    psucceeds
+                      ( mkAuthMp
+                          # pconstantData @PAuthMpParams authMpParams
+                          # pdataImpl (pconstant AuthMpBurn)
                           # pconstant ctx
                       )
     describe "should-fail" $ do

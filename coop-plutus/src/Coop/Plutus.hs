@@ -593,12 +593,11 @@ authMpMint = phoistAcyclic $
     minted <- plet $ pfield @"mint" # ctx'.txInfo
     authMpParams <- pletFields @'["amp'authAuthorityAc", "amp'requiredAtLeastAaQ", "amp'certVAddress"] params
 
-    tnBytes <- plet $ pmustSpendAtLeastAa # ctx # authMpParams.amp'authAuthorityAc # authMpParams.amp'requiredAtLeastAaQ
+    authId <- plet $ pmustSpendAtLeastAa # ctx # authMpParams.amp'authAuthorityAc # authMpParams.amp'requiredAtLeastAaQ
     ptrace "AuthMp mint: Spent at least a required quantity of $AA tokens"
-    authTn <- plet $ pcon $ PTokenName tnBytes
 
     pif
-      (0 #< (pcurrencyTokenQuantity # ownCs # authTn # minted))
+      (0 #< (pcurrencyTokenQuantity # ownCs # pcon (PTokenName authId) # minted))
       (ptrace "AuthMp mint: At least one $AUTH token is minted" $ popaque punit)
       (ptraceError "AuthMp mint: Must mint at least one $AUTH token")
 
@@ -606,13 +605,13 @@ authMpMint = phoistAcyclic $
 
 - accumulate all spent $AUTH tokens and check if all are burned
 
-NOTE: $AUTH tokens can be burned freely
+Notes:
+- $AUTH tokens can be burned freely
 -}
 authMpBurn :: ClosedTerm (PScriptContext :--> POpaque)
 authMpBurn = phoistAcyclic $
   plam $ \ctx -> ptrace "AuthMp burn $AUTH" P.do
     ctx' <- pletFields @'["txInfo", "purpose"] ctx
-    minted <- plet $ pfield @"mint" # ctx'.txInfo
     ownCs <- plet $ pownCurrencySymbol # ctx'.purpose
 
     let foldFn shouldBurn txInInfo = P.do
@@ -626,14 +625,11 @@ authMpBurn = phoistAcyclic $
             )
             (ptrace "AuthMp burn $AUTH: Skipping foreign input" shouldBurn)
 
-    -- INFO[Andrea]: this is actually safe against trying to mint/burn
-    --               for other TokenNames, certMpBurn should be changed to something similar.
-    shouldBurnTotal <- plet $ pfoldTxInputs # ctx # plam foldFn # mempty
-    ownMinted <- plet $ pcurrencyValue # ownCs # minted
-    pif
-      (ownMinted #== shouldBurnTotal)
-      (ptrace "AuthMp burn: Burned all spent $AUTH tokens" $ popaque punit)
-      (ptraceError "AuthMp burn: All spent $AUTH tokens must be burned")
+    shouldBurn <- plet $ pfoldTxInputs # ctx # plam foldFn # mempty
+
+    _ <- plet $ pmustMintCurrency # ctx # ownCs # shouldBurn
+
+    ptrace "AuthMp burn: Burned all spent $AUTH tokens" $ popaque punit
 
 {- | Checks for total spent $AA tokens
 

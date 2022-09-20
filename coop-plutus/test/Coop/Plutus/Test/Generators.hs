@@ -1,4 +1,4 @@
-module Coop.Plutus.Test.Generators (genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue) where
+module Coop.Plutus.Test.Generators (genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx) where
 
 import Test.QuickCheck (Arbitrary (arbitrary), Gen, choose, chooseAny, chooseEnum, chooseInt, chooseInteger, vectorOf)
 
@@ -113,6 +113,28 @@ genCertInputs certVAddr certCs certRdmrAc validUntil = do
           <$> zip certIds certValidities
   return certInputs
 
+genAuthInputs :: CurrencySymbol -> Gen [TxInInfo]
+genAuthInputs authCs = do
+  nAuthInputs <- chooseInt (1, 10)
+  authIds <- replicateM nAuthInputs genAuthenticatonId
+  authQs <- replicateM nAuthInputs (chooseInteger (1, 10))
+  authWallets <- replicateM 5 genAddress
+  authWalletsWithIdsAndQs <- distribute (zip authIds authQs) $ Set.fromList authWallets
+
+  let authInputs =
+        ( \(authWallet, authId, authQ) ->
+            TxInInfo
+              (TxOutRef (TxId authId) 0)
+              ( TxOut
+                  authWallet
+                  (Value.singleton authCs (TokenName authId) authQ)
+                  NoOutputDatum
+                  Nothing
+              )
+        )
+          <$> [(authWallet, authId, authQ) | (authWallet, idsAndQs) <- Map.toList authWalletsWithIdsAndQs, (authId, authQ) <- idsAndQs]
+  return authInputs
+
 genCertRdmrAc :: Gen AssetClass
 genCertRdmrAc = do
   certRdmrCs <- genCurrencySymbol
@@ -224,6 +246,12 @@ genCorruptAuthMpMintingCtx authMpParams authCs = do
   if corruptedCtx == ctx
     then genCorruptAuthMpMintingCtx authMpParams authCs
     else return corruptedCtx
+
+genCorrectAuthMpBurningCtx :: CurrencySymbol -> Gen ScriptContext
+genCorrectAuthMpBurningCtx authCs = do
+  authIns <- genAuthInputs authCs
+  let authTokensToBurn = inv . fold $ [txOutValue authInOut | TxInInfo _ authInOut <- authIns]
+  return $ mkScriptContext (Minting authCs) authIns [] authTokensToBurn [] []
 
 genAddress :: Gen Address
 genAddress = do
