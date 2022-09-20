@@ -494,7 +494,7 @@ certMpBurn = phoistAcyclic $
     ctx' <- pletFields @'["txInfo", "purpose"] ctx
     ownCs <- plet $ pownCurrencySymbol # ctx'.purpose
 
-    let foldFn acc txInInfo = P.do
+    let foldFn shouldBurn txInInfo = P.do
           txIn <- plet $ pfield @"resolved" # txInInfo
           txInVal <- plet $ pfield @"value" # txIn
           pif
@@ -519,21 +519,21 @@ certMpBurn = phoistAcyclic $
                 _ <- plet $ pmustSpendAtLeast # ctx # redeemerAc._0 # redeemerAc._1 # 1
                 ptrace "CertMp burn: At least 1 $CERT-RDMR spent"
 
-                certTn <- plet $ pcon (PTokenName $ certDatum.cert'id)
+                certVal <- plet $ PValue.psingleton # ownCs # pcon (PTokenName $ certDatum.cert'id) # 1
                 _ <-
                   plet $
                     pif
-                      (pvalueOf # txInVal # ownCs # certTn #== 1)
+                      (pcurrencyValue # ownCs # txInVal #== certVal)
                       (ptrace "CertMp burn: Spent a single $CERT token" punit)
                       (ptraceError "CertMp burn: Must spend a single $CERT token")
 
-                -- ERR[Andrea]: allows actually minting $CERT for other token names, and leaking it.
-                _ <- plet $ pmustMint # ctx # ownCs # certTn # (pnegate # 1)
-                ptrace "CertMp burn: $CERT spent and burned" acc
+                shouldBurn <> inv certVal
             )
-            (ptrace "CertMp burn: Skipping foreign input" acc)
+            (ptrace "CertMp burn: Skipping foreign input" shouldBurn)
 
-    _ <- plet $ pfoldTxInputs # ctx # plam foldFn # punit
+    shouldBurn <- plet $ pfoldTxInputs # ctx # plam foldFn # mempty
+
+    _ <- plet $ pmustMintCurrency # ctx # ownCs # shouldBurn
 
     ptrace "CertMp burn: All $CERTs spent and burned" $ popaque punit
 

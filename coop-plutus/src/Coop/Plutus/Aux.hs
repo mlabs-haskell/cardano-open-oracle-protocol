@@ -251,13 +251,13 @@ pmustMint = phoistAcyclic $
 -- | Checks total value of a specified CurrencySymbol minted.
 pmustMintCurrency :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PValue 'Sorted 'NonZero :--> PUnit)
 pmustMintCurrency = phoistAcyclic $
-  plam $ \ctx cs val -> ptrace "pmustMintEx" P.do
+  plam $ \ctx cs val -> ptrace "pmustMintCurrency" P.do
     ctx' <- pletFields @'["txInfo"] ctx
     txInfo <- pletFields @'["mint"] ctx'.txInfo
     pif
       (pcurrencyValue # cs # txInfo.mint #== val)
-      (ptrace "pmustMintEx: Minted specified token name and quantity exclusively" punit)
-      (ptraceError "pmustMintEx: Must mint the specified token name exclusively")
+      (ptrace "pmustMintCurrency: Minted specified token name and quantity exclusively" punit)
+      (ptraceError "pmustMintCurrency: Must mint the specified token name exclusively")
 
 pmustValidateAfter :: ClosedTerm (PScriptContext :--> PExtended PPOSIXTime :--> PUnit)
 pmustValidateAfter = phoistAcyclic $

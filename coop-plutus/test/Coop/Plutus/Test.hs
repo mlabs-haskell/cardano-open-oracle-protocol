@@ -7,7 +7,7 @@ import Test.QuickCheck (NonEmptyList (getNonEmpty), Positive (getPositive), choo
 
 import Coop.Plutus (mkAuthMp, mkCertMp, pmustSpendAtLeastAa)
 import Coop.Plutus.Aux (hashTxInputs)
-import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpMintingCtx)
+import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx)
 import Coop.Plutus.Types (PAuthMpParams, PCertMpParams)
 import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpMint), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint))
 import Data.ByteString (ByteString)
@@ -101,7 +101,7 @@ spec = do
           \aaQ ->
             let certMpParams = CertMpParams aaAc aaQ certVAddr
              in forAll (genCorrectCertMpBurningCtx certMpParams certCs) $
-                  \ctx ->
+                  \ctx -> do
                     psucceeds
                       ( mkCertMp
                           # pconstantData @PCertMpParams certMpParams
@@ -119,6 +119,18 @@ spec = do
                       ( mkCertMp
                           # pconstantData @PCertMpParams certMpParams
                           # pdataImpl (pconstant CertMpMint)
+                          # pconstant ctx
+                      )
+      prop "burn $CERT" $
+        forAll (choose (1, 10)) $
+          \aaQ ->
+            let certMpParams = CertMpParams aaAc aaQ certVAddr
+             in forAll (genCorruptCertMpBurningCtx certMpParams certCs) $
+                  \ctx ->
+                    pfails
+                      ( mkCertMp
+                          # pconstantData @PCertMpParams certMpParams
+                          # pdataImpl (pconstant CertMpBurn)
                           # pconstant ctx
                       )
   describe "@CertV" $ do return ()
@@ -152,6 +164,9 @@ spec = do
 
   describe "FsMp" $ do return ()
   describe "@FsV" $ do return ()
+
+_plog :: ClosedTerm a -> Expectation
+_plog p = _ptraces' p id []
 
 _ptraces' :: (Show b, Eq b) => ClosedTerm a -> ([Text] -> b) -> b -> Expectation
 _ptraces' p traceMap traceMappedShouldBe =
