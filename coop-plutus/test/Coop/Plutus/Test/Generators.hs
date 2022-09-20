@@ -1,4 +1,4 @@
-module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx) where
+module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx) where
 
 import Test.QuickCheck (Arbitrary (arbitrary), Gen, choose, chooseAny, chooseEnum, chooseInt, chooseInteger, vectorOf)
 
@@ -13,7 +13,7 @@ import Data.Set qualified as Set
 import Data.Traversable (for)
 import PlutusLedgerApi.V1.Address (pubKeyHashAddress, scriptHashAddress)
 import PlutusLedgerApi.V1.Value (AssetClass, CurrencySymbol (CurrencySymbol), TokenName (TokenName), assetClass, assetClassValue, assetClassValueOf)
-import PlutusLedgerApi.V2 (Address, BuiltinByteString, Datum (Datum), LedgerBytes (LedgerBytes), OutputDatum (NoOutputDatum, OutputDatum), POSIXTime (POSIXTime), PubKeyHash (PubKeyHash), ScriptContext (ScriptContext, scriptContextTxInfo), ScriptPurpose (Minting), ToData, TxId (TxId), TxInInfo (TxInInfo), TxInfo (TxInfo, txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl), TxOut (TxOut, txOutAddress, txOutDatum, txOutValue), TxOutRef (TxOutRef), ValidatorHash (ValidatorHash), Value (Value, getValue), always, toBuiltin, toBuiltinData)
+import PlutusLedgerApi.V2 (Address, BuiltinByteString, Datum (Datum), LedgerBytes (LedgerBytes), OutputDatum (NoOutputDatum, OutputDatum), POSIXTime (POSIXTime), PubKeyHash (PubKeyHash), ScriptContext (ScriptContext, scriptContextTxInfo), ScriptPurpose (Minting, Spending), ToData, TxId (TxId), TxInInfo (TxInInfo, txInInfoOutRef), TxInfo (TxInfo, txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl), TxOut (TxOut, txOutAddress, txOutDatum, txOutValue), TxOutRef (TxOutRef), ValidatorHash (ValidatorHash), Value (Value, getValue), always, toBuiltin, toBuiltinData)
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
@@ -271,6 +271,13 @@ genCorruptAuthMpBurningCtx authCs = do
   if corruptedCtx == ctx
     then genCorruptAuthMpBurningCtx authCs
     else return corruptedCtx
+
+genCorrectCertVSpendingCtx :: CurrencySymbol -> Address -> Gen ScriptContext
+genCorrectCertVSpendingCtx certCs certVAddr = do
+  certRdmrAc <- genCertRdmrAc
+  certIns <- genCertInputs certVAddr certCs certRdmrAc 100
+  let tokensToBurn = inv . fold $ [txOutValue inOut | TxInInfo _ inOut <- certIns]
+  return $ mkScriptContext (Spending (txInInfoOutRef . head $ certIns)) certIns [] tokensToBurn [] []
 
 genAddress :: Gen Address
 genAddress = do

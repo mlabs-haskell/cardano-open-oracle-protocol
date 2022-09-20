@@ -10,7 +10,7 @@ module Coop.Plutus (
   pmustSpendAtLeastAa,
 ) where
 
-import Coop.Plutus.Aux (pcurrencyTokenQuantity, pcurrencyValue, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfoldTxInputs, pfoldTxOutputs, phasCurrency, pmaybeData, pmustBeSignedBy, pmustHandleSpentWithMp, pmustMint, pmustMintCurrency, pmustPayCurrencyWithDatumTo, pmustSpendAtLeast, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
+import Coop.Plutus.Aux (pcurrencyTokenQuantity, pcurrencyValue, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfoldTxInputs, pfoldTxOutputs, phasCurrency, pmaybeData, pmustBeSignedBy, pmustBurnAllSpent, pmustMint, pmustMintCurrency, pmustPayCurrencyWithDatumTo, pmustSpendAtLeast, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
 import Coop.Plutus.Types (PAuthMpParams, PAuthMpRedeemer (PAuthMpBurn, PAuthMpMint), PAuthParams, PCertDatum, PCertMpParams, PCertMpRedeemer (PCertMpBurn, PCertMpMint), PFsDatum, PFsMpParams, PFsMpRedeemer (PFsMpBurn, PFsMpMint))
 import Plutarch (POpaque, pmatch, popaque)
 import Plutarch.Api.V1.Value (passertPositive, pnormalize, pvalueOf)
@@ -37,14 +37,15 @@ import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PByteString, PEq ((#
 import PlutusTx.Prelude (Group (inv))
 import Prelude (Monoid (mempty), Semigroup ((<>)), const, ($))
 
--- | Delegates spending validation to corresponding minting policies
+{- | Delegates spending validation to corresponding minting policies
+
+TODO: Test 'other-mint-redeemer' vulnerability with psm or Plutip
+-}
 fsV :: ClosedTerm PValidator
 fsV = phoistAcyclic $
   plam $ \_ _ ctx -> ptrace "@FsV" P.do
-    -- ERR[Andrea]: should we be allowed to spend a fsV input as we mint a new $FS token?
-    --              fsMpMint does not check we are after "fd'gcAfter" for any fsV inputs.
-    _ <- plet $ pmustHandleSpentWithMp # ctx
-    ptrace "@FsV: Spending delegated to FsMp" $ popaque punit
+    _ <- plet $ pmustBurnAllSpent # ctx
+    ptrace "@FsV: Everything spent is burned" $ popaque punit
 
 -- | Minting policy that validates minting and burning of $FS tokens
 mkFsMp :: ClosedTerm (PAsData PFsMpParams :--> PMintingPolicy)
@@ -77,7 +78,7 @@ fsMpBurn = phoistAcyclic $
     let foldFn shouldBurn txInInfo = P.do
           txOut <- plet $ pfield @"resolved" # txInInfo
           txIn <- pletFields @'["value", "address"] $ pfield @"resolved" # txInInfo
-          -- WARN[Andrea]: this will error out on non-FsDatum inputs, such as wallet ones to cover fees.
+          -- WARN(Andrea): this will error out on non-FsDatum inputs, such as wallet ones to cover fees.
           --               The comment below refers to this line.
           fsDatum <- pletFields @'["fd'submitter", "fd'gcAfter", "fd'fsId"] $ pdatumFromTxOut @PFsDatum # ctx # txOut
 
@@ -87,8 +88,6 @@ fsMpBurn = phoistAcyclic $
                 _ <- plet $ pmustBeSignedBy # ctx # fsDatum.fd'submitter
                 ptrace "FsMp burn: Submitter signed"
 
-                -- TODO(Andrea): Please check that I didn't mess up interval handling
-                -- INFO[Andrea]: looks good to me.
                 _ <- plet $ pmustValidateAfter # ctx # fsDatum.fd'gcAfter
                 ptrace "FsMp burn: Time validates"
 
@@ -121,7 +120,6 @@ fsMpMint = phoistAcyclic $
 
     ctx' <- pletFields @'["purpose"] ctx
     ownCs <- plet $ pownCurrencySymbol # ctx'.purpose
-    -- MINOR[Andrea]: could be made into a `let`
     fsMintParseOutput' <- plet $ fsMintParseOutput # params # ctx # ownCs
 
     restAuths <- plet $ pfoldTxOutputs # ctx # fsMintParseOutput' # validAuthInputs
@@ -406,8 +404,6 @@ caParseRef = phoistAcyclic $
 - check that the transaction's validation range is contained withing the Certificate's validity range
 - check that the Certificate ref input has 1 $CERT token with appropriate ID (TokenName)
 - accumulate valid CertDatum
-
-NOTE: Fails hard
 -}
 caParseRefWithCert ::
   Term
@@ -460,14 +456,17 @@ authenticating scripts CAN use to validate $AUTH inputs. These are locked @CertV
 - @CertV is a script where $CERT tokens are locked at and authenticating scripts can 'reference' these outputs when performing validation.
 -}
 
--- | Delegates spending validation to corresponding minting policies
+{- | Delegates spending validation to corresponding minting policies
+
+TODO: Test 'other-mint-redeemer' vulnerability with psm or Plutip
+-}
 certV :: ClosedTerm PValidator
 certV = phoistAcyclic $
   plam $ \_ _ ctx -> ptrace "@CertV" P.do
-    -- WARN[Andrea]: Allows spending CertV input while minting $CERT without checking validity range.
-    _ <- plet $ pmustHandleSpentWithMp # ctx
-    ptrace "@CertV: Spending delegated to CertMp" $ popaque punit
+    _ <- plet $ pmustBurnAllSpent # ctx
+    ptrace "@CertV: Everything spent is burned" $ popaque punit
 
+-- | $CERT minting policy
 mkCertMp :: ClosedTerm (PAsData PCertMpParams :--> PMintingPolicy)
 mkCertMp = phoistAcyclic $
   plam $ \params red ctx -> ptrace "CertMp" P.do
@@ -570,6 +569,7 @@ certMpMint = phoistAcyclic $
           # certParams.cmp'certVAddress
     ptrace "CertMp mint: Paid 1 $CERT to @CertV and attached a valid datum" $ popaque punit
 
+-- | $AUTH minting policy
 mkAuthMp :: ClosedTerm (PAsData PAuthMpParams :--> PMintingPolicy)
 mkAuthMp = phoistAcyclic $
   plam $ \params red ctx -> ptrace "AuthMp" P.do

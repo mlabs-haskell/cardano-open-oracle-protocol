@@ -5,12 +5,11 @@ import Test.Hspec (Expectation, Spec, describe, shouldBe)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (NonEmptyList (getNonEmpty), Positive (getPositive), choose, forAll, generate)
 
-import Coop.Plutus (mkAuthMp, mkCertMp, pmustSpendAtLeastAa)
+import Coop.Plutus (certV, mkAuthMp, mkCertMp, pmustSpendAtLeastAa)
 import Coop.Plutus.Aux (hashTxInputs)
-import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, mkScriptContext)
+import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorrectCertVSpendingCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, mkScriptContext)
 import Coop.Plutus.Types (PAuthMpParams, PCertMpParams)
 import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint))
-import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (fold))
 import Data.Map qualified as Map
 import Data.Set qualified as Set
@@ -21,7 +20,8 @@ import Plutarch.Evaluate (evalScript)
 import Plutarch.Test (pfails, psucceeds)
 import PlutusLedgerApi.V1.Address (scriptHashAddress)
 import PlutusLedgerApi.V1.Value (AssetClass, TokenName (TokenName), assetClass, currencySymbol)
-import PlutusLedgerApi.V2 (Address, BuiltinByteString, CurrencySymbol, Script, ScriptPurpose (Minting), ValidatorHash (ValidatorHash), toBuiltin)
+import PlutusLedgerApi.V2 (Address, CurrencySymbol, Script, ScriptPurpose (Minting), ValidatorHash (ValidatorHash), toData)
+import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
 aaAc :: AssetClass
 aaAc = assetClass (currencySymbol "$AA CurrencySymbol") (TokenName "$AA TokenName")
@@ -33,7 +33,7 @@ authCs :: CurrencySymbol
 authCs = currencySymbol "AuthMp hash"
 
 certVAddr :: Address
-certVAddr = scriptHashAddress . ValidatorHash $ toBuiltin @ByteString @BuiltinByteString "@CertV hash"
+certVAddr = scriptHashAddress . ValidatorHash . stringToBuiltinByteString $ "@CertV hash"
 
 spec :: Spec
 spec = do
@@ -110,7 +110,17 @@ spec = do
                           # pdataImpl (pconstant CertMpBurn)
                           # pconstant ctx
                       )
-  describe "@CertV" $ do return ()
+  describe "@CertV" $ do
+    describe "should-succeed" $ do
+      prop "spend $CERT" $
+        forAll (genCorrectCertVSpendingCtx certCs certVAddr) $
+          \ctx ->
+            psucceeds
+              ( certV
+                  # pconstant (toData ())
+                  # pconstant (toData ())
+                  # pconstant ctx
+              )
   describe "AuthMp" $ do
     describe "should-succeed" $ do
       prop "mint $AUTH" $

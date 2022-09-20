@@ -20,7 +20,7 @@ module Coop.Plutus.Aux (
   pfindOwnInput',
   pfoldTxOutputs,
   pfoldTxInputs,
-  pmustHandleSpentWithMp,
+  pmustBurnAllSpent,
   pcurrencyValue,
   pmustSpendAtLeast,
   pmaybeData,
@@ -36,21 +36,23 @@ import Data.List (sort, zipWith)
 import Plutarch (popaque, pto)
 import Plutarch.Api.V1.AssocMap (pempty, plookup, psingleton)
 import Plutarch.Api.V1.Value (
+  pforgetPositive,
   pnoAdaValue,
   pnormalize,
   pvalueOf,
  )
 import Plutarch.Api.V1.Value qualified as PValue
-import Plutarch.Api.V2 (AmountGuarantees (NonZero), KeyGuarantees (Sorted), PAddress, PCurrencySymbol, PDatum, PDatumHash, PExtended, PInterval (PInterval), PLowerBound (PLowerBound), PMap (PMap), PMaybeData (PDJust, PDNothing), PMintingPolicy, POutputDatum (PNoOutputDatum, POutputDatum, POutputDatumHash), PPOSIXTime, PPubKeyHash, PScriptContext, PScriptPurpose (PMinting, PSpending), PTokenName, PTuple, PTxInInfo, PTxOut, PTxOutRef, PUpperBound, PValue (PValue))
+import Plutarch.Api.V2 (AmountGuarantees (NonZero), KeyGuarantees (Sorted), PAddress, PCurrencySymbol, PDatum, PDatumHash, PExtended, PInterval (PInterval), PLowerBound (PLowerBound), PMap, PMaybeData (PDJust, PDNothing), PMintingPolicy, POutputDatum (PNoOutputDatum, POutputDatum, POutputDatumHash), PPOSIXTime, PPubKeyHash, PScriptContext, PScriptPurpose (PMinting, PSpending), PTokenName, PTuple, PTxInInfo, PTxOut, PTxOutRef, PUpperBound, PValue (PValue))
 import Plutarch.Bool (PBool (PTrue))
 import Plutarch.DataRepr (pdcons)
 import Plutarch.Extra.Interval (pcontains)
 import Plutarch.List (PIsListLike, PListLike (pelimList, pnil), pany)
 import Plutarch.Monadic qualified as P
 import Plutarch.Num (PNum ((#+)))
-import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList (PCons, PNil), PData, PEq ((#==)), PInteger (), PIsData, PMaybe (PJust, PNothing), PPartialOrd ((#<=)), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pconstantData, pdata, pdnil, pelem, pfield, pfind, pfix, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pletFields, pmap, pmatch, psndBuiltin, ptrace, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList (PCons, PNil), PData, PEq ((#==)), PInteger (), PIsData, PMaybe (PJust, PNothing), PPartialOrd ((#<=)), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pconstantData, pdata, pdnil, pelem, pfield, pfind, pfix, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pletFields, pmatch, psndBuiltin, ptrace, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
 import Plutarch.TermCont (tcont, unTermCont)
 import PlutusLedgerApi.V2 (Extended (PosInf), TxId (getTxId), TxInInfo (TxInInfo), TxOutRef (txOutRefId, txOutRefIdx), UpperBound (UpperBound), fromBuiltin)
+import PlutusTx.Prelude (Group (inv))
 import Prelude (Bool (False, True), Functor (fmap), Monoid (mconcat, mempty), Num (fromInteger), Semigroup ((<>)), fst, reverse, ($), (.), (<$>))
 
 -- WARN[Andrea]: on a 'NoGuarantees value like `v = psingleton # cs # tn # 0` we have
@@ -108,12 +110,17 @@ pcurrencyTokenQuantity = phoistAcyclic $
                     (ptraceError "pcurrencyTokenQuantity: Must have only as single Token Name under a specified CurrencySymbol")
         )
 
--- PERF[Andrea]: I believe `PMaybe a` is more efficient to interact
--- with and PMaybeData is mostly useful for UTxO datums.
+-- | Deconstruct a PMaybeData type
 pmaybeData :: PIsData a => Term s (PMaybeData a) -> Term s b -> (Term s a -> Term s b) -> Term s b
 pmaybeData m l r = pmatch m \case
   PDNothing _ -> l
   PDJust x -> r (pfield @"_0" # x)
+
+pdnothing :: Term s (PMaybeData a)
+pdnothing = pcon $ PDNothing pdnil
+
+pdjust :: PIsData a => Term s a -> Term s (PMaybeData a)
+pdjust x = pcon $ PDJust $ pdcons # pdata x # pdnil
 
 punit :: Term s PUnit
 punit = pconstant ()
@@ -185,10 +192,14 @@ pfindMap = phoistAcyclic $
       (pcon $ PDNothing pdnil)
       xs
 
-{- | Minting policy for OneShot tokens.
+{- | Minting policy for OneShot tokens
 
-Ensures a given `TxOutRef` is consumed to enforce uniqueness of the token.
-`q` tokens can be minted at a time.
+- check a given `TxOutRef` is consumed
+- check `q` $ONE-SHOT tokens are minted
+
+Notes:
+
+- guarantees $ONE-SHOT tokens are only minted once
 -}
 mkOneShotMintingPolicy ::
   ClosedTerm
@@ -201,7 +212,6 @@ mkOneShotMintingPolicy = phoistAcyclic $
     ctx' <- pletFields @'["txInfo", "purpose"] ctx
     txInfo <- pletFields @'["inputs", "mint"] ctx'.txInfo
     inputs <- plet $ pfromData txInfo.inputs
-    mint <- plet $ pfromData $ txInfo.mint
     cs <- plet $ pownCurrencySymbol # ctx'.purpose
 
     _ <-
@@ -211,12 +221,9 @@ mkOneShotMintingPolicy = phoistAcyclic $
           (ptrace "oneShotMp: Consumes the specified outref" punit)
           (ptraceError "oneShotMp: Must consume the specified utxo")
 
-    -- WARN[Andrea]: allows minting/burning other token names too.
-    --               although the whole check is maybe redundant since this can only run once?
-    pif
-      (pvalueOf # mint # cs # pfromData tn #== pfromData q)
-      (ptrace "oneShotMp: Mints the specified quantity of tokens" $ popaque punit)
-      (ptraceError "oneShotMp: Must mint the specified quantity of tokens")
+    _ <- plet $ pmustMintCurrency # ctx # cs # (PValue.psingleton # cs # pfromData tn # pfromData q)
+
+    ptrace "oneShotMp: Mints the specified quantity of tokens" $ popaque punit
 
 -- | Check if utxo is consumed
 pconsumesRef :: Term s (PTxOutRef :--> PBuiltinList PTxInInfo :--> PBool)
@@ -312,7 +319,7 @@ pmustBeSignedBy = phoistAcyclic $
 -- | Foldl over transaction outputs.
 pfoldTxOutputs :: ClosedTerm (PScriptContext :--> (a :--> PTxOut :--> a) :--> a :--> a)
 pfoldTxOutputs = phoistAcyclic $
-  plam $ \ctx foldFn initial -> ptrace "pfoldTxInputs" P.do
+  plam $ \ctx foldFn initial -> ptrace "pfoldTxOutputs" P.do
     ctx' <- pletFields @'["txInfo"] ctx
     txInfo <- pletFields @'["outputs"] ctx'.txInfo
 
@@ -391,40 +398,36 @@ pmustSpendAtLeast :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PToken
 pmustSpendAtLeast = phoistAcyclic $
   plam $ \ctx cs tn mustSpendAtLeastQ -> pmustSpendPred # ctx # cs # tn # plam (mustSpendAtLeastQ #<=)
 
--- WARN[Andrea]: this is very permissive, maybe you should have
--- different versions that check for either burning or minting the tokens.
-pmustHandleSpentWithMp :: ClosedTerm (PScriptContext :--> PUnit)
-pmustHandleSpentWithMp = phoistAcyclic $
-  plam $ \ctx -> ptrace "pmustHandleSpentWithMp" P.do
+{- | Checks that all the spent non $ADA tokens are also burned
+
+- accumulates all the non $ADA input tokens
+- checks if they are burned
+
+Notes:
+- if used by a validator it will redo a lot of work
+-}
+pmustBurnAllSpent :: ClosedTerm (PScriptContext :--> PUnit)
+pmustBurnAllSpent = phoistAcyclic $
+  plam $ \ctx -> ptrace "pmustBurnAllSpent" P.do
     ctx' <- pletFields @'["txInfo"] ctx
     txInfo <- pletFields @'["mint"] ctx'.txInfo
-    mint <- plet $ pto $ pfromData txInfo.mint
 
-    ownIn <- plet $ pfindOwnInput' # ctx
-    ownInVal <- plet $ pnoAdaValue #$ pfield @"value" # (pfield @"resolved" # ownIn)
-    _ <- plet $ pmatch (pto ownInVal) \case
-      PMap elems ->
-        pmap
-          # plam
-            ( \kv -> P.do
-                cs <- plet $ pfromData $ pfstBuiltin # kv
-                pmatch (plookup # cs # mint) \case
-                  PNothing -> ptraceError "pmustHandleSpentWithMp: Spent currency symbol must be in mint"
-                  PJust _ -> ptrace "pmustHandleSpentWithMp: Spent currency symbol found in mint" punit
-            )
-          # elems
-    ptrace "pmustHandleSpentWithMp: All spent currency symbols are in mint" punit
+    let collectSpent shouldBurn txInInfo = P.do
+          val <- plet $ pfield @"value" #$ pfield @"resolved" # txInInfo
+          shouldBurn <> inv (pforgetPositive $ pnoAdaValue # val)
 
-pdnothing :: Term s (PMaybeData a)
-pdnothing = pcon $ PDNothing pdnil
+    shouldBurn <- plet $ pfoldTxInputs # ctx # plam collectSpent # mempty
 
-pdjust :: PIsData a => Term s a -> Term s (PMaybeData a)
-pdjust x = pcon $ PDJust $ pdcons # pdata x # pdnil
+    pif
+      (pnoAdaValue # txInfo.mint #== shouldBurn)
+      (ptrace "pmustBurnAllSpent: All spent tokens are burned" punit)
+      (ptraceError "pmustBurnAllSpent: Must burn all the spent tokens")
 
+-- | Hashes transaction inputs sha3_256 on the concatenation of id:ix (used for onchain uniqueness)
 hashTxInputs :: [TxInInfo] -> ByteString
 hashTxInputs inputs =
   let orefs = [oref | TxInInfo oref _ <- inputs]
-      sortedOrefs = Prelude.reverse $ sort orefs -- TODO: Why the reverse works?
+      sortedOrefs = Prelude.reverse $ sort orefs -- TODO: Why does `reverse` works?
       ixs = fmap (fromInteger . txOutRefIdx) sortedOrefs
       txIds = fmap (fromBuiltin . getTxId . txOutRefId) sortedOrefs
       hashedOref = convert @_ @ByteString . hashWith SHA3_256 . mconcat $ zipWith cons ixs txIds
