@@ -428,5 +428,5 @@ hashTxInputs inputs =
       sortedOrefs = Prelude.reverse $ sort orefs -- TODO: Why does `reverse` works?
       ixs = fmap (fromInteger . txOutRefIdx) sortedOrefs
       txIds = fmap (fromBuiltin . getTxId . txOutRefId) sortedOrefs
-      hashedOref = convert @_ @ByteString . hashWith SHA3_256 . mconcat $ zipWith cons ixs txIds
+      hashedOref = convert @_ @ByteString . hashWith SHA3_256 . mconcat $ zipWith cons ixs txIds -- TODO: Switch to blake256
    in hashedOref

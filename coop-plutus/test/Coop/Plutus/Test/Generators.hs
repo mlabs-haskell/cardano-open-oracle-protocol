@@ -12,7 +12,7 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Traversable (for)
 import PlutusLedgerApi.V1.Address (pubKeyHashAddress, scriptHashAddress)
-import PlutusLedgerApi.V1.Value (AssetClass, CurrencySymbol (CurrencySymbol), TokenName (TokenName), assetClass, assetClassValue, assetClassValueOf)
+import PlutusLedgerApi.V1.Value (AssetClass, CurrencySymbol (CurrencySymbol), TokenName (TokenName), assetClass, assetClassValue, assetClassValueOf, flattenValue)
 import PlutusLedgerApi.V2 (Address, BuiltinByteString, Datum (Datum), LedgerBytes (LedgerBytes), OutputDatum (NoOutputDatum, OutputDatum), POSIXTime (POSIXTime), PubKeyHash (PubKeyHash), ScriptContext (ScriptContext, scriptContextTxInfo), ScriptPurpose (Minting, Spending), ToData, TxId (TxId), TxInInfo (TxInInfo, txInInfoOutRef), TxInfo (TxInfo, txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl), TxOut (TxOut, txOutAddress, txOutDatum, txOutValue), TxOutRef (TxOutRef), ValidatorHash (ValidatorHash), Value (Value, getValue), always, toBuiltin, toBuiltinData)
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
@@ -144,13 +144,17 @@ genCorrectCertMpMintingCtx certMpParams certCs = do
       certVAddr = cmp'certVAddress certMpParams
   aaIns <- genAaInputs aaAc aaQ
   certRdmrAc <- genCertRdmrAc
+  (otherIns, otherMint, otherOuts) <- genOthers 5
   let certId = toBuiltin . hashTxInputs $ aaIns
       certTn = TokenName certId
       certToken = assetClassValue (assetClass certCs certTn) 1
       certDatum = CertDatum (LedgerBytes certId) (interval 0 100) certRdmrAc
       certOut = TxOut certVAddr certToken (OutputDatum . Datum . toBuiltinData $ certDatum) Nothing
+      ins = otherIns <> aaIns
+      mint = otherMint <> certToken
+      outs = otherOuts <> [certOut]
   return $
-    mkScriptContext (Minting certCs) aaIns [] certToken [certOut] []
+    mkScriptContext (Minting certCs) ins [] mint outs []
 
 genCorruptCertMpMintingCtx :: CertMpParams -> CurrencySymbol -> Gen ScriptContext
 genCorruptCertMpMintingCtx certMpParams certCs = do
@@ -171,8 +175,12 @@ genCorrectCertMpBurningCtx certMpParams certCs certRdmrAc = do
   let certVAddr = cmp'certVAddress certMpParams
   certIns <- genCertInputs certVAddr certCs certRdmrAc 100
   certRdmrIns <- genCertRdmrInputs certRdmrAc
+  (otherIns, otherMint, otherOuts) <- genOthers 5
   let certTokensToBurn = inv . fold $ [txOutValue certInOut | TxInInfo _ certInOut <- certIns]
-      ctx = mkScriptContext (Minting certCs) (certIns <> certRdmrIns) [] certTokensToBurn [] []
+      ins = certIns <> certRdmrIns <> otherIns
+      mint = otherMint <> certTokensToBurn
+      outs = otherOuts
+      ctx = mkScriptContext (Minting certCs) ins [] mint outs []
   return $
     ctx
       { scriptContextTxInfo =
@@ -204,12 +212,16 @@ genCorrectAuthMpMintingCtx authMpParams authCs = do
       aaQ = amp'requiredAtLeastAaQ authMpParams
   aaIns <- genAaInputs aaAc aaQ
   addr <- genAddress
-  let authId = toBuiltin . hashTxInputs $ aaIns
+  (otherIns, otherMint, otherOuts) <- genOthers 5
+  let ins = aaIns <> otherIns
+      authId = toBuiltin . hashTxInputs $ aaIns
       authTn = TokenName authId
       authToken = assetClassValue (assetClass authCs authTn) 1
       authOut = TxOut addr authToken NoOutputDatum Nothing
+      mint = otherMint <> authToken
+      outs = otherOuts <> [authOut]
   return $
-    mkScriptContext (Minting authCs) aaIns [] authToken [authOut] []
+    mkScriptContext (Minting authCs) ins [] mint outs [] -- INFO: Unbalanced transaction
 
 genCorruptAuthMpMintingCtx :: AuthMpParams -> CurrencySymbol -> Gen ScriptContext
 genCorruptAuthMpMintingCtx authMpParams authCs = do
@@ -226,8 +238,12 @@ genCorruptAuthMpMintingCtx authMpParams authCs = do
 genCorrectAuthMpBurningCtx :: CurrencySymbol -> Gen ScriptContext
 genCorrectAuthMpBurningCtx authCs = do
   authIns <- genAuthInputs authCs
-  let authTokensToBurn = inv . fold $ [txOutValue authInOut | TxInInfo _ authInOut <- authIns]
-  return $ mkScriptContext (Minting authCs) authIns [] authTokensToBurn [] []
+  (otherIns, otherMint, otherOuts) <- genOthers 5
+  let ins = authIns <> otherIns
+      authTokensToBurn = inv . fold $ [txOutValue authInOut | TxInInfo _ authInOut <- authIns]
+      mint = otherMint <> authTokensToBurn
+      outs = otherOuts
+  return $ mkScriptContext (Minting authCs) ins [] mint outs []
 
 genCorruptAuthMpBurningCtx :: CurrencySymbol -> Gen ScriptContext
 genCorruptAuthMpBurningCtx authCs = do
@@ -245,12 +261,7 @@ genCorruptAuthMpBurningCtx authCs = do
 
 genCorrectMustSinkholeCtx :: Gen ScriptContext
 genCorrectMustSinkholeCtx = do
-  nInputs <- chooseInt (1, 10)
-  vals <- replicateM nInputs (Value.singleton <$> genCurrencySymbol <*> genTokenName <*> chooseInteger (1, 100))
-  ins <- for vals $ \v -> do
-    txOutRef <- genTxOutRef
-    txOutAddr <- genAddress
-    return $ TxInInfo txOutRef (TxOut txOutAddr v NoOutputDatum Nothing)
+  ins <- genInputs 10
   let tokensToBurn = inv . fold $ [txOutValue inOut | TxInInfo _ inOut <- ins]
   -- WARN: Using unsafe head here, switch to using NonEmptyList where applicable
   return $ mkScriptContext (Spending (txInInfoOutRef . head $ ins)) ins [] tokensToBurn [] []
@@ -273,8 +284,10 @@ genCorrectCertVSpendingCtx :: CurrencySymbol -> Address -> Gen ScriptContext
 genCorrectCertVSpendingCtx certCs certVAddr = do
   certRdmrAc <- genCertRdmrAc
   certIns <- genCertInputs certVAddr certCs certRdmrAc 100
-  let tokensToBurn = inv . fold $ [txOutValue inOut | TxInInfo _ inOut <- certIns]
-  return $ mkScriptContext (Spending (txInInfoOutRef . head $ certIns)) certIns [] tokensToBurn [] []
+  (otherIns, _, _) <- genOthers 5
+  let tokensToBurn = inv . fold $ [txOutValue inOut | TxInInfo _ inOut <- ins]
+      ins = certIns <> otherIns
+  return $ mkScriptContext (Spending (txInInfoOutRef . head $ ins)) ins [] tokensToBurn [] []
 
 genCorruptCertVSpendingCtx :: CurrencySymbol -> Address -> Gen ScriptContext
 genCorruptCertVSpendingCtx certCs certVAddr = do
@@ -289,6 +302,35 @@ genCorruptCertVSpendingCtx certCs certVAddr = do
   let corrupt = mkCorrupt corruptions
 
   return $ corrupt ctx
+
+genInputs :: Int -> Gen [TxInInfo]
+genInputs n = do
+  nInputs <- chooseInt (1, n)
+  vals <- replicateM nInputs genValue
+  for vals $ \v -> do
+    txOutRef <- genTxOutRef
+    txOutAddr <- genAddress
+    return $ TxInInfo txOutRef (TxOut txOutAddr v NoOutputDatum Nothing)
+
+genValue :: Gen Value
+genValue = Value.singleton <$> genCurrencySymbol <*> genTokenName <*> chooseInteger (1, 100)
+
+genOthers :: Int -> Gen ([TxInInfo], Value, [TxOut])
+genOthers n = do
+  ins <- genInputs n
+  outAddrs <- replicateM n genAddress
+  let inVals = mconcat [flattenValue v | TxInInfo _ (TxOut _ v _ _) <- ins]
+  mints <- mconcat . (flattenValue <$>) <$> replicateM n genValue
+  inToOutVals <- sublistOf inVals
+  let outVals = mints <> inToOutVals
+      burnVals = Set.toList $ Set.difference (Set.fromList inVals) (Set.fromList inToOutVals)
+  outAddrsWithVals <- distribute outVals (Set.fromList outAddrs)
+  let outs = [TxOut addr (valueFromList vals) NoOutputDatum Nothing | (addr, vals) <- Map.toList outAddrsWithVals]
+      minted = valueFromList mints <> inv (valueFromList burnVals)
+  return (ins, minted, outs)
+
+valueFromList :: [(CurrencySymbol, TokenName, Integer)] -> Value
+valueFromList vals = mconcat [Value.singleton c t q | (c, t, q) <- vals]
 
 genBuiltinByteString :: String -> Int -> Gen BuiltinByteString
 genBuiltinByteString prefix len = do
