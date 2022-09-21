@@ -31,7 +31,7 @@ module Coop.Plutus.Aux (
   pmustBurnOwnSingletonValue,
 ) where
 
-import Crypto.Hash (SHA3_256 (SHA3_256), hashWith)
+import Crypto.Hash (Blake2b_256 (Blake2b_256), hashWith)
 import Data.ByteArray (convert)
 import Data.ByteString (ByteString, cons)
 import Data.List (sort, zipWith)
@@ -53,7 +53,7 @@ import Plutarch.Num (PNum (pnegate, (#+)))
 import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList (PCons, PNil), PData, PEq ((#==)), PInteger (), PIsData, PMaybe (PJust, PNothing), PPartialOrd ((#<=)), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pconstantData, pdata, pdnil, pelem, pfield, pfind, pfix, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pletFields, pmatch, psndBuiltin, ptrace, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
 import Plutarch.TermCont (tcont, unTermCont)
 import PlutusLedgerApi.V2 (Extended (PosInf), TxId (getTxId), TxInInfo (TxInInfo), TxOutRef (txOutRefId, txOutRefIdx), UpperBound (UpperBound), fromBuiltin)
-import Prelude (Bool (False, True), Functor (fmap), Monoid (mconcat, mempty), Num (fromInteger), Semigroup ((<>)), fst, reverse, ($), (.), (<$>))
+import Prelude (Bool (False, True), Functor (fmap), Monoid (mconcat, mempty), Num (fromInteger), Semigroup ((<>)), fst, ($), (.), (<$>))
 
 -- WARN(@Saizan): on a 'NoGuarantees value like `v = psingleton # cs # tn # 0` we have
 --               `phasCurrency # cs # tn # v #== pcon PTrue` which could be misleading.
@@ -402,7 +402,7 @@ pmustSpendAtLeast :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PToken
 pmustSpendAtLeast = phoistAcyclic $
   plam $ \ctx cs tn mustSpendAtLeastQ -> pmustSpendPred # ctx # cs # tn # plam (mustSpendAtLeastQ #<=)
 
-{- | Sinkhole 'own' unique (non $ADA) AssetClass
+{- | Must spend and burn 'own' singleton AssetClass
 
 - check that the 'own' non $ADA token spent is a singleton
 - check that the quantity is entirely burned
@@ -453,12 +453,12 @@ pmustBurnOwnSingletonValue = phoistAcyclic $
             )
             (ptraceError "Must spent a single CurrencySymbol")
 
--- | Hashes transaction inputs sha3_256 on the concatenation of id:ix (used for onchain uniqueness)
+-- | Hashes transaction inputs blake2b_256 on the concatenation of id:ix (used for onchain uniqueness)
 hashTxInputs :: [TxInInfo] -> ByteString
 hashTxInputs inputs =
   let orefs = [oref | TxInInfo oref _ <- inputs]
-      sortedOrefs = Prelude.reverse $ sort orefs -- TODO: Why does `reverse` works?
+      sortedOrefs = sort orefs
       ixs = fmap (fromInteger . txOutRefIdx) sortedOrefs
       txIds = fmap (fromBuiltin . getTxId . txOutRefId) sortedOrefs
-      hashedOref = convert @_ @ByteString . hashWith SHA3_256 . mconcat $ zipWith cons ixs txIds -- TODO: Switch to blake256
+      hashedOref = convert @_ @ByteString . hashWith Blake2b_256 . mconcat $ zipWith cons ixs txIds
    in hashedOref

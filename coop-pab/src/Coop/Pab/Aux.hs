@@ -5,6 +5,7 @@ module Coop.Pab.Aux (
   datumFromTxOut,
   loadCoopPlutus,
   runBpi,
+  hashTxInputs,
   DeployMode (..),
   minUtxoAdaValue,
   mkMintNftTrx,
@@ -14,7 +15,6 @@ module Coop.Pab.Aux (
   findOutsAt,
   toDatum,
   fromDatum,
-  hashTxOutRefs,
   findOutsAtHolding,
   testDataRoundtrip,
   testDataRoundtrip',
@@ -33,13 +33,14 @@ import Control.Lens ((^.), (^?))
 import Control.Lens.Prism (_Just)
 import Control.Monad (filterM)
 import Coop.Types (CoopPlutus)
-import Crypto.Hash (SHA3_256 (SHA3_256), hashWith)
+import Crypto.Hash (Blake2b_256 (Blake2b_256), hashWith)
 import Data.Aeson (ToJSON, decodeFileStrict)
 import Data.Bool (bool)
 import Data.ByteArray (convert)
-import Data.ByteString (ByteString, cons)
+import Data.ByteString (cons)
 import Data.Dynamic (Typeable)
 import Data.Kind (Type)
+import Data.List (sort)
 import Data.Map (Map, fromList)
 import Data.Map qualified as Map
 import Data.Proxy (Proxy (Proxy))
@@ -56,7 +57,7 @@ import Plutus.Contract.Constraints (ScriptLookups, TxConstraints, mustMintValue,
 import Plutus.PAB.Core.ContractInstance.STM (Activity (Active))
 import Plutus.Script.Utils.V2.Address (mkValidatorAddress)
 import Plutus.Script.Utils.V2.Scripts (scriptCurrencySymbol, validatorHash)
-import Plutus.V1.Ledger.Api (Address, BuiltinByteString, CurrencySymbol, Datum (Datum, getDatum), DatumHash, FromData (fromBuiltinData), MintingPolicy (MintingPolicy), Script, ToData, TokenName (TokenName), TxId (getTxId), TxOutRef (txOutRefId, txOutRefIdx), Validator, adaSymbol, adaToken, fromBuiltin, toBuiltin, toBuiltinData, toData)
+import Plutus.V1.Ledger.Api (Address, BuiltinByteString, CurrencySymbol, Datum (Datum, getDatum), DatumHash, FromData (fromBuiltinData), MintingPolicy (MintingPolicy), Script, ToData, TokenName (TokenName), TxId (getTxId), TxOutRef (txOutRefId, txOutRefIdx), Validator, adaSymbol, adaToken, fromBuiltin, toBuiltinData, toData)
 import Plutus.V1.Ledger.Value (AssetClass (unAssetClass), assetClass, valueOf)
 import Plutus.V1.Ledger.Value qualified as Value
 import Plutus.V2.Ledger.Api (Extended, Interval (Interval), LowerBound (LowerBound), UpperBound (UpperBound))
@@ -109,7 +110,7 @@ currencyValue (Value vals) cs = maybe mempty (Value . AssocMap.singleton cs) $ A
 
 mkMintNftTrx :: PaymentPubKeyHash -> PaymentPubKeyHash -> (TxOutRef, ChainIndexTxOut) -> Script -> Integer -> (Trx i o a, AssetClass)
 mkMintNftTrx self toWallet out@(oref, _) mkNftMp q =
-  let nftTn = TokenName . hashTxOutRefs $ [oref]
+  let nftTn = TokenName . hashTxInputs $ Map.fromList [out]
       nftMp = MintingPolicy $ applyArguments mkNftMp [toData q, toData nftTn, toData oref]
       nftCs = scriptCurrencySymbol nftMp
       val = Value.singleton nftCs nftTn q
@@ -123,14 +124,18 @@ mkMintNftTrx self toWallet out@(oref, _) mkNftMp q =
           <> mustPayToPubKey toWallet (val <> minUtxoAdaValue)
    in (Trx lookups constraints, assetClass nftCs nftTn)
 
--- FIXME: Sort orefs to match the onchain order
--- TODO: Switch to using blake
-hashTxOutRefs :: [TxOutRef] -> BuiltinByteString
-hashTxOutRefs orefs =
-  let ixs = fmap (fromInteger . txOutRefIdx) orefs
-      txIds = fmap (fromBuiltin . getTxId . txOutRefId) orefs
-      hashedOref = convert @_ @ByteString . hashWith SHA3_256 . mconcat $ zipWith cons ixs txIds
-   in toBuiltin hashedOref
+{- | Hashes transaction inputs blake2b_256 on the concatenation of id:ix (used for onchain uniqueness)
+
+TODO: Consolidate with the same `coop-plutus`.Coop.Plutus.Aux.hashTxInputs in a shared location
+-}
+hashTxInputs :: Map TxOutRef ChainIndexTxOut -> BuiltinByteString
+hashTxInputs inputs =
+  let orefs = [oref | (oref, _) <- Map.toList inputs]
+      sortedOrefs = sort orefs
+      ixs = fmap (fromInteger . txOutRefIdx) sortedOrefs
+      txIds = fmap (fromBuiltin . getTxId . txOutRefId) sortedOrefs
+      hashedOref = convert @_ @BuiltinByteString . hashWith Blake2b_256 . mconcat $ zipWith cons ixs txIds
+   in hashedOref
 
 makeCollateralOuts :: PaymentPubKeyHash -> Integer -> Integer -> Contract w s Text TxId
 makeCollateralOuts self n lovelace = do

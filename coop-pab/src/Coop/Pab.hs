@@ -12,7 +12,7 @@ module Coop.Pab (
 ) where
 
 import Control.Lens ((^.))
-import Coop.Pab.Aux (Trx (Trx), currencyValue, findOutsAt, findOutsAt', findOutsAtHolding', hasCurrency, hashTxOutRefs, interval', minUtxoAdaValue, mkMintNftTrx, submitTrx, toDatum, toRedeemer)
+import Coop.Pab.Aux (Trx (Trx), currencyValue, findOutsAt, findOutsAt', findOutsAtHolding', hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintNftTrx, submitTrx, toDatum, toRedeemer)
 import Coop.Types (
   AuthDeployment (AuthDeployment, ad'authMp, ad'authorityAc, ad'certMp, ad'certV),
   AuthMpParams (AuthMpParams),
@@ -140,12 +140,11 @@ mkMintCertTrx coopDeployment self redeemerAc validityInterval aaOuts =
       certV = (ad'certV . cd'auth) coopDeployment
       certVAddr = validatorHash certV
       aaOrefs = Map.keys aaOuts
-      hashedAaOrefs = hashTxOutRefs aaOrefs
-      certTn = TokenName hashedAaOrefs
-      certId = LedgerBytes hashedAaOrefs
+      certId = hashTxInputs aaOuts
+      certTn = TokenName certId
       certCs = scriptCurrencySymbol certMp
       certVal = Value.singleton certCs certTn 1
-      certDatum = toDatum $ CertDatum certId validityInterval redeemerAc
+      certDatum = toDatum $ CertDatum (LedgerBytes certId) validityInterval redeemerAc
       lookups =
         mconcat
           [ plutusV2MintingPolicy certMp
@@ -194,8 +193,8 @@ mkMintAuthTrx :: CoopDeployment -> PaymentPubKeyHash -> [PaymentPubKeyHash] -> I
 mkMintAuthTrx coopDeployment self authWallets authQEach aaOuts =
   let authMp = (ad'authMp . cd'auth) coopDeployment
       aaOrefs = Map.keys aaOuts
-      hashedAaOrefs = hashTxOutRefs aaOrefs
-      authTn = TokenName hashedAaOrefs
+      authId = hashTxInputs aaOuts
+      authTn = TokenName authId
       authCs = scriptCurrencySymbol authMp
       authValEach = Value.singleton authCs authTn authQEach
       authValTotal = Value.singleton authCs authTn (authQEach * (fromIntegral . length $ authWallets))
@@ -265,7 +264,7 @@ mkMintFsTrx coopDeployment self trxValidRange fsDatum authOut (certOut, certDatu
       fsV = cd'fsV coopDeployment
       fsVAddr = validatorHash fsV
       fsCs = scriptCurrencySymbol fsMp
-      fsTn = TokenName . hashTxOutRefs $ [fst authOut]
+      fsTn = TokenName . hashTxInputs $ Map.fromList [authOut]
       fsVal = Value.singleton fsCs fsTn 1
       certV = ad'certV . cd'auth $ coopDeployment
       lookups =

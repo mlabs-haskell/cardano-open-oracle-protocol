@@ -30,10 +30,11 @@ import Plutarch.Api.V2 (
  )
 import Plutarch.Api.V2.Contexts (PScriptContext)
 import Plutarch.Bool (pif)
+import Plutarch.Crypto (pblake2b_256)
 import Plutarch.Extra.Interval (pcontains)
 import Plutarch.Monadic qualified as P
 import Plutarch.Num (PNum (pnegate, (#+)))
-import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PByteString, PEq ((#==)), PInteger, PListLike (pcons, pnil), PPair (PPair), PPartialOrd ((#<), (#<=)), Term, pcon, pconsBS, pfield, pfoldl, pfromData, phoistAcyclic, plam, plet, pletFields, psha3_256, ptrace, ptraceError, (#), (#$), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PByteString, PEq ((#==)), PInteger, PListLike (pcons, pnil), PPair (PPair), PPartialOrd ((#<), (#<=)), Term, pcon, pconsBS, pfield, pfoldl, pfromData, phoistAcyclic, plam, plet, pletFields, ptrace, ptraceError, (#), (#$), type (:-->))
 import PlutusTx.Prelude (Group (inv))
 import Prelude (Monoid (mempty), Semigroup ((<>)), const, ($))
 
@@ -196,8 +197,8 @@ fsMintParseOutputWithFs = phoistAcyclic $
           pmaybeData
             mayFsTn
             ( P.do
-                -- NOTE: Here we create a UNIQUE $FS token name
-                fsTn <- plet $ ptokenNameFromTxInInfo # authInput
+                -- NOTE: Here we create a unique $FS token name
+                fsTn <- plet $ pcon $ PTokenName (phashInput # authInput)
                 pif -- NOTE: Only outputs a single $FS token!
                   (ownValue #== (PValue.psingleton # ownCs # fsTn # 1))
                   (ptrace "fsMintParseOutputWithFs: Found the $FS token" $ pcon $ PPair (pdjust fsTn) restAuthInputs)
@@ -231,17 +232,17 @@ fsMintParseOutputWithFs = phoistAcyclic $
           ptrace "fsMintParseOutputWithFs: $FS minted" restAuthInputs
       )
 
-{- | ptokenNameFromTxInInfo creates a unique TokenName from the given transaction input
+{- | phashInput creates a unique bytestring from the given transaction input
 
-TokenName $ sha3_256 (refId `concat` num)
+- does blake2b_256 (txId `concat` ix)
 -}
-ptokenNameFromTxInInfo :: Term s (PTxInInfo :--> PTokenName)
-ptokenNameFromTxInInfo = phoistAcyclic $
+phashInput :: Term s (PTxInInfo :--> PByteString)
+phashInput = phoistAcyclic $
   plam $ \inInfo -> P.do
     txId <- plet $ pfield @"_0" # (pfield @"id" # (pfield @"outRef" # inInfo))
     -- TODO: Check that txIDx < 256
     txIdx <- plet $ pfield @"idx" # (pfield @"outRef" # inInfo)
-    pcon $ PTokenName $ psha3_256 # (pconsBS # txIdx # txId)
+    pblake2b_256 # (pconsBS # txIdx # txId)
 
 {- | Validates $AUTH inputs against associated $CERT reference inputs.
 
@@ -631,7 +632,7 @@ authMpBurn = phoistAcyclic $
 
     ptrace "AuthMp burn: Burned all spent $AUTH tokens" $ popaque punit
 
-{- | Checks for total spent $AA tokens
+{- | Checks for total spent $AA tokens and create a unique bytestring from them
 
 - accumulate all spent $AA tokens and check if totals are at least as specified
 - create unique bytestring from $AA inputs by hashing the concatenation of (idx,id) pairs
@@ -653,7 +654,7 @@ pmustSpendAtLeastAa = phoistAcyclic $
                 -- accumulate token name bytes
                 txId <- plet $ pfield @"_0" #$ pfield @"id" # txIn'.outRef
                 txIdx <- plet $ pfield @"idx" # txIn'.outRef
-                tnBytes' <- plet $ pconsBS # txIdx # txId <> tnBytes
+                tnBytes' <- plet $ tnBytes <> pconsBS # txIdx # txId
                 -- accumulate token quantities
                 aaVal' <- plet $ aaVal #+ (pvalueOf # txInVal # aaCs # aaTn)
 
@@ -665,5 +666,5 @@ pmustSpendAtLeastAa = phoistAcyclic $
 
     pif
       (atLeastAaQ #<= aaTokensSpent)
-      (ptrace "pmustSpendAtLeastAa: Spent at least the specified amount of AA tokens" $ psha3_256 # tnBytes)
+      (ptrace "pmustSpendAtLeastAa: Spent at least the specified amount of AA tokens" $ pblake2b_256 # tnBytes)
       (ptraceError "pmustSpendAtLeastAa: Must spend at least the specified amount of AA tokens")
