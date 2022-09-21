@@ -20,7 +20,7 @@ module Coop.Plutus.Aux (
   pfindOwnInput',
   pfoldTxOutputs,
   pfoldTxInputs,
-  pmustBurnAllSpent,
+  pmustSinkhole,
   pcurrencyValue,
   pmustSpendAtLeast,
   pmaybeData,
@@ -396,17 +396,17 @@ pmustSpendAtLeast :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PToken
 pmustSpendAtLeast = phoistAcyclic $
   plam $ \ctx cs tn mustSpendAtLeastQ -> pmustSpendPred # ctx # cs # tn # plam (mustSpendAtLeastQ #<=)
 
-{- | Checks that all the spent non $ADA tokens are also burned
+{- | Checks that all the spent non $ADA tokens are burned and that no tokens were minted and paid
 
-- accumulates all the non $ADA input tokens
-- checks if they are burned
+- accumulates all the non $ADA input tokens to burn
+- checks if it is equal to what is minted
 
 Notes:
 - if used by a validator it will redo a lot of work
 -}
-pmustBurnAllSpent :: ClosedTerm (PScriptContext :--> PUnit)
-pmustBurnAllSpent = phoistAcyclic $
-  plam $ \ctx -> ptrace "pmustBurnAllSpent" P.do
+pmustSinkhole :: ClosedTerm (PScriptContext :--> PUnit)
+pmustSinkhole = phoistAcyclic $
+  plam $ \ctx -> ptrace "pmustSinkhole" P.do
     ctx' <- pletFields @'["txInfo"] ctx
     txInfo <- pletFields @'["mint"] ctx'.txInfo
 
@@ -418,8 +418,8 @@ pmustBurnAllSpent = phoistAcyclic $
 
     pif
       (pnoAdaValue # txInfo.mint #== shouldBurn)
-      (ptrace "pmustBurnAllSpent: All spent tokens are burned" punit)
-      (ptraceError "pmustBurnAllSpent: Must burn all the spent tokens")
+      (ptrace "pmustSinkhole: All spent tokens are burned and no tokens were minted and paid" punit)
+      (ptraceError "pmustSinkhole: Must burn all the spent tokens and no tokens must be minted and paid")
 
 -- | Hashes transaction inputs sha3_256 on the concatenation of id:ix (used for onchain uniqueness)
 hashTxInputs :: [TxInInfo] -> ByteString

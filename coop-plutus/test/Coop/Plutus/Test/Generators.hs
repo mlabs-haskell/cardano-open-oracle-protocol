@@ -1,10 +1,10 @@
-module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx) where
+module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx, genCorruptCertVSpendingCtx, genCorrectMustSinkholeCtx, genCorruptMustSinkholeCtx) where
 
-import Test.QuickCheck (Arbitrary (arbitrary), Gen, choose, chooseAny, chooseEnum, chooseInt, chooseInteger, vectorOf)
+import Test.QuickCheck (Arbitrary (arbitrary), Gen, choose, chooseAny, chooseEnum, chooseInt, chooseInteger, sublistOf, suchThat, vectorOf)
 
 import Control.Monad (foldM, replicateM)
 import Coop.Plutus.Aux (hashTxInputs)
-import Data.Foldable (Foldable (fold, foldl'))
+import Data.Foldable (Foldable (fold))
 import Data.List (sortOn)
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -18,9 +18,6 @@ import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
 import Coop.Types (AuthMpParams (amp'authAuthorityAc, amp'requiredAtLeastAaQ), CertDatum (CertDatum), CertMpParams (cmp'authAuthorityAc, cmp'certVAddress, cmp'requiredAtLeastAaQ))
-import Data.ByteString (ByteString)
-import Data.ByteString qualified as ByteString
-import Data.Word (Word8)
 import PlutusLedgerApi.V1.Interval (interval)
 import PlutusLedgerApi.V2 qualified as Value
 import PlutusTx.Prelude (Group (inv))
@@ -161,21 +158,13 @@ genCorruptCertMpMintingCtx certMpParams certCs = do
 
   ctx <- genCorrectCertMpMintingCtx certMpParams certCs
 
-  -- Randomly pick a corruption
-  ((mintAndPayOtherTokenName, removeOutputDatum, sendToOtherAddress) :: (Bool, Bool, Bool)) <- arbitrary
+  -- Randomly pick corruptions
+  corruptions <-
+    suchThat (sublistOf [doMintAndPayOtherTokenName certCs, doRemoveOutputDatum, doSendToOtherAddress certVAddr]) (not . null)
 
-  let corrupt =
-        mkCorrupt
-          [ (mintAndPayOtherTokenName, doMintAndPayOtherTokenName certCs)
-          , (removeOutputDatum, doRemoveOutputDatum)
-          , (sendToOtherAddress, doSendToOtherAddress certVAddr)
-          ]
+  let corrupt = mkCorrupt corruptions
 
-  -- If we didn't manage to corrupt anything, do it again
-  let corruptedCtx = corrupt ctx
-  if corruptedCtx == ctx
-    then genCorruptCertMpMintingCtx certMpParams certCs
-    else return corruptedCtx
+  return $ corrupt ctx
 
 genCorrectCertMpBurningCtx :: CertMpParams -> CurrencySymbol -> AssetClass -> Gen ScriptContext
 genCorrectCertMpBurningCtx certMpParams certCs certRdmrAc = do
@@ -198,23 +187,16 @@ genCorruptCertMpBurningCtx certMpParams certCs certRdmrAc = do
 
   ctx <- genCorrectCertMpBurningCtx certMpParams certCs certRdmrAc
 
-  -- Randomly pick a corruption
-  ((mintAndPayOtherTokenNameAddr, removeCertRdmrInputs) :: (Bool, Bool)) <- arbitrary
+  -- Randomly pick corruptions
+  corruptions <-
+    suchThat (sublistOf [doMintAndPayOtherTokenNameAddr certCs certVAddr, doRemoveInputsWithToken certRdmrAc]) (not . null)
 
-  let corrupt =
-        mkCorrupt
-          [ (mintAndPayOtherTokenNameAddr, doMintAndPayOtherTokenNameAddr certCs certVAddr)
-          , (removeCertRdmrInputs, doRemoveInputsWithToken certRdmrAc)
-          ]
+  let corrupt = mkCorrupt corruptions
 
-  -- If we didn't manage to corrupt anything, do it again
-  let corruptedCtx = corrupt ctx
-  if corruptedCtx == ctx
-    then genCorruptCertMpBurningCtx certMpParams certCs certRdmrAc
-    else return corruptedCtx
+  return $ corrupt ctx
 
-mkCorrupt :: forall {b}. [(Bool, b -> b)] -> b -> b
-mkCorrupt = foldl' (\rest (b, act) -> if b then act . rest else rest) id
+mkCorrupt :: forall {b}. [b -> b] -> b -> b
+mkCorrupt = foldr (.) id
 
 genCorrectAuthMpMintingCtx :: AuthMpParams -> CurrencySymbol -> Gen ScriptContext
 genCorrectAuthMpMintingCtx authMpParams authCs = do
@@ -233,19 +215,13 @@ genCorruptAuthMpMintingCtx :: AuthMpParams -> CurrencySymbol -> Gen ScriptContex
 genCorruptAuthMpMintingCtx authMpParams authCs = do
   ctx <- genCorrectAuthMpMintingCtx authMpParams authCs
 
-  -- Randomly pick a corruption
-  (mintAndPayOtherTokenName :: Bool) <- arbitrary
+  -- Randomly pick corruptions
+  corruptions <-
+    suchThat (sublistOf [doMintAndPayOtherTokenName authCs]) (not . null)
 
-  let corrupt =
-        mkCorrupt
-          [ (mintAndPayOtherTokenName, doMintAndPayOtherTokenName authCs)
-          ]
+  let corrupt = mkCorrupt corruptions
 
-  -- If we didn't manage to corrupt anything, do it again
-  let corruptedCtx = corrupt ctx
-  if corruptedCtx == ctx
-    then genCorruptAuthMpMintingCtx authMpParams authCs
-    else return corruptedCtx
+  return $ corrupt ctx
 
 genCorrectAuthMpBurningCtx :: CurrencySymbol -> Gen ScriptContext
 genCorrectAuthMpBurningCtx authCs = do
@@ -257,20 +233,41 @@ genCorruptAuthMpBurningCtx :: CurrencySymbol -> Gen ScriptContext
 genCorruptAuthMpBurningCtx authCs = do
   ctx <- genCorrectAuthMpBurningCtx authCs
 
-  -- Randomly pick a corruption
-  (mintAndPayOtherTokenNameAddr :: Bool) <- arbitrary
+  otherAddr <- genAddress
+
+  -- Randomly pick corruptions
+  corruptions <-
+    suchThat (sublistOf [doMintAndPayOtherTokenNameAddr authCs otherAddr]) (not . null)
+
+  let corrupt = mkCorrupt corruptions
+
+  return $ corrupt ctx
+
+genCorrectMustSinkholeCtx :: Gen ScriptContext
+genCorrectMustSinkholeCtx = do
+  nInputs <- chooseInt (1, 10)
+  vals <- replicateM nInputs (Value.singleton <$> genCurrencySymbol <*> genTokenName <*> chooseInteger (1, 100))
+  ins <- for vals $ \v -> do
+    txOutRef <- genTxOutRef
+    txOutAddr <- genAddress
+    return $ TxInInfo txOutRef (TxOut txOutAddr v NoOutputDatum Nothing)
+  let tokensToBurn = inv . fold $ [txOutValue inOut | TxInInfo _ inOut <- ins]
+  -- WARN: Using unsafe head here, switch to using NonEmptyList where applicable
+  return $ mkScriptContext (Spending (txInInfoOutRef . head $ ins)) ins [] tokensToBurn [] []
+
+genCorruptMustSinkholeCtx :: Gen ScriptContext
+genCorruptMustSinkholeCtx = do
+  ctx <- genCorrectMustSinkholeCtx
 
   otherAddr <- genAddress
-  let corrupt =
-        mkCorrupt
-          [ (mintAndPayOtherTokenNameAddr, doMintAndPayOtherTokenNameAddr authCs otherAddr)
-          ]
+  let someCs = fst . head . AssocMap.toList . getValue . txInfoMint . scriptContextTxInfo $ ctx
+  -- Randomly pick corruptions
+  corruptions <-
+    suchThat (sublistOf [doMintAndPayOtherTokenNameAddr someCs otherAddr]) (not . null)
 
-  -- If we didn't manage to corrupt anything, do it again
-  let corruptedCtx = corrupt ctx
-  if corruptedCtx == ctx
-    then genCorruptAuthMpBurningCtx authCs
-    else return corruptedCtx
+  let corrupt = mkCorrupt corruptions
+
+  return $ corrupt ctx
 
 genCorrectCertVSpendingCtx :: CurrencySymbol -> Address -> Gen ScriptContext
 genCorrectCertVSpendingCtx certCs certVAddr = do
@@ -279,28 +276,52 @@ genCorrectCertVSpendingCtx certCs certVAddr = do
   let tokensToBurn = inv . fold $ [txOutValue inOut | TxInInfo _ inOut <- certIns]
   return $ mkScriptContext (Spending (txInInfoOutRef . head $ certIns)) certIns [] tokensToBurn [] []
 
+genCorruptCertVSpendingCtx :: CurrencySymbol -> Address -> Gen ScriptContext
+genCorruptCertVSpendingCtx certCs certVAddr = do
+  ctx <- genCorrectCertVSpendingCtx certCs certVAddr
+
+  otherAddr <- genAddress
+
+  -- Randomly pick corruptions
+  corruptions <-
+    suchThat (sublistOf [doMintAndPayOtherTokenNameAddr certCs otherAddr]) (not . null)
+
+  let corrupt = mkCorrupt corruptions
+
+  return $ corrupt ctx
+
+genBuiltinByteString :: String -> Int -> Gen BuiltinByteString
+genBuiltinByteString prefix len = do
+  suffix <- vectorOf len (chooseEnum ('a', 'z'))
+  return . stringToBuiltinByteString . take len $ prefix <> suffix
+
+genTxOutRef :: Gen TxOutRef
+genTxOutRef = do
+  txId <- genBuiltinByteString "txid-" 28
+  txIx <- chooseInteger (0, 255)
+  return $ TxOutRef (TxId txId) txIx
+
 genAddress :: Gen Address
 genAddress = do
   scriptOrWallet :: Bool <- arbitrary
   if scriptOrWallet
     then do
-      bs :: ByteString <- ByteString.pack <$> vectorOf 28 (arbitrary :: Gen Word8)
-      return . scriptHashAddress . ValidatorHash . toBuiltin $ bs
+      bs <- genBuiltinByteString "vh-" 28
+      return . scriptHashAddress . ValidatorHash $ bs
     else do
-      bs :: ByteString <- ByteString.pack <$> vectorOf 28 (arbitrary :: Gen Word8)
-      return . pubKeyHashAddress . PubKeyHash . toBuiltin $ bs
+      bs <- genBuiltinByteString "pkh-" 28
+      return . pubKeyHashAddress . PubKeyHash $ bs
+
+genTokenName :: Gen TokenName
+genTokenName = TokenName <$> genBuiltinByteString "tn-" 32
 
 genCurrencySymbol :: Gen CurrencySymbol
-genCurrencySymbol = do
-  bs <- stringToBuiltinByteString <$> vectorOf 28 (chooseEnum ('a', 'z'))
-  return . CurrencySymbol $ bs
+genCurrencySymbol = CurrencySymbol <$> genBuiltinByteString "cs-" 28
 
 genAuthenticatonId :: Gen BuiltinByteString
-genAuthenticatonId = do
-  bs <- stringToBuiltinByteString <$> vectorOf 21 (chooseEnum ('a', 'z'))
-  return $ "authid-" <> bs
+genAuthenticatonId = genBuiltinByteString "authid-" 28
 
--- | Distributes elements in the first argument over the elements of the second
+-- | Distributes values (first argument) over the keys (second) to create a random Map
 distribute :: Ord a => [b] -> Set a -> Gen (Map a [b])
 distribute total xs = do
   (leftover, distributed) <- distributeSingle total xs
