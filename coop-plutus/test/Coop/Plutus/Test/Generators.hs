@@ -1,4 +1,4 @@
-module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx, genCorruptCertVSpendingCtx, genCorrectMustSinkholeCtx, genCorruptMustSinkholeCtx) where
+module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx, genCorruptCertVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptMustBurnOwnSingletonValueCtx) where
 
 import Test.QuickCheck (Arbitrary (arbitrary), Gen, choose, chooseAny, chooseEnum, chooseInt, chooseInteger, sublistOf, suchThat, vectorOf)
 
@@ -162,9 +162,17 @@ genCorruptCertMpMintingCtx certMpParams certCs = do
 
   ctx <- genCorrectCertMpMintingCtx certMpParams certCs
 
+  otherAddr <- genAddress
   -- Randomly pick corruptions
   corruptions <-
-    suchThat (sublistOf [doMintAndPayOtherTokenName certCs, doRemoveOutputDatum, doSendToOtherAddress certVAddr]) (not . null)
+    suchThat
+      ( sublistOf
+          [ doMintAndPayOtherTokenName certCs
+          , doRemoveOutputDatum
+          , doSendToOtherAddress certVAddr otherAddr
+          ]
+      )
+      (not . null)
 
   let corrupt = mkCorrupt corruptions
 
@@ -202,9 +210,6 @@ genCorruptCertMpBurningCtx certMpParams certCs certRdmrAc = do
   let corrupt = mkCorrupt corruptions
 
   return $ corrupt ctx
-
-mkCorrupt :: forall {b}. [b -> b] -> b -> b
-mkCorrupt = foldr (.) id
 
 genCorrectAuthMpMintingCtx :: AuthMpParams -> CurrencySymbol -> Gen ScriptContext
 genCorrectAuthMpMintingCtx authMpParams authCs = do
@@ -259,22 +264,28 @@ genCorruptAuthMpBurningCtx authCs = do
 
   return $ corrupt ctx
 
-genCorrectMustSinkholeCtx :: Gen ScriptContext
-genCorrectMustSinkholeCtx = do
-  ins <- genInputs 10
-  let tokensToBurn = inv . fold $ [txOutValue inOut | TxInInfo _ inOut <- ins]
-  -- WARN: Using unsafe head here, switch to using NonEmptyList where applicable
-  return $ mkScriptContext (Spending (txInInfoOutRef . head $ ins)) ins [] tokensToBurn [] []
+genCorrectMustBurnOwnSingletonValueCtx :: Gen ScriptContext
+genCorrectMustBurnOwnSingletonValueCtx = snd <$> genCorrectMustBurnOwnSingletonValueCtx'
 
-genCorruptMustSinkholeCtx :: Gen ScriptContext
-genCorruptMustSinkholeCtx = do
-  ctx <- genCorrectMustSinkholeCtx
+genCorrectMustBurnOwnSingletonValueCtx' :: Gen ((TxOutRef, (CurrencySymbol, TokenName, Integer)), ScriptContext)
+genCorrectMustBurnOwnSingletonValueCtx' = do
+  spentIn <- genInput
+  (otherIns, otherMint, otherOuts) <- genOthers 5
+  let TxInInfo spentOref (TxOut _ spentVal _ _) = spentIn
+      tokensToBurn = inv spentVal
+      ins = otherIns <> [spentIn]
+      mint = otherMint <> tokensToBurn
+      outs = otherOuts
+  return ((spentOref, head . flattenValue $ spentVal), mkScriptContext (Spending spentOref) ins [] mint outs [])
+
+genCorruptMustBurnOwnSingletonValueCtx :: Gen ScriptContext
+genCorruptMustBurnOwnSingletonValueCtx = do
+  (_, ctx) <- genCorrectMustBurnOwnSingletonValueCtx'
 
   otherAddr <- genAddress
-  let someCs = fst . head . AssocMap.toList . getValue . txInfoMint . scriptContextTxInfo $ ctx
   -- Randomly pick corruptions
   corruptions <-
-    suchThat (sublistOf [doMintAndPayOtherTokenNameAddr someCs otherAddr]) (not . null)
+    suchThat (sublistOf [doPayInsteadOfBurn otherAddr]) (not . null)
 
   let corrupt = mkCorrupt corruptions
 
@@ -297,30 +308,27 @@ genCorruptCertVSpendingCtx certCs certVAddr = do
 
   -- Randomly pick corruptions
   corruptions <-
-    suchThat (sublistOf [doMintAndPayOtherTokenNameAddr certCs otherAddr]) (not . null)
+    suchThat (sublistOf [doPayInsteadOfBurn otherAddr]) (not . null)
 
   let corrupt = mkCorrupt corruptions
 
   return $ corrupt ctx
 
-genInputs :: Int -> Gen [TxInInfo]
-genInputs n = do
-  nInputs <- chooseInt (1, n)
-  vals <- replicateM nInputs genValue
-  for vals $ \v -> do
-    txOutRef <- genTxOutRef
-    txOutAddr <- genAddress
-    return $ TxInInfo txOutRef (TxOut txOutAddr v NoOutputDatum Nothing)
+genInput :: Gen TxInInfo
+genInput = (\outRef val addr -> TxInInfo outRef (TxOut addr val NoOutputDatum Nothing)) <$> genTxOutRef <*> genSingletonValue <*> genAddress
 
-genValue :: Gen Value
-genValue = Value.singleton <$> genCurrencySymbol <*> genTokenName <*> chooseInteger (1, 100)
+genInputs :: Int -> Gen [TxInInfo]
+genInputs n = replicateM n genInput
+
+genSingletonValue :: Gen Value
+genSingletonValue = Value.singleton <$> genCurrencySymbol <*> genTokenName <*> chooseInteger (1, 100)
 
 genOthers :: Int -> Gen ([TxInInfo], Value, [TxOut])
 genOthers n = do
   ins <- genInputs n
   outAddrs <- replicateM n genAddress
   let inVals = mconcat [flattenValue v | TxInInfo _ (TxOut _ v _ _) <- ins]
-  mints <- mconcat . (flattenValue <$>) <$> replicateM n genValue
+  mints <- mconcat . (flattenValue <$>) <$> replicateM n genSingletonValue
   inToOutVals <- sublistOf inVals
   let outVals = mints <> inToOutVals
       burnVals = Set.toList $ Set.difference (Set.fromList inVals) (Set.fromList inToOutVals)
@@ -392,7 +400,15 @@ distributeSingle total =
         then take' ins (i : outs)
         else return (outs, i : ins)
 
--- | Mutating functions to introduce corruptions
+{- | Mutating functions to introduce corruptions into ScriptContext
+
+TODO: Use mlabs-haskell/plutus-simple-model to ensure ledger invariances for the mutated ScriptContexts
+WARN: All these mutations are untested and fairly unreliable
+-}
+
+-- | Makes a ScriptContext corruption pipeline
+mkCorrupt :: [ScriptContext -> ScriptContext] -> ScriptContext -> ScriptContext
+mkCorrupt = foldr (.) id
 
 -- | Mints a token with a specified CurrencySymbol and 'other token name' and pays it to same output
 doMintAndPayOtherTokenName :: CurrencySymbol -> ScriptContext -> ScriptContext
@@ -432,10 +448,9 @@ doRemoveOutputDatum ctx =
         }
 
 -- | Replaces original address with some other address
-doSendToOtherAddress :: Address -> ScriptContext -> ScriptContext
-doSendToOtherAddress originalAddr ctx =
+doSendToOtherAddress :: Address -> Address -> ScriptContext -> ScriptContext
+doSendToOtherAddress originalAddr otherAddr ctx =
   let ScriptContext txInfo _ = ctx
-      otherAddr = scriptHashAddress . ValidatorHash $ "other addr"
    in ctx
         { scriptContextTxInfo =
             txInfo
@@ -443,18 +458,32 @@ doSendToOtherAddress originalAddr ctx =
               }
         }
 
--- | Replaces original address with some other address
+-- | Removes inputs that contain a specified AssetClass
 doRemoveInputsWithToken :: AssetClass -> ScriptContext -> ScriptContext
 doRemoveInputsWithToken ac ctx =
   let ScriptContext txInfo _ = ctx
    in ctx
         { scriptContextTxInfo =
             txInfo
-              { txInfoInputs = [inp | inp@(TxInInfo _ inOut) <- txInfoInputs txInfo, assetClassValueOf (txOutValue inOut) ac == 0]
+              { txInfoInputs = [inp | inp@(TxInInfo _ inOut) <- txInfoInputs txInfo, assetClassValueOf (txOutValue inOut) ac > 0]
               }
         }
 
--- NOTE: That's why you want to use mlabs-haskell/plutus-simple-model
+-- | Removes burned tokens and pais them out to a specified address
+doPayInsteadOfBurn :: Address -> ScriptContext -> ScriptContext
+doPayInsteadOfBurn addr ctx =
+  let ScriptContext txInfo _ = ctx
+      burnedVal = mconcat [Value.singleton cs tn q | (cs, tn, q) <- flattenValue . txInfoMint $ txInfo, q < 0]
+      mintedVal = mconcat [Value.singleton cs tn q | (cs, tn, q) <- flattenValue . txInfoMint $ txInfo, q > 0]
+   in ctx
+        { scriptContextTxInfo =
+            txInfo
+              { txInfoMint = mintedVal
+              , txInfoOutputs = txInfoOutputs txInfo <> [TxOut addr (inv burnedVal) NoOutputDatum Nothing]
+              }
+        }
+
+-- TODO: Switch to mlabs-haskell/plutus-simple-model (that's why you need it)
 normalizeValue :: Value -> Value
 normalizeValue v =
   Value . AssocMap.fromList . Map.toAscList . (AssocMap.fromList . Map.toAscList <$>) $

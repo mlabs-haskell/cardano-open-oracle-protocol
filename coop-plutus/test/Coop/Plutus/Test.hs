@@ -6,8 +6,8 @@ import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (NonEmptyList (getNonEmpty), Positive (getPositive), choose, forAll, generate)
 
 import Coop.Plutus (certV, mkAuthMp, mkCertMp, pmustSpendAtLeastAa)
-import Coop.Plutus.Aux (hashTxInputs, pmustSinkhole)
-import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorrectCertVSpendingCtx, genCorrectMustSinkholeCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, genCorruptCertVSpendingCtx, genCorruptMustSinkholeCtx, mkScriptContext)
+import Coop.Plutus.Aux (hashTxInputs, pmustBurnOwnSingletonValue)
+import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorrectCertVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, genCorruptCertVSpendingCtx, genCorruptMustBurnOwnSingletonValueCtx, mkScriptContext)
 import Coop.Plutus.Types (PAuthMpParams, PCertMpParams)
 import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint))
 import Data.Foldable (Foldable (fold))
@@ -59,15 +59,15 @@ spec = do
       let ctx = mkScriptContext (Minting certCs) [] [] mempty [] []
       prop "must-have-non-zero-aa-inputs" $ \(aaQRequired :: Positive Integer) -> pfails (pmustSpendAtLeastAa # pconstant ctx # pconstant aaAc # pconstant (getPositive aaQRequired))
 
-  describe "pmustSinkhole" $ do
+  describe "pmustBurnOwnSingletonValue" $ do
     prop "should-succeed" $ do
-      forAll genCorrectMustSinkholeCtx $
+      forAll genCorrectMustBurnOwnSingletonValueCtx $
         \ctx ->
-          psucceeds (pmustSinkhole # pconstant ctx)
+          psucceeds (pmustBurnOwnSingletonValue # pconstant ctx)
     prop "should-fail" $ do
-      forAll genCorruptMustSinkholeCtx $
+      forAll genCorruptMustBurnOwnSingletonValueCtx $
         \ctx ->
-          pfails (pmustSinkhole # pconstant ctx)
+          pfails (pmustBurnOwnSingletonValue # pconstant ctx)
   describe "CertMp" $ do
     describe "should-succeed" $ do
       prop "mint $CERT" $

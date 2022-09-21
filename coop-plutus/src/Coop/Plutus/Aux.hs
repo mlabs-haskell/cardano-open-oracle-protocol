@@ -20,13 +20,15 @@ module Coop.Plutus.Aux (
   pfindOwnInput',
   pfoldTxOutputs,
   pfoldTxInputs,
-  pmustSinkhole,
   pcurrencyValue,
   pmustSpendAtLeast,
   pmaybeData,
   hashTxInputs,
   pmustMintCurrency,
   pcurrencyTokenQuantity,
+  pfindOwnInput,
+  pfindOwnAddr,
+  pmustBurnOwnSingletonValue,
 ) where
 
 import Crypto.Hash (SHA3_256 (SHA3_256), hashWith)
@@ -36,7 +38,6 @@ import Data.List (sort, zipWith)
 import Plutarch (popaque, pto)
 import Plutarch.Api.V1.AssocMap (pempty, plookup, psingleton)
 import Plutarch.Api.V1.Value (
-  pforgetPositive,
   pnoAdaValue,
   pnormalize,
   pvalueOf,
@@ -48,11 +49,10 @@ import Plutarch.DataRepr (pdcons)
 import Plutarch.Extra.Interval (pcontains)
 import Plutarch.List (PIsListLike, PListLike (pelimList, pnil), pany)
 import Plutarch.Monadic qualified as P
-import Plutarch.Num (PNum ((#+)))
+import Plutarch.Num (PNum (pnegate, (#+)))
 import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList (PCons, PNil), PData, PEq ((#==)), PInteger (), PIsData, PMaybe (PJust, PNothing), PPartialOrd ((#<=)), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pconstantData, pdata, pdnil, pelem, pfield, pfind, pfix, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pletFields, pmatch, psndBuiltin, ptrace, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
 import Plutarch.TermCont (tcont, unTermCont)
 import PlutusLedgerApi.V2 (Extended (PosInf), TxId (getTxId), TxInInfo (TxInInfo), TxOutRef (txOutRefId, txOutRefIdx), UpperBound (UpperBound), fromBuiltin)
-import PlutusTx.Prelude (Group (inv))
 import Prelude (Bool (False, True), Functor (fmap), Monoid (mconcat, mempty), Num (fromInteger), Semigroup ((<>)), fst, reverse, ($), (.), (<$>))
 
 -- WARN(@Saizan): on a 'NoGuarantees value like `v = psingleton # cs # tn # 0` we have
@@ -135,8 +135,28 @@ pownCurrencySymbol = phoistAcyclic $
       PMinting cs -> pfield @"_0" # cs
       _ -> ptraceError "pownCurrencySymbol: Script purpose is not 'Minting'!"
 
-pfindOwnInputV2 :: Term s (PBuiltinList PTxInInfo :--> PTxOutRef :--> PMaybe PTxInInfo)
-pfindOwnInputV2 = phoistAcyclic $
+pfindOwnAddr :: Term s (PScriptContext :--> PAddress)
+pfindOwnAddr = phoistAcyclic $
+  plam $ \ctx -> ptrace "pfindOwnAddr" P.do
+    ownInput <- plet $ pfindOwnInput # ctx
+    pfield @"address" #$ pfield @"resolved" # ownInput
+
+pfindOwnInput :: Term s (PScriptContext :--> PTxInInfo)
+pfindOwnInput = phoistAcyclic $
+  plam $ \ctx -> ptrace "pfindOwnInput" P.do
+    ctx' <- pletFields @'["txInfo", "purpose"] ctx
+    txInfo <- pletFields @'["inputs"] ctx'.txInfo
+    pmatch ctx'.purpose \case
+      PSpending txOutRef ->
+        pmatch
+          (pfindOwnInput' # txInfo.inputs # (pfield @"_0" # txOutRef))
+          \case
+            PNothing -> ptraceError "pfindOwnInput: Script purpose is not 'Spending'!"
+            PJust txInInfo -> txInInfo
+      _ -> ptraceError "pfindOwnInput: Script purpose is not 'Spending'!"
+
+pfindOwnInput' :: Term s (PBuiltinList PTxInInfo :--> PTxOutRef :--> PMaybe PTxInInfo)
+pfindOwnInput' = phoistAcyclic $
   plam $ \inputs outRef ->
     pfind # (matches # outRef) # inputs
   where
@@ -144,20 +164,6 @@ pfindOwnInputV2 = phoistAcyclic $
     matches = phoistAcyclic $
       plam $ \outref txininfo ->
         outref #== pfield @"outRef" # txininfo
-
-pfindOwnInput' :: Term s (PScriptContext :--> PTxInInfo)
-pfindOwnInput' = phoistAcyclic $
-  plam $ \ctx -> ptrace "pfindOwnInput'" P.do
-    ctx' <- pletFields @'["txInfo", "purpose"] ctx
-    txInfo <- pletFields @'["inputs"] ctx'.txInfo
-    pmatch ctx'.purpose \case
-      PSpending txOutRef ->
-        pmatch
-          (pfindOwnInputV2 # txInfo.inputs # (pfield @"_0" # txOutRef))
-          \case
-            PNothing -> ptraceError "pfindOwnInput': Script purpose is not 'Spending'!"
-            PJust txInInfo -> txInInfo
-      _ -> ptraceError "pfindOwnInput': Script purpose is not 'Spending'!"
 
 -- | Find the data corresponding to a data hash, if there is one
 pfindDatum :: Term s (PBuiltinList (PAsData (PTuple PDatumHash PDatum)) :--> PDatumHash :--> PMaybeData PDatum)
@@ -396,30 +402,56 @@ pmustSpendAtLeast :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PToken
 pmustSpendAtLeast = phoistAcyclic $
   plam $ \ctx cs tn mustSpendAtLeastQ -> pmustSpendPred # ctx # cs # tn # plam (mustSpendAtLeastQ #<=)
 
-{- | Checks that all the spent non $ADA tokens are burned and that no tokens were minted and paid
+{- | Sinkhole 'own' unique (non $ADA) AssetClass
 
-- accumulates all the non $ADA input tokens to burn
-- checks if it is equal to what is minted
+- check that the 'own' non $ADA token spent is a singleton
+- check that the quantity is entirely burned
 
-Notes:
-- if used by a validator it will redo a lot of work
+WARN: Use this function only when the input contains the entire quantity of an AssetClass!!!
+
+Attack scenario:
+
+- only 2 x assetClass "mintingPolicyA" "someTokenName" are minted and paid to legitValidator in 2 different UTxOs
+- legitValidator validates spending using this function
+- Alice creates a transaction that spends both UTxOs containins these tokens BUT
+  - burns only one of them
+  - pays to somewhere else the other one
 -}
-pmustSinkhole :: ClosedTerm (PScriptContext :--> PUnit)
-pmustSinkhole = phoistAcyclic $
+pmustBurnOwnSingletonValue :: ClosedTerm (PScriptContext :--> PUnit)
+pmustBurnOwnSingletonValue = phoistAcyclic $
   plam $ \ctx -> ptrace "pmustSinkhole" P.do
     ctx' <- pletFields @'["txInfo"] ctx
     txInfo <- pletFields @'["mint"] ctx'.txInfo
 
-    let collectSpent shouldBurn txInInfo = P.do
-          val <- plet $ pfield @"value" #$ pfield @"resolved" # txInInfo
-          shouldBurn <> inv (pforgetPositive $ pnoAdaValue # val)
+    ownInput <- plet $ pfindOwnInput # ctx
+    ownInValue <- plet $ pnoAdaValue #$ pfield @"value" # (pfield @"resolved" # ownInput)
 
-    shouldBurn <- plet $ pfoldTxInputs # ctx # plam collectSpent # mempty
+    pmatch
+      (pto . pto $ ownInValue)
+      \case
+        PNil -> ptraceError "Must spend at least 1 non-ADA token"
+        PCons csTokens restCsTokens -> ptrace "Spent at least 1 non-ADA token" P.do
+          pif
+            (restCsTokens #== pnil)
+            ( ptrace "Spent a single CurrencySymbol" P.do
+                pmatch (pto . pfromData $ psndBuiltin # csTokens) \case
+                  PNil -> ptraceError "Must spend at least 1 token of CurrencySymbol"
+                  PCons tokenQ restTokenQs ->
+                    pif
+                      (restTokenQs #== pnil)
+                      ( ptrace "Spent a single TokenName" P.do
+                          cs <- plet . pfromData $ pfstBuiltin # csTokens
+                          tn <- plet . pfromData $ pfstBuiltin # tokenQ
+                          q <- plet . pfromData $ psndBuiltin # tokenQ
 
-    pif
-      (pnoAdaValue # txInfo.mint #== shouldBurn)
-      (ptrace "pmustSinkhole: All spent tokens are burned and no tokens were minted and paid" punit)
-      (ptraceError "pmustSinkhole: Must burn all the spent tokens and no tokens must be minted and paid")
+                          pif
+                            (pnegate # q #== pvalueOf # txInfo.mint # cs # tn)
+                            (ptrace "Burned the same quantity that was spent" punit)
+                            (ptraceError "Must burn the same quantity that was spent")
+                      )
+                      (ptraceError "Must spend a single TokenName")
+            )
+            (ptraceError "Must spent a single CurrencySymbol")
 
 -- | Hashes transaction inputs sha3_256 on the concatenation of id:ix (used for onchain uniqueness)
 hashTxInputs :: [TxInInfo] -> ByteString

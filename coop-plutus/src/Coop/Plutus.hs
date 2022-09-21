@@ -10,7 +10,7 @@ module Coop.Plutus (
   pmustSpendAtLeastAa,
 ) where
 
-import Coop.Plutus.Aux (pcurrencyTokenQuantity, pcurrencyValue, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfoldTxInputs, pfoldTxOutputs, phasCurrency, pmaybeData, pmustBeSignedBy, pmustMint, pmustMintCurrency, pmustPayCurrencyWithDatumTo, pmustSinkhole, pmustSpendAtLeast, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
+import Coop.Plutus.Aux (pcurrencyTokenQuantity, pcurrencyValue, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfoldTxInputs, pfoldTxOutputs, phasCurrency, pmaybeData, pmustBeSignedBy, pmustBurnOwnSingletonValue, pmustMint, pmustMintCurrency, pmustPayCurrencyWithDatumTo, pmustSpendAtLeast, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
 import Coop.Plutus.Types (PAuthMpParams, PAuthMpRedeemer (PAuthMpBurn, PAuthMpMint), PAuthParams, PCertDatum, PCertMpParams, PCertMpRedeemer (PCertMpBurn, PCertMpMint), PFsDatum, PFsMpParams, PFsMpRedeemer (PFsMpBurn, PFsMpMint))
 import Plutarch (POpaque, pmatch, popaque)
 import Plutarch.Api.V1.Value (passertPositive, pnormalize, pvalueOf)
@@ -37,15 +37,17 @@ import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PByteString, PEq ((#
 import PlutusTx.Prelude (Group (inv))
 import Prelude (Monoid (mempty), Semigroup ((<>)), const, ($))
 
-{- | Delegates spending validation to corresponding minting policies
+{- | Validates spending from @FsV
+
+- check that 'own' spent $FS token is spent and burned (FsMpBurn checks the rest)
 
 TODO: Test 'other-mint-redeemer' vulnerability with psm or Plutip
 -}
 fsV :: ClosedTerm PValidator
 fsV = phoistAcyclic $
   plam $ \_ _ ctx -> ptrace "@FsV" P.do
-    _ <- plet $ pmustSinkhole # ctx
-    ptrace "@FsV: All spent value is sinkholed" $ popaque punit
+    _ <- plet $ pmustBurnOwnSingletonValue # ctx
+    ptrace "@CertV: Own spent singleton value is burned" $ popaque punit
 
 -- | Minting policy that validates minting and burning of $FS tokens
 mkFsMp :: ClosedTerm (PAsData PFsMpParams :--> PMintingPolicy)
@@ -452,15 +454,17 @@ authenticating scripts CAN use to validate $AUTH inputs. These are locked @CertV
 - @CertV is a script where $CERT tokens are locked at and authenticating scripts can 'reference' these outputs when performing validation.
 -}
 
-{- | Delegates spending validation to corresponding minting policies
+{- | Validates spending from @CertV
+
+- check that 'own' spent $CERT token is spent and burned (CertMpBurn checks the rest)
 
 TODO: Test 'other-mint-redeemer' vulnerability with psm or Plutip
 -}
 certV :: ClosedTerm PValidator
 certV = phoistAcyclic $
   plam $ \_ _ ctx -> ptrace "@CertV" P.do
-    _ <- plet $ pmustSinkhole # ctx
-    ptrace "@CertV: All spent value is sinkholed" $ popaque punit
+    _ <- plet $ pmustBurnOwnSingletonValue # ctx
+    ptrace "@CertV: Own spent singleton value is burned" $ popaque punit
 
 -- | $CERT minting policy
 mkCertMp :: ClosedTerm (PAsData PCertMpParams :--> PMintingPolicy)
