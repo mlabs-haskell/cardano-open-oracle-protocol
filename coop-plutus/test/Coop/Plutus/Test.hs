@@ -58,9 +58,6 @@ spec = do
   describe "pmustSpendAtLeastAa" $ do
     describe "should-succeed" $ do
       prop "hash-all-aa-inputs" $ -- TODO: Add a Plutip test for this
-      -- TODO: Add a Plutip test for this
-      -- TODO: Add a Plutip test for this
-      -- TODO: Add a Plutip test for this
         forAll (choose (1, 10)) $
           \aaQ ->
             forAll (genAaInputs aaAc aaQ) $ \aaIns -> do
