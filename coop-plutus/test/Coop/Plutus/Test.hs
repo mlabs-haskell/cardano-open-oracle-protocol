@@ -5,11 +5,11 @@ import Test.Hspec (Expectation, Spec, describe, shouldBe)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (NonEmptyList (getNonEmpty), Positive (getPositive), choose, forAll, generate)
 
-import Coop.Plutus (certV, mkAuthMp, mkCertMp, pmustSpendAtLeastAa)
+import Coop.Plutus (certV, mkAuthMp, mkCertMp, mkFsMp, pmustSpendAtLeastAa)
 import Coop.Plutus.Aux (hashTxInputs, pmustBurnOwnSingletonValue)
-import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorrectCertVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, genCorruptCertVSpendingCtx, genCorruptMustBurnOwnSingletonValueCtx, mkScriptContext)
-import Coop.Plutus.Types (PAuthMpParams, PCertMpParams)
-import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint))
+import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorrectCertVSpendingCtx, genCorrectFsMpMintingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, genCorruptCertVSpendingCtx, genCorruptMustBurnOwnSingletonValueCtx, mkScriptContext)
+import Coop.Plutus.Types (PAuthMpParams, PCertMpParams, PFsMpParams)
+import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), AuthParams (AuthParams), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint), FsMpParams (FsMpParams), FsMpRedeemer (FsMpMint))
 import Data.Foldable (Foldable (fold))
 import Data.Map qualified as Map
 import Data.Set qualified as Set
@@ -23,6 +23,9 @@ import PlutusLedgerApi.V1.Value (AssetClass, TokenName (TokenName), assetClass, 
 import PlutusLedgerApi.V2 (Address, CurrencySymbol, Script, ScriptPurpose (Minting), ValidatorHash (ValidatorHash), toData)
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
+coopAc :: AssetClass
+coopAc = assetClass (currencySymbol "$COOP CurrencySymbol") (TokenName "$COOP TokenName")
+
 aaAc :: AssetClass
 aaAc = assetClass (currencySymbol "$AA CurrencySymbol") (TokenName "$AA TokenName")
 
@@ -32,8 +35,14 @@ certCs = currencySymbol "CertMp hash"
 authCs :: CurrencySymbol
 authCs = currencySymbol "AuthMp hash"
 
+fsCs :: CurrencySymbol
+fsCs = currencySymbol "FsMp hash"
+
 certVAddr :: Address
 certVAddr = scriptHashAddress . ValidatorHash . stringToBuiltinByteString $ "@CertV hash"
+
+fsVAddr :: Address
+fsVAddr = scriptHashAddress . ValidatorHash . stringToBuiltinByteString $ "@FsV hash"
 
 spec :: Spec
 spec = do
@@ -192,7 +201,18 @@ spec = do
                           # pconstant ctx
                       )
 
-  describe "FsMp" $ do return ()
+  describe "FsMp" $
+    describe "should-succeed" $ do
+      prop "mint $FS" $
+        let fsMpParams = FsMpParams coopAc fsVAddr (AuthParams authCs certCs)
+         in forAll (genCorrectFsMpMintingCtx fsMpParams fsCs) $
+              \ctx ->
+                psucceeds
+                  ( mkFsMp
+                      # pconstantData @PFsMpParams fsMpParams
+                      # pdataImpl (pconstant FsMpMint)
+                      # pconstant ctx
+                  )
   describe "@FsV" $ do return ()
 
 _plog :: ClosedTerm a -> Expectation

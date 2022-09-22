@@ -9,10 +9,8 @@ module Coop.Plutus.Aux (
   mkOneShotMp,
   pfindMap,
   pdatumFromTxOut,
-  pmustMint,
   pmustValidateAfter,
   pmustBeSignedBy,
-  pcurrencyTokens,
   pdjust,
   pdnothing,
   pmustSpend,
@@ -29,6 +27,7 @@ module Coop.Plutus.Aux (
   pfindOwnInput,
   pfindOwnAddr,
   pmustBurnOwnSingletonValue,
+  pfoldTxRefs,
 ) where
 
 import Crypto.Hash (Blake2b_256 (Blake2b_256), hashWith)
@@ -36,14 +35,15 @@ import Data.ByteArray (convert)
 import Data.ByteString (ByteString, cons)
 import Data.List (sort, zipWith)
 import Plutarch (popaque, pto)
-import Plutarch.Api.V1.AssocMap (pempty, plookup, psingleton)
+import Plutarch.Api.V1.AssocMap (plookup, psingleton)
 import Plutarch.Api.V1.Value (
+  AmountGuarantees (Positive),
   pnoAdaValue,
   pnormalize,
   pvalueOf,
  )
 import Plutarch.Api.V1.Value qualified as PValue
-import Plutarch.Api.V2 (AmountGuarantees (NonZero), KeyGuarantees (Sorted), PAddress, PCurrencySymbol, PDatum, PDatumHash, PExtended, PInterval (PInterval), PLowerBound (PLowerBound), PMap, PMaybeData (PDJust, PDNothing), PMintingPolicy, POutputDatum (PNoOutputDatum, POutputDatum, POutputDatumHash), PPOSIXTime, PPubKeyHash, PScriptContext, PScriptPurpose (PMinting, PSpending), PTokenName, PTuple, PTxInInfo, PTxOut, PTxOutRef, PUpperBound, PValue (PValue))
+import Plutarch.Api.V2 (AmountGuarantees (NonZero), KeyGuarantees (Sorted), PAddress, PCurrencySymbol, PDatum, PDatumHash, PExtended, PInterval (PInterval), PLowerBound (PLowerBound), PMaybeData (PDJust, PDNothing), PMintingPolicy, POutputDatum (PNoOutputDatum, POutputDatum, POutputDatumHash), PPOSIXTime, PPubKeyHash, PScriptContext, PScriptPurpose (PMinting, PSpending), PTokenName, PTuple, PTxInInfo, PTxOut, PTxOutRef, PUpperBound, PValue (PValue))
 import Plutarch.Bool (PBool (PTrue))
 import Plutarch.DataRepr (pdcons)
 import Plutarch.Extra.Interval (pcontains)
@@ -55,10 +55,8 @@ import Plutarch.TermCont (tcont, unTermCont)
 import PlutusLedgerApi.V2 (Extended (PosInf), TxId (getTxId), TxInInfo (TxInInfo), TxOutRef (txOutRefId, txOutRefIdx), UpperBound (UpperBound), fromBuiltin)
 import Prelude (Bool (False, True), Functor (fmap), Monoid (mconcat, mempty), Num (fromInteger), Semigroup ((<>)), fst, ($), (.), (<$>))
 
--- WARN(@Saizan): on a 'NoGuarantees value like `v = psingleton # cs # tn # 0` we have
---               `phasCurrency # cs # tn # v #== pcon PTrue` which could be misleading.
---               For values from `TxInfo` the only case where this is relevant is if `v` is the mint field and cs:tk is Ada.
-phasCurrency :: forall (q :: AmountGuarantees) (s :: S). Term s (PCurrencySymbol :--> PValue 'PValue.Sorted q :--> PBool)
+-- | Checks if there's a CurrencySymbol in a Value
+phasCurrency :: forall (s :: S). Term s (PCurrencySymbol :--> PValue 'Sorted 'Positive :--> PBool)
 phasCurrency = phoistAcyclic $
   plam $ \cs val ->
     pmatch
@@ -66,16 +64,6 @@ phasCurrency = phoistAcyclic $
       ( \case
           PNothing -> pcon PFalse
           _ -> pcon PTrue
-      )
-
-pcurrencyTokens :: forall (q :: AmountGuarantees) (s :: S). Term s (PCurrencySymbol :--> PValue 'PValue.Sorted q :--> PMap 'Sorted PTokenName PInteger)
-pcurrencyTokens = phoistAcyclic $
-  plam $ \cs val ->
-    pmatch
-      (plookup # cs # pto val)
-      ( \case
-          PNothing -> pempty
-          PJust tokens -> tokens
       )
 
 -- | Retrieves a Value of a specified CurrencySymbol or fails otherwise
@@ -237,6 +225,7 @@ pconsumesRef = phoistAcyclic $
   plam $ \txOutRef ->
     pany #$ plam $ \input -> pfield @"outRef" # input #== txOutRef
 
+-- | Parses a datum from a TxOut or fails hard
 pdatumFromTxOut :: forall a (s :: S). (PIsData a, PTryFrom PData (PAsData a)) => Term s (PScriptContext :--> PTxOut :--> a)
 pdatumFromTxOut = phoistAcyclic $
   plam $ \ctx txOut -> ptrace "pdatumFromTxOut" P.do
@@ -252,17 +241,6 @@ pdatumFromTxOut = phoistAcyclic $
 
     pfromData (ptryFromData @a (pto datum))
 
--- WARN(@Saizan): leaves you vulnerable to `other tokenname` attacks.
-pmustMint :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PUnit)
-pmustMint = phoistAcyclic $
-  plam $ \ctx cs tn q -> ptrace "mustMint" P.do
-    ctx' <- pletFields @'["txInfo"] ctx
-    txInfo <- pletFields @'["mint"] ctx'.txInfo
-    pif
-      (pvalueOf # txInfo.mint # cs # tn #== q)
-      (ptrace "pmustMint: Minted specified quantity" punit)
-      (ptraceError "pmustMint: Must mint the specified quantity")
-
 -- | Checks total value of a specified CurrencySymbol minted.
 pmustMintCurrency :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PValue 'Sorted 'NonZero :--> PUnit)
 pmustMintCurrency = phoistAcyclic $
@@ -275,6 +253,7 @@ pmustMintCurrency = phoistAcyclic $
       (ptrace "pmustMintCurrency: Minted specified value of currency exclusively" punit)
       (ptraceError "pmustMintCurrency: Must mint the specified value of currency")
 
+-- | Checks that the transaction validates after the specified point
 pmustValidateAfter :: ClosedTerm (PScriptContext :--> PExtended PPOSIXTime :--> PUnit)
 pmustValidateAfter = phoistAcyclic $
   plam $ \ctx after -> ptrace "mustValidateAfter" P.do
@@ -360,6 +339,18 @@ pmustPayCurrencyWithDatumTo = phoistAcyclic $
       (mustPayVal #== paidVal)
       (ptrace "pmustPayExWithDatumTo: Paid the specified value" punit)
       (ptraceError "pmustPayExWithDatumTo: Must pay the specified value")
+
+-- | Foldl over transaction references
+pfoldTxRefs :: ClosedTerm (PScriptContext :--> (a :--> PTxInInfo :--> a) :--> a :--> a)
+pfoldTxRefs = phoistAcyclic $
+  plam $ \ctx foldFn initial -> ptrace "pfoldTxRefs" P.do
+    ctx' <- pletFields @'["txInfo"] ctx
+    txInfo <- pletFields @'["referenceInputs"] ctx'.txInfo
+
+    pfoldl
+      # foldFn
+      # initial
+      # pfromData txInfo.referenceInputs
 
 -- | Foldl over transaction inputs
 pfoldTxInputs :: ClosedTerm (PScriptContext :--> (a :--> PTxInInfo :--> a) :--> a :--> a)

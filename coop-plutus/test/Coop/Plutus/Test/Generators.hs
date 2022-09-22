@@ -1,4 +1,4 @@
-module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx, genCorruptCertVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptMustBurnOwnSingletonValueCtx) where
+module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx, genCorruptCertVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptMustBurnOwnSingletonValueCtx, genCorrectFsMpMintingCtx) where
 
 import Test.QuickCheck (Arbitrary (arbitrary), Gen, choose, chooseAny, chooseEnum, chooseInt, chooseInteger, sublistOf, suchThat, vectorOf)
 
@@ -13,11 +13,11 @@ import Data.Set qualified as Set
 import Data.Traversable (for)
 import PlutusLedgerApi.V1.Address (pubKeyHashAddress, scriptHashAddress)
 import PlutusLedgerApi.V1.Value (AssetClass, CurrencySymbol (CurrencySymbol), TokenName (TokenName), assetClass, assetClassValue, assetClassValueOf, flattenValue)
-import PlutusLedgerApi.V2 (Address, BuiltinByteString, Datum (Datum), LedgerBytes (LedgerBytes), OutputDatum (NoOutputDatum, OutputDatum), POSIXTime (POSIXTime), PubKeyHash (PubKeyHash), ScriptContext (ScriptContext, scriptContextTxInfo), ScriptPurpose (Minting, Spending), ToData, TxId (TxId), TxInInfo (TxInInfo, txInInfoOutRef), TxInfo (TxInfo, txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl), TxOut (TxOut, txOutAddress, txOutDatum, txOutValue), TxOutRef (TxOutRef), ValidatorHash (ValidatorHash), Value (Value, getValue), always, toBuiltin, toBuiltinData)
+import PlutusLedgerApi.V2 (Address, BuiltinByteString, Datum (Datum), Extended (Finite), Interval, LedgerBytes (LedgerBytes), OutputDatum (NoOutputDatum, OutputDatum), POSIXTime (POSIXTime), PubKeyHash (PubKeyHash), ScriptContext (ScriptContext, scriptContextTxInfo), ScriptPurpose (Minting, Spending), ToData, TxId (TxId), TxInInfo (TxInInfo, txInInfoOutRef), TxInfo (TxInfo, txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl), TxOut (TxOut, txOutAddress, txOutDatum, txOutValue), TxOutRef (TxOutRef), ValidatorHash (ValidatorHash), Value (Value, getValue), always, toBuiltin, toBuiltinData)
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
-import Coop.Types (AuthMpParams (amp'authAuthorityAc, amp'requiredAtLeastAaQ), CertDatum (CertDatum), CertMpParams (cmp'authAuthorityAc, cmp'certVAddress, cmp'requiredAtLeastAaQ))
+import Coop.Types (AuthMpParams (amp'authAuthorityAc, amp'requiredAtLeastAaQ), AuthParams (ap'authTokenCs, ap'certTokenCs), CertDatum (CertDatum), CertMpParams (cmp'authAuthorityAc, cmp'certVAddress, cmp'requiredAtLeastAaQ), FsDatum (FsDatum), FsMpParams (fmp'authParams, fmp'fsVAddress))
 import PlutusLedgerApi.V1.Interval (interval)
 import PlutusLedgerApi.V2 qualified as Value
 import PlutusTx.Prelude (Group (inv))
@@ -41,6 +41,15 @@ mkTxInfo ins refs mints outs sigs =
     , txInfoMint = normalizeValue mints
     , txInfoOutputs = outs
     , txInfoSignatories = sigs
+    }
+
+setValidity :: ScriptContext -> Value.POSIXTimeRange -> ScriptContext
+setValidity ctx validity =
+  ctx
+    { scriptContextTxInfo =
+        (scriptContextTxInfo ctx)
+          { txInfoValidRange = validity
+          }
     }
 
 genAaInputs :: AssetClass -> Integer -> Gen [TxInInfo]
@@ -83,32 +92,37 @@ genCertRdmrInputs certRdmrAc = do
     | addr <- certRdmrAddrs
     ]
 
-genCertInputs :: Address -> CurrencySymbol -> AssetClass -> Integer -> Gen [TxInInfo]
-genCertInputs certVAddr certCs certRdmrAc validUntil = do
-  nCertInputs <- chooseInt (1, 10)
-  certIds <- replicateM nCertInputs genAuthenticatonId
-  certValidities <-
-    replicateM
-      nCertInputs
-      ( do
-          lowerBound <- chooseInteger (0, validUntil)
-          upperBound <- chooseInteger (lowerBound, validUntil)
-          return $ interval (POSIXTime lowerBound) (POSIXTime upperBound)
+genCertInput :: Address -> CurrencySymbol -> AssetClass -> Interval POSIXTime -> BuiltinByteString -> Gen TxInInfo
+genCertInput certVAddr certCs certRdmrAc certValidity certId = do
+  return $
+    TxInInfo
+      (TxOutRef (TxId certId) 0)
+      ( TxOut
+          certVAddr
+          (Value.singleton certCs (TokenName certId) 1)
+          (toOutputDatum $ CertDatum (LedgerBytes certId) certValidity certRdmrAc)
+          Nothing
       )
 
-  let certInputs =
-        ( \(certId, certValidity) ->
-            TxInInfo
-              (TxOutRef (TxId certId) 0)
-              ( TxOut
-                  certVAddr
-                  (Value.singleton certCs (TokenName certId) 1)
-                  (toOutputDatum $ CertDatum (LedgerBytes certId) certValidity certRdmrAc)
-                  Nothing
-              )
-        )
-          <$> zip certIds certValidities
-  return certInputs
+genCertInputs :: Address -> CurrencySymbol -> AssetClass -> Interval POSIXTime -> Gen [TxInInfo]
+genCertInputs certVAddr certCs certRdmrAc validity = do
+  nCertInputs <- chooseInt (1, 10)
+  certIds <- replicateM nCertInputs genAuthenticatonId
+  for certIds (genCertInput certVAddr certCs certRdmrAc validity)
+
+genAuthInput :: CurrencySymbol -> BuiltinByteString -> Gen TxInInfo
+genAuthInput authCs authId = do
+  authQ <- chooseInteger (1, 10)
+  authWallet <- genAddress
+  return $
+    TxInInfo
+      (TxOutRef (TxId authId) 0)
+      ( TxOut
+          authWallet
+          (Value.singleton authCs (TokenName authId) authQ)
+          NoOutputDatum
+          Nothing
+      )
 
 genAuthInputs :: CurrencySymbol -> Gen [TxInInfo]
 genAuthInputs authCs = do
@@ -178,10 +192,14 @@ genCorruptCertMpMintingCtx certMpParams certCs = do
 
   return $ corrupt ctx
 
+genValidity :: Gen (Interval POSIXTime)
+genValidity = chooseInteger (0, 50) >>= \l -> chooseInteger (l, 100) >>= \u -> return $ interval (POSIXTime l) (POSIXTime u)
+
 genCorrectCertMpBurningCtx :: CertMpParams -> CurrencySymbol -> AssetClass -> Gen ScriptContext
 genCorrectCertMpBurningCtx certMpParams certCs certRdmrAc = do
   let certVAddr = cmp'certVAddress certMpParams
-  certIns <- genCertInputs certVAddr certCs certRdmrAc 100
+  validity <- genValidity
+  certIns <- genCertInputs certVAddr certCs certRdmrAc validity
   certRdmrIns <- genCertRdmrInputs certRdmrAc
   (otherIns, otherMint, otherOuts) <- genOthers 5
   let certTokensToBurn = inv . fold $ [txOutValue certInOut | TxInInfo _ certInOut <- certIns]
@@ -189,13 +207,7 @@ genCorrectCertMpBurningCtx certMpParams certCs certRdmrAc = do
       mint = otherMint <> certTokensToBurn
       outs = otherOuts
       ctx = mkScriptContext (Minting certCs) ins [] mint outs []
-  return $
-    ctx
-      { scriptContextTxInfo =
-          (scriptContextTxInfo ctx)
-            { txInfoValidRange = interval 101 201
-            }
-      }
+  return $ setValidity ctx validity
 
 genCorruptCertMpBurningCtx :: CertMpParams -> CurrencySymbol -> AssetClass -> Gen ScriptContext
 genCorruptCertMpBurningCtx certMpParams certCs certRdmrAc = do
@@ -294,7 +306,8 @@ genCorruptMustBurnOwnSingletonValueCtx = do
 genCorrectCertVSpendingCtx :: CurrencySymbol -> Address -> Gen ScriptContext
 genCorrectCertVSpendingCtx certCs certVAddr = do
   certRdmrAc <- genCertRdmrAc
-  certIns <- genCertInputs certVAddr certCs certRdmrAc 100
+  validity <- genValidity
+  certIns <- genCertInputs certVAddr certCs certRdmrAc validity
   (otherIns, _, _) <- genOthers 5
   let tokensToBurn = inv . fold $ [txOutValue inOut | TxInInfo _ inOut <- ins]
       ins = certIns <> otherIns
@@ -313,6 +326,36 @@ genCorruptCertVSpendingCtx certCs certVAddr = do
   let corrupt = mkCorrupt corruptions
 
   return $ corrupt ctx
+
+genCorrectFsMpMintingCtx :: FsMpParams -> CurrencySymbol -> Gen ScriptContext
+genCorrectFsMpMintingCtx fsMpParams fsCs = do
+  let certCs = ap'certTokenCs . fmp'authParams $ fsMpParams
+      authCs = ap'authTokenCs . fmp'authParams $ fsMpParams
+      fsVAddr = fmp'fsVAddress fsMpParams
+  certRdmrAc <- genCertRdmrAc
+  certVAddr <- genAddress
+  submitter <- genPubKeyHash
+  nCerts <- chooseInt (1, 5)
+  certIds <- replicateM nCerts genAuthenticatonId
+  validity <- genValidity
+  certRefs <- for certIds (genCertInput certVAddr certCs certRdmrAc validity)
+  authIns <- for certIds (genAuthInput authCs)
+  (otherIns, otherMint, otherOuts) <- genOthers 5
+  let authsBurned = mconcat [Value.singleton authCs (TokenName certId) (-1) | certId <- certIds]
+      fsVOuts =
+        [ TxOut
+          fsVAddr
+          (Value.singleton fsCs (TokenName . toBuiltin $ hashTxInputs [authIn]) 1)
+          (toOutputDatum $ FsDatum (toBuiltinData True) "deadbeef" (Finite 100) submitter)
+          Nothing
+        | authIn <- authIns
+        ]
+      fsMinted = mconcat [txOutValue fsVOut | fsVOut <- fsVOuts]
+      ins = otherIns <> authIns
+      mint = otherMint <> fsMinted <> authsBurned
+      outs = otherOuts <> fsVOuts
+      ctx = mkScriptContext (Minting fsCs) ins certRefs mint outs []
+  return $ setValidity ctx validity
 
 genInput :: Gen TxInInfo
 genInput = (\outRef val addr -> TxInInfo outRef (TxOut addr val NoOutputDatum Nothing)) <$> genTxOutRef <*> genSingletonValue <*> genAddress
@@ -358,9 +401,12 @@ genAddress = do
     then do
       bs <- genBuiltinByteString "vh-" 28
       return . scriptHashAddress . ValidatorHash $ bs
-    else do
-      bs <- genBuiltinByteString "pkh-" 28
-      return . pubKeyHashAddress . PubKeyHash $ bs
+    else pubKeyHashAddress <$> genPubKeyHash
+
+genPubKeyHash :: Gen PubKeyHash
+genPubKeyHash = do
+  bs <- genBuiltinByteString "pkh-" 28
+  return . PubKeyHash $ bs
 
 genTokenName :: Gen TokenName
 genTokenName = TokenName <$> genBuiltinByteString "tn-" 32
