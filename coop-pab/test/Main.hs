@@ -51,6 +51,7 @@ tests coopPlutus =
         (withCollateral $ initAda [100] <> initAda [100])
         ( withContract @String
             ( \[oneShotWallet] -> do
+                _ <- waitNSlots 10
                 self <- ownFirstPaymentPubKeyHash
                 outs <- findOutsAt' @Void self (\_ _ -> True)
                 let (trx, oneShotAc) = mkMintOneShotTrx self oneShotWallet (head . Map.toList $ outs) (cp'mkOneShotMp coopPlutus) 1
@@ -268,7 +269,7 @@ tests coopPlutus =
                       aaOuts <- findOutsAtHoldingAa self coopDeployment
                       now <- currentTime
                       let validityInterval = interval' (Finite now) PosInf
-                      let (mintAuthTrx, authAc) = mkMintAuthTrx coopDeployment self [authWallet] 1 aaOuts -- TODO: Enable $AUTH outputs with more than 1 Q
+                      let (mintAuthTrx, authAc) = mkMintAuthTrx coopDeployment self [authWallet] 5 aaOuts
                           (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRedeemerAc validityInterval aaOuts
                       submitTrx @Void (mintAuthTrx <> mintCertTrx)
                       return (authAc, certAc)
