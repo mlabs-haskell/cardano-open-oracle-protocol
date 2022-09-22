@@ -7,7 +7,7 @@ import Test.QuickCheck (NonEmptyList (getNonEmpty), Positive (getPositive), choo
 
 import Coop.Plutus (certV, mkAuthMp, mkCertMp, mkFsMp, pmustSpendAtLeastAa)
 import Coop.Plutus.Aux (hashTxInputs, pmustBurnOwnSingletonValue)
-import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorrectCertVSpendingCtx, genCorrectFsMpBurningCtx, genCorrectFsMpMintingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, genCorruptCertVSpendingCtx, genCorruptFsMpMintingCtx, genCorruptMustBurnOwnSingletonValueCtx, mkScriptContext)
+import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorrectCertVSpendingCtx, genCorrectFsMpBurningCtx, genCorrectFsMpMintingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, genCorruptCertVSpendingCtx, genCorruptFsMpBurningCtx, genCorruptFsMpMintingCtx, genCorruptMustBurnOwnSingletonValueCtx, mkScriptContext)
 import Coop.Plutus.Types (PAuthMpParams, PCertMpParams, PFsMpParams)
 import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), AuthParams (AuthParams), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint), FsMpParams (FsMpParams), FsMpRedeemer (FsMpBurn, FsMpMint))
 import Data.Foldable (Foldable (fold))
@@ -234,7 +234,16 @@ spec = do
                       # pdataImpl (pconstant FsMpMint)
                       # pconstant ctx
                   )
-
+      prop "burn $FS" $
+        let fsMpParams = FsMpParams coopAc fsVAddr (AuthParams authCs certCs)
+         in forAll (genCorruptFsMpBurningCtx fsMpParams fsCs) $
+              \ctx ->
+                pfails
+                  ( mkFsMp
+                      # pconstantData @PFsMpParams fsMpParams
+                      # pdataImpl (pconstant FsMpBurn)
+                      # pconstant ctx
+                  )
   describe "@FsV" $ do return ()
 
 _plog :: ClosedTerm a -> Expectation

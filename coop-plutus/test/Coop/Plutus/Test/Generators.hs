@@ -1,4 +1,4 @@
-module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx, genCorruptCertVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptMustBurnOwnSingletonValueCtx, genCorrectFsMpMintingCtx, genCorruptFsMpMintingCtx, genCorrectFsMpBurningCtx) where
+module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx, genCorruptCertVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptMustBurnOwnSingletonValueCtx, genCorrectFsMpMintingCtx, genCorruptFsMpMintingCtx, genCorrectFsMpBurningCtx, genCorruptFsMpBurningCtx) where
 
 import Test.QuickCheck (Arbitrary (arbitrary), Gen, choose, chooseAny, chooseEnum, chooseInt, chooseInteger, sublistOf, suchThat, vectorOf)
 
@@ -13,7 +13,7 @@ import Data.Set qualified as Set
 import Data.Traversable (for)
 import PlutusLedgerApi.V1.Address (pubKeyHashAddress, scriptHashAddress)
 import PlutusLedgerApi.V1.Value (AssetClass, CurrencySymbol (CurrencySymbol), TokenName (TokenName), assetClass, assetClassValue, assetClassValueOf, flattenValue)
-import PlutusLedgerApi.V2 (Address, BuiltinByteString, Datum (Datum), Extended (Finite, PosInf), FromData (fromBuiltinData), Interval (Interval), LedgerBytes (LedgerBytes), LowerBound (LowerBound), OutputDatum (NoOutputDatum, OutputDatum), POSIXTime (POSIXTime), PubKeyHash (PubKeyHash), ScriptContext (ScriptContext, scriptContextTxInfo), ScriptPurpose (Minting, Spending), ToData, TxId (TxId), TxInInfo (TxInInfo, txInInfoOutRef), TxInfo (TxInfo, txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl), TxOut (TxOut, txOutAddress, txOutDatum, txOutValue), TxOutRef (TxOutRef), UpperBound (UpperBound), ValidatorHash (ValidatorHash), Value (Value, getValue), always, toBuiltin, toBuiltinData)
+import PlutusLedgerApi.V2 (Address, BuiltinByteString, Datum (Datum), Extended (Finite, NegInf, PosInf), FromData (fromBuiltinData), Interval (Interval), LedgerBytes (LedgerBytes), LowerBound (LowerBound), OutputDatum (NoOutputDatum, OutputDatum), POSIXTime (POSIXTime), PubKeyHash (PubKeyHash), ScriptContext (ScriptContext, scriptContextTxInfo), ScriptPurpose (Minting, Spending), ToData, TxId (TxId), TxInInfo (TxInInfo, txInInfoOutRef), TxInfo (TxInfo, txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl), TxOut (TxOut, txOutAddress, txOutDatum, txOutValue), TxOutRef (TxOutRef), UpperBound (UpperBound), ValidatorHash (ValidatorHash), Value (Value, getValue), always, toBuiltin, toBuiltinData)
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
@@ -218,7 +218,15 @@ genCorruptCertMpBurningCtx certMpParams certCs certRdmrAc = do
 
   -- Randomly pick corruptions
   corruptions <-
-    suchThat (sublistOf [doMintAndPayOtherTokenNameAddr certCs certVAddr, doRemoveInputsWithToken certRdmrAc]) (not . null)
+    suchThat
+      ( sublistOf
+          [ doMintAndPayOtherTokenNameAddr certCs certVAddr
+          , doRemoveInputsWithToken certRdmrAc
+          , doValidityAlways
+          , doValidityBefore
+          ]
+      )
+      (not . null)
 
   let corrupt = mkCorrupt corruptions
 
@@ -377,6 +385,8 @@ genCorruptFsMpMintingCtx fsMpParams fsCs = do
           , doPayToOtherAddress fsVAddr otherAddr
           , doRemoveInputsWithCurrency certCs
           , doRemoveInputsWithCurrency authCs
+          , doValidityAlways
+          , doValidityBefore
           ]
       )
       (not . null)
@@ -404,6 +414,30 @@ genCorrectFsMpBurningCtx fsMpParams fsCs = do
       outs = otherOuts
       ctx = mkScriptContext (Minting fsCs) ins [] mint outs submitters
   return $ setValidity ctx (interval' gcAfter PosInf)
+
+genCorruptFsMpBurningCtx :: FsMpParams -> CurrencySymbol -> Gen ScriptContext
+genCorruptFsMpBurningCtx fsMpParams fsCs = do
+  ctx <- genCorrectFsMpBurningCtx fsMpParams fsCs
+  let fsVAddr = fmp'fsVAddress fsMpParams
+  otherAddr <- genAddress
+
+  -- Randomly pick corruptions
+  corruptions <-
+    suchThat
+      ( sublistOf
+          [ doPayInsteadOfBurn otherAddr
+          , doPayInsteadOfBurn fsVAddr
+          , doMintAndPayOtherTokenNameAddr fsCs otherAddr
+          , doMintAndPayOtherTokenNameAddr fsCs fsVAddr
+          , doValidityAlways
+          , doValidityBefore
+          ]
+      )
+      (not . null)
+
+  let corrupt = mkCorrupt corruptions
+
+  return $ corrupt ctx
 
 genInput :: Gen TxInInfo
 genInput = (\outRef val addr -> TxInInfo outRef (TxOut addr val NoOutputDatum Nothing)) <$> genTxOutRef <*> genSingletonValue <*> genAddress
@@ -585,6 +619,27 @@ doPayInsteadOfBurn addr ctx =
             txInfo
               { txInfoMint = mintedVal
               , txInfoOutputs = txInfoOutputs txInfo <> [TxOut addr (inv burnedVal) NoOutputDatum Nothing]
+              }
+        }
+
+doValidityBefore :: ScriptContext -> ScriptContext
+doValidityBefore ctx =
+  let ScriptContext txInfo _ = ctx
+      Interval (LowerBound l _) _ = txInfoValidRange . scriptContextTxInfo $ ctx
+   in ctx
+        { scriptContextTxInfo =
+            txInfo
+              { txInfoValidRange = interval' NegInf l
+              }
+        }
+
+doValidityAlways :: ScriptContext -> ScriptContext
+doValidityAlways ctx =
+  let ScriptContext txInfo _ = ctx
+   in ctx
+        { scriptContextTxInfo =
+            txInfo
+              { txInfoValidRange = interval' NegInf PosInf
               }
         }
 
