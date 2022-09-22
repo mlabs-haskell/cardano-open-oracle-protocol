@@ -1,4 +1,4 @@
-module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx, genCorruptCertVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptMustBurnOwnSingletonValueCtx, genCorrectFsMpMintingCtx) where
+module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx, genCorruptCertVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptMustBurnOwnSingletonValueCtx, genCorrectFsMpMintingCtx, genCorruptFsMpMintingCtx) where
 
 import Test.QuickCheck (Arbitrary (arbitrary), Gen, choose, chooseAny, chooseEnum, chooseInt, chooseInteger, sublistOf, suchThat, vectorOf)
 
@@ -183,7 +183,7 @@ genCorruptCertMpMintingCtx certMpParams certCs = do
       ( sublistOf
           [ doMintAndPayOtherTokenName certCs
           , doRemoveOutputDatum
-          , doSendToOtherAddress certVAddr otherAddr
+          , doPayToOtherAddress certVAddr otherAddr
           ]
       )
       (not . null)
@@ -357,6 +357,33 @@ genCorrectFsMpMintingCtx fsMpParams fsCs = do
       ctx = mkScriptContext (Minting fsCs) ins certRefs mint outs []
   return $ setValidity ctx validity
 
+genCorruptFsMpMintingCtx :: FsMpParams -> CurrencySymbol -> Gen ScriptContext
+genCorruptFsMpMintingCtx fsMpParams fsCs = do
+  ctx <- genCorrectFsMpMintingCtx fsMpParams fsCs
+  let certCs = ap'certTokenCs . fmp'authParams $ fsMpParams
+      authCs = ap'authTokenCs . fmp'authParams $ fsMpParams
+      fsVAddr = fmp'fsVAddress fsMpParams
+  otherAddr <- genAddress
+
+  -- Randomly pick corruptions
+  corruptions <-
+    suchThat
+      ( sublistOf
+          [ doPayInsteadOfBurn otherAddr
+          , doMintAndPayOtherTokenNameAddr fsCs otherAddr
+          , doMintAndPayOtherTokenNameAddr fsCs fsVAddr
+          , doRemoveOutputDatum
+          , doPayToOtherAddress fsVAddr otherAddr
+          , doRemoveInputsWithCurrency certCs
+          , doRemoveInputsWithCurrency authCs
+          ]
+      )
+      (not . null)
+
+  let corrupt = mkCorrupt corruptions
+
+  return $ corrupt ctx
+
 genInput :: Gen TxInInfo
 genInput = (\outRef val addr -> TxInInfo outRef (TxOut addr val NoOutputDatum Nothing)) <$> genTxOutRef <*> genSingletonValue <*> genAddress
 
@@ -494,8 +521,8 @@ doRemoveOutputDatum ctx =
         }
 
 -- | Replaces original address with some other address
-doSendToOtherAddress :: Address -> Address -> ScriptContext -> ScriptContext
-doSendToOtherAddress originalAddr otherAddr ctx =
+doPayToOtherAddress :: Address -> Address -> ScriptContext -> ScriptContext
+doPayToOtherAddress originalAddr otherAddr ctx =
   let ScriptContext txInfo _ = ctx
    in ctx
         { scriptContextTxInfo =
@@ -512,6 +539,17 @@ doRemoveInputsWithToken ac ctx =
         { scriptContextTxInfo =
             txInfo
               { txInfoInputs = [inp | inp@(TxInInfo _ inOut) <- txInfoInputs txInfo, assetClassValueOf (txOutValue inOut) ac > 0]
+              }
+        }
+
+-- | Removes inputs that contain a specified CurrencySymbol
+doRemoveInputsWithCurrency :: CurrencySymbol -> ScriptContext -> ScriptContext
+doRemoveInputsWithCurrency cs ctx =
+  let ScriptContext txInfo _ = ctx
+   in ctx
+        { scriptContextTxInfo =
+            txInfo
+              { txInfoInputs = [inp | inp@(TxInInfo _ inOut) <- txInfoInputs txInfo, AssocMap.member cs $ getValue (txOutValue inOut)]
               }
         }
 

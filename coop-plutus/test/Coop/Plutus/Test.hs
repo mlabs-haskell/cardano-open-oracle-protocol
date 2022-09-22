@@ -7,7 +7,7 @@ import Test.QuickCheck (NonEmptyList (getNonEmpty), Positive (getPositive), choo
 
 import Coop.Plutus (certV, mkAuthMp, mkCertMp, mkFsMp, pmustSpendAtLeastAa)
 import Coop.Plutus.Aux (hashTxInputs, pmustBurnOwnSingletonValue)
-import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorrectCertVSpendingCtx, genCorrectFsMpMintingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, genCorruptCertVSpendingCtx, genCorruptMustBurnOwnSingletonValueCtx, mkScriptContext)
+import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorrectCertVSpendingCtx, genCorrectFsMpMintingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, genCorruptCertVSpendingCtx, genCorruptFsMpMintingCtx, genCorruptMustBurnOwnSingletonValueCtx, mkScriptContext)
 import Coop.Plutus.Types (PAuthMpParams, PCertMpParams, PFsMpParams)
 import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), AuthParams (AuthParams), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint), FsMpParams (FsMpParams), FsMpRedeemer (FsMpMint))
 import Data.Foldable (Foldable (fold))
@@ -201,7 +201,7 @@ spec = do
                           # pconstant ctx
                       )
 
-  describe "FsMp" $
+  describe "FsMp" $ do
     describe "should-succeed" $ do
       prop "mint $FS" $
         let fsMpParams = FsMpParams coopAc fsVAddr (AuthParams authCs certCs)
@@ -213,6 +213,18 @@ spec = do
                       # pdataImpl (pconstant FsMpMint)
                       # pconstant ctx
                   )
+    describe "should-fail" $ do
+      prop "mint $FS" $
+        let fsMpParams = FsMpParams coopAc fsVAddr (AuthParams authCs certCs)
+         in forAll (genCorruptFsMpMintingCtx fsMpParams fsCs) $
+              \ctx ->
+                pfails
+                  ( mkFsMp
+                      # pconstantData @PFsMpParams fsMpParams
+                      # pdataImpl (pconstant FsMpMint)
+                      # pconstant ctx
+                  )
+
   describe "@FsV" $ do return ()
 
 _plog :: ClosedTerm a -> Expectation

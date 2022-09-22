@@ -124,11 +124,20 @@ fsMpMint = phoistAcyclic $
     ctx' <- pletFields @'["purpose"] ctx
     ownCs <- plet $ pownCurrencySymbol # ctx'.purpose
 
+    let foldFn acc txOut = P.do
+          outVal <- plet $ pfield @"value" # txOut
+
+          hasOwnCs <- plet $ phasCurrency # ownCs # outVal
+          pif
+            hasOwnCs
+            (ptrace "fsMpMint: Found own token in the output" $ fsMintParseOutputWithFs # params # ctx # ownCs # acc # txOut)
+            (ptrace "fsMint: Skipping foreign output" acc)
+
     PPair fsToMint restAuths <-
       pmatch $
         pfoldTxOutputs
           # ctx
-          # (fsMintParseOutput # params # ctx # ownCs)
+          # plam foldFn
           # pcon (PPair mempty validAuthInputs)
     ptrace "FsMp mint: Validated and authenticated Fact Statement outputs"
 
@@ -141,27 +150,6 @@ fsMpMint = phoistAcyclic $
 
     _ <- plet $ pmustMintCurrency # ctx # ownCs # fsToMint
     ptrace "FsMp mint: $FS minted are paid to @FsV" $ popaque punit
-
--- | Skips foreign inputs and processes $FS inputs.
-fsMintParseOutput ::
-  Term
-    s
-    ( PFsMpParams
-        :--> PScriptContext
-        :--> PCurrencySymbol
-        :--> PPair (PValue 'Sorted 'NonZero) (PBuiltinList PTxInInfo)
-        :--> PTxOut
-        :--> PPair (PValue 'Sorted 'NonZero) (PBuiltinList PTxInInfo)
-    )
-fsMintParseOutput = phoistAcyclic $
-  plam $ \params ctx ownCs acc txOut -> ptrace "fsMintParseOutput" P.do
-    txOut' <- pletFields @'["value"] txOut
-
-    hasOwnCs <- plet $ phasCurrency # ownCs # txOut'.value
-    pif
-      hasOwnCs
-      (ptrace "fsMintParseOutput: Found own token in the output" $ fsMintParseOutputWithFs # params # ctx # ownCs # acc # txOut)
-      (ptrace "fsMintParseOutput: Skipping foreign output" acc)
 
 {- | Handles a transaction output that holds an $FS token.
 
