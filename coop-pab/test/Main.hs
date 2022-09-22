@@ -6,8 +6,8 @@ import Aux (runAfter, withSuccessContract)
 import BotPlutusInterface.Types (LogContext (ContractLog), LogLevel (Debug), LogType (AnyLog, CollateralLog))
 import Control.Monad.Reader (ReaderT)
 import Coop.Pab (burnAuths, burnCerts, deployCoop, findOutsAtCertVWithCERT, findOutsAtHoldingAa, mintCertRedeemers, mkMintAuthTrx, mkMintCertTrx, mkMintFsTrx)
-import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), ciValueOf, datumFromTxOut, findOutsAt', findOutsAtHolding, findOutsAtHolding', interval', loadCoopPlutus, mkMintNftTrx, submitTrx)
-import Coop.Types (AuthDeployment (ad'authorityAc, ad'certV), CertDatum (cert'validity), CoopDeployment (cd'auth, cd'coopAc, cd'fsV), CoopPlutus (cp'mkNftMp), FsDatum (FsDatum))
+import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), ciValueOf, datumFromTxOut, findOutsAt', findOutsAtHolding, findOutsAtHolding', interval', loadCoopPlutus, mkMintOneShotTrx, submitTrx)
+import Coop.Types (AuthDeployment (ad'authorityAc, ad'certV), CertDatum (cert'validity), CoopDeployment (cd'auth, cd'coopAc, cd'fsV), CoopPlutus (cp'mkOneShotMp), FsDatum (FsDatum))
 import Data.Bool (bool)
 import Data.Default (def)
 import Data.Foldable (Foldable (toList))
@@ -20,7 +20,7 @@ import Ledger (PaymentPubKeyHash (unPaymentPubKeyHash), interval)
 import Ledger.Value (AssetClass)
 import Plutus.Contract (currentTime, logInfo, ownFirstPaymentPubKeyHash, throwError, waitNSlots)
 import Plutus.Script.Utils.V2.Address (mkValidatorAddress)
-import Plutus.V2.Ledger.Api (Extended (Finite, NegInf, PosInf), Interval (ivTo), UpperBound (UpperBound))
+import Plutus.V2.Ledger.Api (Extended (Finite, NegInf, PosInf), Interval (ivTo), ToData (toBuiltinData), UpperBound (UpperBound))
 import Test.Plutip.Contract (assertExecutionWith, initAda, withCollateral, withContract, withContractAs)
 import Test.Plutip.Internal.Types (ClusterEnv)
 import Test.Plutip.LocalCluster (BpiWallet, withConfiguredCluster)
@@ -47,20 +47,20 @@ tests coopPlutus =
     "coop-pab-tests"
     [ assertExecutionWith
         testOpts
-        "mint-nft"
+        "mint-one-shot"
         (withCollateral $ initAda [100] <> initAda [100])
         ( withContract @String
-            ( \[nftWallet] -> do
+            ( \[oneShotWallet] -> do
                 self <- ownFirstPaymentPubKeyHash
                 outs <- findOutsAt' @Void self (\_ _ -> True)
-                let (trx, nftAc) = mkMintNftTrx self nftWallet (head . Map.toList $ outs) (cp'mkNftMp coopPlutus) 1
+                let (trx, oneShotAc) = mkMintOneShotTrx self oneShotWallet (head . Map.toList $ outs) (cp'mkOneShotMp coopPlutus) 1
                 submitTrx @Void trx
-                found <- findOutsAtHolding' nftWallet nftAc
+                found <- findOutsAtHolding' oneShotWallet oneShotAc
                 return $ length found
             )
         )
         [shouldSucceed, shouldYield 1]
-    , runAfter "mint-nft" $
+    , runAfter "mint-one-shot" $
         assertExecutionWith
           testOpts
           "deploy-coop"
@@ -296,7 +296,7 @@ tests coopPlutus =
                         mayCertDatum
                     now <- currentTime
                     let (UpperBound toExt _) = ivTo . cert'validity $ certDatum
-                    let fsDatum = FsDatum "aa" "aa" NegInf (unPaymentPubKeyHash submitterWallet)
+                    let fsDatum = FsDatum (toBuiltinData True) "aa" NegInf (unPaymentPubKeyHash submitterWallet)
                         (mintFsTrx, fsAc) =
                           mkMintFsTrx
                             coopDeployment

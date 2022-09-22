@@ -12,7 +12,7 @@ module Coop.Pab (
 ) where
 
 import Control.Lens ((^.))
-import Coop.Pab.Aux (Trx (Trx), currencyValue, findOutsAt, findOutsAt', findOutsAtHolding', hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintNftTrx, submitTrx, toDatum, toRedeemer)
+import Coop.Pab.Aux (Trx (Trx), currencyValue, findOutsAt, findOutsAt', findOutsAtHolding', hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintOneShotTrx, submitTrx, toDatum, toRedeemer)
 import Coop.Types (
   AuthDeployment (AuthDeployment, ad'authMp, ad'authorityAc, ad'certMp, ad'certV),
   AuthMpParams (AuthMpParams),
@@ -22,7 +22,7 @@ import Coop.Types (
   CertMpParams (CertMpParams),
   CertMpRedeemer (CertMpBurn, CertMpMint),
   CoopDeployment (CoopDeployment, cd'auth, cd'fsMp, cd'fsV),
-  CoopPlutus (cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkNftMp),
+  CoopPlutus (cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkOneShotMp),
   FsDatum,
   FsMpParams (FsMpParams),
   FsMpRedeemer (FsMpMint),
@@ -70,11 +70,11 @@ deployCoop coopPlutus self aaWallet atLeastAaQ = do
   outs <- findOutsAt' @Void self (\_ _ -> True)
   (aaOut, coopOut) <- case Map.toList outs of
     o1 : o2 : _ -> return (o1, o2)
-    _ -> throwError "deployCoop: Not enough outputs found to use for making NFTs"
+    _ -> throwError "deployCoop: Not enough outputs found to use for making $ONE-SHOTs"
 
-  let mkNftMp = cp'mkNftMp coopPlutus
-      (mintAaTrx, aaAc) = mkMintNftTrx self aaWallet aaOut mkNftMp atLeastAaQ
-      (mintCoopTrx, coopAc) = mkMintNftTrx self self coopOut mkNftMp 1
+  let mkOneShotMp = cp'mkOneShotMp coopPlutus
+      (mintAaTrx, aaAc) = mkMintOneShotTrx self aaWallet aaOut mkOneShotMp atLeastAaQ
+      (mintCoopTrx, coopAc) = mkMintOneShotTrx self self coopOut mkOneShotMp 1
 
   submitTrx @Void (mintAaTrx <> mintCoopTrx)
   logI $ "Created $COOP instance token: " <> show coopAc
@@ -124,10 +124,10 @@ mintCertRedeemers coopPlutus self certRedeemerWallet q = do
   outs <- findOutsAt' @Void self (\_ _ -> True)
   out <- case reverse . Map.toList $ outs of -- FIXME: If I don't shuffle this I get InsuficientCollateral
     o1 : _ -> return o1
-    _ -> throwError "mintCertR: Not enough outputs found to use for making NFTs"
+    _ -> throwError "mintCertR: Not enough outputs found to use for making $ONE-SHOTs"
 
-  let mkNftMp = cp'mkNftMp coopPlutus
-      (mintCertRTrx, certRAc) = mkMintNftTrx self certRedeemerWallet out mkNftMp q
+  let mkOneShotMp = cp'mkOneShotMp coopPlutus
+      (mintCertRTrx, certRAc) = mkMintOneShotTrx self certRedeemerWallet out mkOneShotMp q
 
   submitTrx @Void mintCertRTrx
   logI $ printf "Created $CertR redeemer token for redeeming $CERT outputs @CertV: %s" (show certRAc)

@@ -41,13 +41,12 @@ import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
 import Plutarch.Prelude (PAsData, PBool, PData, PDataRecord, PEq, PInteger, PIsData, PLabeledType ((:=)), PTryFrom, PlutusType, S, Term)
 import PlutusLedgerApi.V1.Value (AssetClass)
 
--- TODO: Add Plutarch type plumbage for FactStatement
 newtype PFsDatum s
   = PFsDatum
       ( Term
           s
           ( PDataRecord
-              '[ "fd'fs" ':= PByteString
+              '[ "fd'fs" ':= PData
                , "fd'fsId" ':= PByteString
                , "fd'gcAfter" ':= PExtended PPOSIXTime
                , "fd'submitter" ':= PPubKeyHash

@@ -8,16 +8,13 @@ module Coop.Pab.Aux (
   hashTxInputs,
   DeployMode (..),
   minUtxoAdaValue,
-  mkMintNftTrx,
+  mkMintOneShotTrx,
   hasCurrency,
   currencyValue,
-  makeCollateralOuts,
   findOutsAt,
   toDatum,
   fromDatum,
   findOutsAtHolding,
-  testDataRoundtrip,
-  testDataRoundtrip',
   ciValueOf,
   toRedeemer,
   submitTrx,
@@ -35,7 +32,6 @@ import Control.Monad (filterM)
 import Coop.Types (CoopPlutus)
 import Crypto.Hash (Blake2b_256 (Blake2b_256), hashWith)
 import Data.Aeson (ToJSON, decodeFileStrict)
-import Data.Bool (bool)
 import Data.ByteArray (convert)
 import Data.ByteString (cons)
 import Data.Dynamic (Typeable)
@@ -52,12 +48,11 @@ import Ledger (ChainIndexTxOut, PaymentPubKeyHash, Redeemer (Redeemer), applyArg
 import Ledger.Ada (lovelaceValueOf)
 import Ledger.Typed.Scripts (RedeemerType, ValidatorTypes (DatumType))
 import Ledger.Value (Value (Value), isAdaOnlyValue)
-import Plutus.Contract (AsContractError, Contract, ContractInstanceId, awaitTxConfirmed, datumFromHash, logInfo, ownFirstPaymentPubKeyHash, submitTxConstraintsWith, throwError, utxosAt, waitNSlots)
-import Plutus.Contract.Constraints (ScriptLookups, TxConstraints, mustMintValue, mustPayToOtherScript, mustPayToPubKey, mustSpendPubKeyOutput, otherData, ownPaymentPubKeyHash, plutusV1OtherScript, plutusV2MintingPolicy, unspentOutputs)
+import Plutus.Contract (AsContractError, Contract, ContractInstanceId, awaitTxConfirmed, datumFromHash, logInfo, submitTxConstraintsWith, throwError, utxosAt)
+import Plutus.Contract.Constraints (ScriptLookups, TxConstraints, mustMintValue, mustPayToPubKey, mustSpendPubKeyOutput, ownPaymentPubKeyHash, plutusV2MintingPolicy, unspentOutputs)
 import Plutus.PAB.Core.ContractInstance.STM (Activity (Active))
-import Plutus.Script.Utils.V2.Address (mkValidatorAddress)
-import Plutus.Script.Utils.V2.Scripts (scriptCurrencySymbol, validatorHash)
-import Plutus.V1.Ledger.Api (Address, BuiltinByteString, CurrencySymbol, Datum (Datum, getDatum), DatumHash, FromData (fromBuiltinData), MintingPolicy (MintingPolicy), Script, ToData, TokenName (TokenName), TxId (getTxId), TxOutRef (txOutRefId, txOutRefIdx), Validator, adaSymbol, adaToken, fromBuiltin, toBuiltinData, toData)
+import Plutus.Script.Utils.V2.Scripts (scriptCurrencySymbol)
+import Plutus.V1.Ledger.Api (Address, BuiltinByteString, CurrencySymbol, Datum (Datum, getDatum), DatumHash, FromData (fromBuiltinData), MintingPolicy (MintingPolicy), Script, ToData, TokenName (TokenName), TxId (getTxId), TxOutRef (txOutRefId, txOutRefIdx), adaSymbol, adaToken, fromBuiltin, toBuiltinData, toData)
 import Plutus.V1.Ledger.Value (AssetClass (unAssetClass), assetClass, valueOf)
 import Plutus.V1.Ledger.Value qualified as Value
 import Plutus.V2.Ledger.Api (Extended, Interval (Interval), LowerBound (LowerBound), UpperBound (UpperBound))
@@ -102,27 +97,29 @@ runBpi pabConf contract = do
 minUtxoAdaValue :: Value
 minUtxoAdaValue = lovelaceValueOf 2_000_000
 
+-- | Checks if Value has tokens of CurrencySymbol
 hasCurrency :: Value -> CurrencySymbol -> Bool
 hasCurrency (Value vals) cs = AssocMap.member cs vals
 
 currencyValue :: Value -> CurrencySymbol -> Value
 currencyValue (Value vals) cs = maybe mempty (Value . AssocMap.singleton cs) $ AssocMap.lookup cs vals
 
-mkMintNftTrx :: PaymentPubKeyHash -> PaymentPubKeyHash -> (TxOutRef, ChainIndexTxOut) -> Script -> Integer -> (Trx i o a, AssetClass)
-mkMintNftTrx self toWallet out@(oref, _) mkNftMp q =
-  let nftTn = TokenName . hashTxInputs $ Map.fromList [out]
-      nftMp = MintingPolicy $ applyArguments mkNftMp [toData q, toData nftTn, toData oref]
-      nftCs = scriptCurrencySymbol nftMp
-      val = Value.singleton nftCs nftTn q
+-- | Makes a OneShot minting transaction that's validated by `coop-plutus`.Coop.Plutus.Aux.mkOneShotMp
+mkMintOneShotTrx :: PaymentPubKeyHash -> PaymentPubKeyHash -> (TxOutRef, ChainIndexTxOut) -> Script -> Integer -> (Trx i o a, AssetClass)
+mkMintOneShotTrx self toWallet out@(oref, _) mkOneShotMp q =
+  let oneShotTn = TokenName . hashTxInputs $ Map.fromList [out]
+      oneShotMp = MintingPolicy $ applyArguments mkOneShotMp [toData q, toData oneShotTn, toData oref]
+      oneShotCs = scriptCurrencySymbol oneShotMp
+      val = Value.singleton oneShotCs oneShotTn q
       lookups =
-        plutusV2MintingPolicy nftMp
+        plutusV2MintingPolicy oneShotMp
           <> unspentOutputs (fromList [out])
           <> ownPaymentPubKeyHash self
       constraints =
         mustMintValue val
           <> mustSpendPubKeyOutput oref
           <> mustPayToPubKey toWallet (val <> minUtxoAdaValue)
-   in (Trx lookups constraints, assetClass nftCs nftTn)
+   in (Trx lookups constraints, assetClass oneShotCs oneShotTn)
 
 {- | Hashes transaction inputs blake2b_256 on the concatenation of id:ix (used for onchain uniqueness)
 
@@ -137,18 +134,7 @@ hashTxInputs inputs =
       hashedOref = convert @_ @BuiltinByteString . hashWith Blake2b_256 . mconcat $ zipWith cons ixs txIds
    in hashedOref
 
-makeCollateralOuts :: PaymentPubKeyHash -> Integer -> Integer -> Contract w s Text TxId
-makeCollateralOuts self n lovelace = do
-  let logI m = logInfo @String ("makeCollateralOuts: " <> m)
-  logI "Starting"
-  adaOnlyOuts <- findOutsAtHoldingOnlyAda (pubKeyHashAddress self Nothing) (>= lovelace)
-  let adaOnlyOutsToMake = fromIntegral n - length adaOnlyOuts
-  let lookups = ownPaymentPubKeyHash self
-      tx = mconcat $ replicate adaOnlyOutsToMake $ mustPayToPubKey self (lovelaceValueOf lovelace)
-  tx <- submitTxConstraintsWith @Void lookups tx
-  logI "Finished"
-  return $ getCardanoTxId tx
-
+-- | Tries to parse Data from ChainIndexTxOut which is surprisingly complicated
 datumFromTxOut :: forall (a :: Type) w s. Typeable a => FromData a => ChainIndexTxOut -> Contract w s Text (Maybe a)
 datumFromTxOut out =
   maybe
@@ -209,16 +195,6 @@ findOutsAtHolding addr ac = do
 findOutsAtHolding' :: PaymentPubKeyHash -> AssetClass -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
 findOutsAtHolding' wallet = findOutsAtHolding (pubKeyHashAddress wallet Nothing)
 
-findOutsAtHoldingOnlyAda :: Address -> (Integer -> Bool) -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
-findOutsAtHoldingOnlyAda addr pred = do
-  let logI m = logInfo @String ("findOutsAtHoldingOnlyAda: " <> m)
-  logI "Starting"
-
-  found <- findOutsAt @Void addr (\v _ -> isAdaOnlyValue v && pred (valueOf v adaSymbol adaToken))
-
-  logI "Finished"
-  return found
-
 toDatum :: ToData a => a -> Datum
 toDatum = Datum . toBuiltinData
 
@@ -227,33 +203,6 @@ toRedeemer = Redeemer . toBuiltinData
 
 fromDatum :: FromData a => Datum -> Maybe a
 fromDatum = fromBuiltinData . getDatum
-
-testDataRoundtrip :: (Typeable a, FromData a, ToData a, Eq a) => Validator -> a -> Contract w s Text TxId
-testDataRoundtrip val x = do
-  let logI m = logInfo @String ("testDataRoundtrip: " <> m)
-  self <- ownFirstPaymentPubKeyHash
-
-  let datum = toDatum x
-      lookups =
-        mconcat
-          [ plutusV1OtherScript val
-          , otherData datum
-          , ownPaymentPubKeyHash self
-          ]
-      tx = mustPayToOtherScript (validatorHash val) datum minUtxoAdaValue
-  logI $ "Sending datum: " <> show datum
-  tx <- submitTxConstraintsWith @Void lookups tx
-  waitNSlots 30
-  found <- findOutsAt (mkValidatorAddress val) (\_ mayX -> mayX == Just x)
-  bool
-    (logI "Found the datum that was sent")
-    (throwError "Must find the datum that was sent")
-    $ found == mempty
-  logI "Finished"
-  return $ getCardanoTxId tx
-
-testDataRoundtrip' :: (Typeable a, FromData a, ToData a, Eq a) => a -> Bool
-testDataRoundtrip' x = let datum = toDatum x; mayX = fromDatum datum in mayX == Just x
 
 ciValueOf :: AssetClass -> ChainIndexTxOut -> Integer
 ciValueOf ac out = let (cs, tn) = unAssetClass ac in valueOf (out ^. ciTxOutValue) cs tn
@@ -274,5 +223,6 @@ submitTrx (Trx lookups constraints) = do
   logInfo @String $ show (getCardanoTxInputs tx)
   awaitTxConfirmed (getCardanoTxId tx)
 
+-- | Creates an interval with Extended bounds
 interval' :: forall a. Extended a -> Extended a -> Interval a
 interval' from to = Interval (LowerBound from False) (UpperBound to False)

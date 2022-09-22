@@ -6,7 +6,7 @@ module Coop.Plutus.Aux (
   ptryFromData,
   pownCurrencySymbol,
   pfindDatum,
-  mkOneShotMintingPolicy,
+  mkOneShotMp,
   pfindMap,
   pdatumFromTxOut,
   pmustMint,
@@ -207,13 +207,13 @@ Notes:
 
 - guarantees $ONE-SHOT tokens are only minted once
 -}
-mkOneShotMintingPolicy ::
+mkOneShotMp ::
   ClosedTerm
     ( PAsData PInteger :--> PAsData PTokenName
         :--> PAsData PTxOutRef
         :--> PMintingPolicy
     )
-mkOneShotMintingPolicy = phoistAcyclic $
+mkOneShotMp = phoistAcyclic $
   plam $ \q tn txOutRef _ ctx -> ptrace "oneShotMp" P.do
     ctx' <- pletFields @'["txInfo", "purpose"] ctx
     txInfo <- pletFields @'["inputs", "mint"] ctx'.txInfo
