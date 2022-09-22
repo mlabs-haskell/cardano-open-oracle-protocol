@@ -12,7 +12,7 @@ module Coop.Pab (
 ) where
 
 import Control.Lens ((^.))
-import Coop.Pab.Aux (Trx (Trx), currencyValue, findOutsAt, findOutsAt', findOutsAtHolding', hasCurrency, hashTxOutRefs, interval', minUtxoAdaValue, mkMintNftTrx, submitTrx, toDatum, toRedeemer)
+import Coop.Pab.Aux (Trx (Trx), currencyValue, findOutsAt, findOutsAt', findOutsAtHolding', hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintOneShotTrx, submitTrx, toDatum, toRedeemer)
 import Coop.Types (
   AuthDeployment (AuthDeployment, ad'authMp, ad'authorityAc, ad'certMp, ad'certV),
   AuthMpParams (AuthMpParams),
@@ -22,7 +22,7 @@ import Coop.Types (
   CertMpParams (CertMpParams),
   CertMpRedeemer (CertMpBurn, CertMpMint),
   CoopDeployment (CoopDeployment, cd'auth, cd'fsMp, cd'fsV),
-  CoopPlutus (cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkNftMp),
+  CoopPlutus (cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkOneShotMp),
   FsDatum,
   FsMpParams (FsMpParams),
   FsMpRedeemer (FsMpMint),
@@ -40,11 +40,16 @@ import Plutus.Contract.Constraints (mustBeSignedBy, mustMintValueWithRedeemer, m
 import Plutus.Contract.Logging (logInfo)
 import Plutus.Script.Utils.V2.Address (mkValidatorAddress)
 import Plutus.Script.Utils.V2.Scripts (scriptCurrencySymbol, validatorHash)
-import Plutus.V1.Ledger.Api (
+import Plutus.V1.Ledger.Value (
+  AssetClass,
+  assetClass,
+ )
+import Plutus.V1.Ledger.Value qualified as Value
+import Plutus.V2.Ledger.Api (
+  Extended (Finite, PosInf),
   LedgerBytes (LedgerBytes),
   MintingPolicy (MintingPolicy),
-  Redeemer (Redeemer),
-  ToData (toBuiltinData),
+  POSIXTimeRange,
   TokenName (TokenName),
   TxId,
   TxOutRef,
@@ -52,9 +57,6 @@ import Plutus.V1.Ledger.Api (
   Value,
   toData,
  )
-import Plutus.V1.Ledger.Value (AssetClass, assetClass)
-import Plutus.V1.Ledger.Value qualified as Value
-import Plutus.V2.Ledger.Api (Extended (Finite, PosInf), POSIXTimeRange)
 import PlutusTx.Prelude (Group (inv))
 import Test.Plutip.Internal.BotPlutusInterface.Setup ()
 import Test.Plutip.Internal.LocalCluster ()
@@ -68,11 +70,11 @@ deployCoop coopPlutus self aaWallet atLeastAaQ = do
   outs <- findOutsAt' @Void self (\_ _ -> True)
   (aaOut, coopOut) <- case Map.toList outs of
     o1 : o2 : _ -> return (o1, o2)
-    _ -> throwError "deployCoop: Not enough outputs found to use for making NFTs"
+    _ -> throwError "deployCoop: Not enough outputs found to use for making $ONE-SHOTs"
 
-  let mkNftMp = cp'mkNftMp coopPlutus
-      (mintAaTrx, aaAc) = mkMintNftTrx self aaWallet aaOut mkNftMp atLeastAaQ
-      (mintCoopTrx, coopAc) = mkMintNftTrx self self coopOut mkNftMp 1
+  let mkOneShotMp = cp'mkOneShotMp coopPlutus
+      (mintAaTrx, aaAc) = mkMintOneShotTrx self aaWallet aaOut mkOneShotMp atLeastAaQ
+      (mintCoopTrx, coopAc) = mkMintOneShotTrx self self coopOut mkOneShotMp 1
 
   submitTrx @Void (mintAaTrx <> mintCoopTrx)
   logI $ "Created $COOP instance token: " <> show coopAc
@@ -122,10 +124,10 @@ mintCertRedeemers coopPlutus self certRedeemerWallet q = do
   outs <- findOutsAt' @Void self (\_ _ -> True)
   out <- case reverse . Map.toList $ outs of -- FIXME: If I don't shuffle this I get InsuficientCollateral
     o1 : _ -> return o1
-    _ -> throwError "mintCertR: Not enough outputs found to use for making NFTs"
+    _ -> throwError "mintCertR: Not enough outputs found to use for making $ONE-SHOTs"
 
-  let mkNftMp = cp'mkNftMp coopPlutus
-      (mintCertRTrx, certRAc) = mkMintNftTrx self certRedeemerWallet out mkNftMp q
+  let mkOneShotMp = cp'mkOneShotMp coopPlutus
+      (mintCertRTrx, certRAc) = mkMintOneShotTrx self certRedeemerWallet out mkOneShotMp q
 
   submitTrx @Void mintCertRTrx
   logI $ printf "Created $CertR redeemer token for redeeming $CERT outputs @CertV: %s" (show certRAc)
@@ -138,12 +140,11 @@ mkMintCertTrx coopDeployment self redeemerAc validityInterval aaOuts =
       certV = (ad'certV . cd'auth) coopDeployment
       certVAddr = validatorHash certV
       aaOrefs = Map.keys aaOuts
-      hashedAaOrefs = hashTxOutRefs aaOrefs
-      certTn = TokenName hashedAaOrefs
-      certId = LedgerBytes hashedAaOrefs
+      certId = hashTxInputs aaOuts
+      certTn = TokenName certId
       certCs = scriptCurrencySymbol certMp
       certVal = Value.singleton certCs certTn 1
-      certDatum = toDatum $ CertDatum certId validityInterval redeemerAc
+      certDatum = toDatum $ CertDatum (LedgerBytes certId) validityInterval redeemerAc
       lookups =
         mconcat
           [ plutusV2MintingPolicy certMp
@@ -153,19 +154,19 @@ mkMintCertTrx coopDeployment self redeemerAc validityInterval aaOuts =
           , unspentOutputs aaOuts
           ]
       constraints =
-        mustMintValueWithRedeemer (Redeemer . toBuiltinData $ CertMpMint) certVal
+        mustMintValueWithRedeemer (toRedeemer CertMpMint) certVal
           <> mustPayToOtherScript certVAddr certDatum (certVal <> minUtxoAdaValue)
           <> mconcat (mustSpendPubKeyOutput <$> aaOrefs)
    in (Trx lookups constraints, assetClass certCs certTn)
 
 burnCerts :: CoopDeployment -> PaymentPubKeyHash -> Map TxOutRef ChainIndexTxOut -> Map TxOutRef ChainIndexTxOut -> Contract w s Text TxId
-burnCerts coopDeployment self certOuts redeemerOuts = do
+burnCerts coopDeployment self certOuts certRdmrOuts = do
   let logI m = logInfo @String ("burnCerts: " <> m)
   logI "Starting"
   now <- currentTime
   let certMp = (ad'certMp . cd'auth) coopDeployment
       certV = (ad'certV . cd'auth) coopDeployment
-      redeemerOrefs = Map.keys redeemerOuts
+      certRdmdrOrefs = Map.keys certRdmrOuts
       certOrefs = Map.keys certOuts
       certCs = scriptCurrencySymbol certMp
       certVal = foldMap (\out -> inv $ currencyValue (out ^. ciTxOutValue) certCs) (toList certOuts)
@@ -175,12 +176,12 @@ burnCerts coopDeployment self certOuts redeemerOuts = do
         plutusV2MintingPolicy certMp
           <> plutusV2OtherScript certV
           <> ownPaymentPubKeyHash self
-          <> unspentOutputs redeemerOuts
+          <> unspentOutputs certRdmrOuts
           <> unspentOutputs certOuts
 
       tx =
-        mustMintValueWithRedeemer (Redeemer . toBuiltinData $ CertMpBurn) certVal
-          <> mconcat (mustSpendPubKeyOutput <$> redeemerOrefs)
+        mustMintValueWithRedeemer (toRedeemer CertMpBurn) certVal
+          <> mconcat (mustSpendPubKeyOutput <$> certRdmdrOrefs)
           <> mconcat ((\oref -> mustSpendScriptOutput oref (toRedeemer ())) <$> certOrefs)
           <> mustValidateIn timeRange
 
@@ -192,8 +193,8 @@ mkMintAuthTrx :: CoopDeployment -> PaymentPubKeyHash -> [PaymentPubKeyHash] -> I
 mkMintAuthTrx coopDeployment self authWallets authQEach aaOuts =
   let authMp = (ad'authMp . cd'auth) coopDeployment
       aaOrefs = Map.keys aaOuts
-      hashedAaOrefs = hashTxOutRefs aaOrefs
-      authTn = TokenName hashedAaOrefs
+      authId = hashTxInputs aaOuts
+      authTn = TokenName authId
       authCs = scriptCurrencySymbol authMp
       authValEach = Value.singleton authCs authTn authQEach
       authValTotal = Value.singleton authCs authTn (authQEach * (fromIntegral . length $ authWallets))
@@ -202,7 +203,7 @@ mkMintAuthTrx coopDeployment self authWallets authQEach aaOuts =
           <> ownPaymentPubKeyHash self
           <> unspentOutputs aaOuts
       constraints =
-        mustMintValueWithRedeemer (Redeemer . toBuiltinData $ AuthMpMint) authValTotal
+        mustMintValueWithRedeemer (toRedeemer AuthMpMint) authValTotal
           <> mconcat ((`mustPayToPubKey` (authValEach <> minUtxoAdaValue)) <$> authWallets)
           <> mconcat (mustSpendPubKeyOutput <$> aaOrefs)
    in (Trx lookups constraints, assetClass authCs authTn)
@@ -263,7 +264,7 @@ mkMintFsTrx coopDeployment self trxValidRange fsDatum authOut (certOut, certDatu
       fsV = cd'fsV coopDeployment
       fsVAddr = validatorHash fsV
       fsCs = scriptCurrencySymbol fsMp
-      fsTn = TokenName . hashTxOutRefs $ [fst authOut]
+      fsTn = TokenName . hashTxInputs $ Map.fromList [authOut]
       fsVal = Value.singleton fsCs fsTn 1
       certV = ad'certV . cd'auth $ coopDeployment
       lookups =
@@ -283,6 +284,7 @@ mkMintFsTrx coopDeployment self trxValidRange fsDatum authOut (certOut, certDatu
           <> mustBeSignedBy submitterPpkh
           <> mustPayToOtherScript fsVAddr (toDatum fsDatum) (fsVal <> minUtxoAdaValue)
           <> mustValidateIn trxValidRange
+      -- TODO[Andrea]: add fee output?
       mintFsTrx =
         mkBurnAuthsTrx coopDeployment self (Map.fromList [authOut])
           <> Trx lookups constraints

@@ -39,14 +39,14 @@ import Plutarch.DataRepr (
  )
 import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
 import Plutarch.Prelude (PAsData, PBool, PData, PDataRecord, PEq, PInteger, PIsData, PLabeledType ((:=)), PTryFrom, PlutusType, S, Term)
+import PlutusLedgerApi.V1.Value (AssetClass)
 
--- TODO: Add Plutarch type plumbage for FactStatement
 newtype PFsDatum s
   = PFsDatum
       ( Term
           s
           ( PDataRecord
-              '[ "fd'fs" ':= PByteString
+              '[ "fd'fs" ':= PData
                , "fd'fsId" ':= PByteString
                , "fd'gcAfter" ':= PExtended PPOSIXTime
                , "fd'submitter" ':= PPubKeyHash
@@ -188,6 +188,9 @@ deriving via (DerivePConstantViaData CertMpRedeemer PCertMpRedeemer) instance (P
 instance PTryFrom PData (PAsData PCertMpRedeemer)
 
 -- FIXME: Purge this when Plutarch supports it
+instance PUnsafeLiftDecl (PTuple PCurrencySymbol PTokenName) where type PLifted (PTuple PCurrencySymbol PTokenName) = AssetClass
+deriving via (DerivePConstantViaData AssetClass (PTuple PCurrencySymbol PTokenName)) instance (PConstantDecl AssetClass)
+
 instance PTryFrom PData (PAsData PBool)
 instance PTryFrom PData (PExtended PPOSIXTime)
 instance PTryFrom PData (PUpperBound PPOSIXTime)

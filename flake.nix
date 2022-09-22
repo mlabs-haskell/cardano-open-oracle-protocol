@@ -5,6 +5,7 @@
 
   inputs = {
     # Plutip maintains a compatible Plutus/Cardano derivation set
+    # TODO: Merge with upstream and use that.
     bot-plutus-interface.url = "github:bladyjoker/bot-plutus-interface/bladyjoker/vasil-use-v2-scripts"; # "git+file:/home/bladyjoker/Desktop/bot-plutus-interface";
 
     plutip.url = "github:mlabs-haskell/plutip/f8f9e4650f09b448ffc5825434eb6f1714f9ddca"; # https://github.com/mlabs-haskell/plutip/releases/tag/vasil-compliant-v1.0.0
@@ -24,11 +25,13 @@
 
     pre-commit-hooks.url = "github:cachix/pre-commit-hooks.nix";
 
+    # TODO: Merge with upstream and use that.
     http2-grpc-native = {
       url = "github:bladyjoker/http2-grpc-haskell";
       flake = false;
     };
 
+    # TODO: Merge with upstream and use that.
     plutarch.url = "github:bladyjoker/plutarch-plutus/bladyjoker/complete-v2-api-reexports";
     plutarch.inputs.nixpkgs.follows = "nixpkgs";
 

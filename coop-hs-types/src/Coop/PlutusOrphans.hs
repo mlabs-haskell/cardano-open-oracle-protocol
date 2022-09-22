@@ -13,10 +13,10 @@ import Data.ByteString.Lazy (fromStrict, toStrict)
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 
 #ifdef NEW_LEDGER_NAMESPACE
-import PlutusLedgerApi.V2 (Script, LedgerBytes(LedgerBytes), PubKeyHash, CurrencySymbol, Address, BuiltinByteString, fromBuiltin, toBuiltin, Credential, StakingCredential, ValidatorHash, Validator, MintingPolicy, POSIXTime, POSIXTimeRange, LowerBound, UpperBound, Extended, TokenName(TokenName), TxOutRef, TxId)
+import PlutusLedgerApi.V2 (Script, LedgerBytes(LedgerBytes), PubKeyHash, CurrencySymbol, Address, BuiltinByteString, fromBuiltin, toBuiltin, Credential, StakingCredential, ValidatorHash, Validator, MintingPolicy, POSIXTime, POSIXTimeRange, LowerBound, UpperBound, Extended, TokenName(TokenName), TxOutRef, TxId, Data, BuiltinData (BuiltinData))
 import PlutusLedgerApi.V1.Value (AssetClass)
 #else
-import Plutus.V2.Ledger.Api (Script, LedgerBytes(LedgerBytes), PubKeyHash, CurrencySymbol, Address, BuiltinByteString, fromBuiltin, toBuiltin, Credential, StakingCredential, ValidatorHash, Validator, MintingPolicy, POSIXTime, POSIXTimeRange, LowerBound, UpperBound, Extended, TokenName(TokenName), TxOutRef, TxId)
+import Plutus.V2.Ledger.Api (Script, LedgerBytes(LedgerBytes), PubKeyHash, CurrencySymbol, Address, BuiltinByteString, fromBuiltin, toBuiltin, Credential, StakingCredential, ValidatorHash, Validator, MintingPolicy, POSIXTime, POSIXTimeRange, LowerBound, UpperBound, Extended, TokenName(TokenName), TxOutRef, TxId, Data, BuiltinData (BuiltinData))
 import Plutus.V1.Ledger.Value (AssetClass)
 #endif
 
@@ -95,3 +95,12 @@ instance FromJSON TxOutRef
 
 instance ToJSON TxId
 instance FromJSON TxId
+
+instance ToJSON Data
+instance FromJSON Data
+
+instance ToJSON BuiltinData where
+  toJSON (BuiltinData d) = toJSON d
+
+instance FromJSON BuiltinData where
+  parseJSON v = BuiltinData <$> parseJSON @Data v

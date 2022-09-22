@@ -5,19 +5,16 @@ module Coop.Pab.Aux (
   datumFromTxOut,
   loadCoopPlutus,
   runBpi,
+  hashTxInputs,
   DeployMode (..),
   minUtxoAdaValue,
-  mkMintNftTrx,
+  mkMintOneShotTrx,
   hasCurrency,
   currencyValue,
-  makeCollateralOuts,
   findOutsAt,
   toDatum,
   fromDatum,
-  hashTxOutRefs,
   findOutsAtHolding,
-  testDataRoundtrip,
-  testDataRoundtrip',
   ciValueOf,
   toRedeemer,
   submitTrx,
@@ -33,13 +30,13 @@ import Control.Lens ((^.), (^?))
 import Control.Lens.Prism (_Just)
 import Control.Monad (filterM)
 import Coop.Types (CoopPlutus)
-import Crypto.Hash (SHA3_256 (SHA3_256), hashWith)
+import Crypto.Hash (Blake2b_256 (Blake2b_256), hashWith)
 import Data.Aeson (ToJSON, decodeFileStrict)
-import Data.Bool (bool)
 import Data.ByteArray (convert)
-import Data.ByteString (ByteString, cons)
+import Data.ByteString (cons)
 import Data.Dynamic (Typeable)
 import Data.Kind (Type)
+import Data.List (sort)
 import Data.Map (Map, fromList)
 import Data.Map qualified as Map
 import Data.Proxy (Proxy (Proxy))
@@ -47,19 +44,16 @@ import Data.Text (Text)
 import Data.Typeable (typeRep)
 import Data.UUID.V4 qualified as UUID
 import Data.Void (Void)
-import Ledger (ChainIndexTxOut, PaymentPubKeyHash, Redeemer (Redeemer), applyArguments, ciTxOutPublicKeyDatum, ciTxOutScriptDatum, ciTxOutValue, getCardanoTxData, getCardanoTxId, getCardanoTxInputs, pubKeyHashAddress)
+import Ledger (ChainIndexTxOut, PaymentPubKeyHash, applyArguments, ciTxOutPublicKeyDatum, ciTxOutScriptDatum, ciTxOutValue, getCardanoTxData, getCardanoTxId, getCardanoTxInputs, pubKeyHashAddress)
 import Ledger.Ada (lovelaceValueOf)
 import Ledger.Typed.Scripts (RedeemerType, ValidatorTypes (DatumType))
-import Ledger.Value (Value (Value), isAdaOnlyValue)
-import Plutus.Contract (AsContractError, Contract, ContractInstanceId, awaitTxConfirmed, datumFromHash, logInfo, ownFirstPaymentPubKeyHash, submitTxConstraintsWith, throwError, utxosAt, waitNSlots)
-import Plutus.Contract.Constraints (ScriptLookups, TxConstraints, mustMintValue, mustPayToOtherScript, mustPayToPubKey, mustSpendPubKeyOutput, otherData, ownPaymentPubKeyHash, plutusV1OtherScript, plutusV2MintingPolicy, unspentOutputs)
+import Plutus.Contract (AsContractError, Contract, ContractInstanceId, awaitTxConfirmed, datumFromHash, logInfo, submitTxConstraintsWith, throwError, utxosAt)
+import Plutus.Contract.Constraints (ScriptLookups, TxConstraints, mustMintValue, mustPayToPubKey, mustSpendPubKeyOutput, ownPaymentPubKeyHash, plutusV2MintingPolicy, unspentOutputs)
 import Plutus.PAB.Core.ContractInstance.STM (Activity (Active))
-import Plutus.Script.Utils.V2.Address (mkValidatorAddress)
-import Plutus.Script.Utils.V2.Scripts (scriptCurrencySymbol, validatorHash)
-import Plutus.V1.Ledger.Api (Address, BuiltinByteString, CurrencySymbol, Datum (Datum, getDatum), DatumHash, FromData (fromBuiltinData), MintingPolicy (MintingPolicy), Script, ToData, TokenName (TokenName), TxId (getTxId), TxOutRef (txOutRefId, txOutRefIdx), Validator, adaSymbol, adaToken, fromBuiltin, toBuiltin, toBuiltinData, toData)
+import Plutus.Script.Utils.V2.Scripts (scriptCurrencySymbol)
 import Plutus.V1.Ledger.Value (AssetClass (unAssetClass), assetClass, valueOf)
 import Plutus.V1.Ledger.Value qualified as Value
-import Plutus.V2.Ledger.Api (Extended, Interval (Interval), LowerBound (LowerBound), UpperBound (UpperBound))
+import Plutus.V2.Ledger.Api (Address, BuiltinByteString, CurrencySymbol, Datum (Datum, getDatum), DatumHash, Extended, FromData (fromBuiltinData), Interval (Interval), LowerBound (LowerBound), MintingPolicy (MintingPolicy), Redeemer (Redeemer), Script, ToData, TokenName (TokenName), TxId (getTxId), TxOutRef (txOutRefId, txOutRefIdx), UpperBound (UpperBound), Value (Value), fromBuiltin, toBuiltinData, toData)
 import PlutusTx.AssocMap qualified as AssocMap
 import System.Directory (getTemporaryDirectory)
 import System.FilePath ((</>))
@@ -101,49 +95,44 @@ runBpi pabConf contract = do
 minUtxoAdaValue :: Value
 minUtxoAdaValue = lovelaceValueOf 2_000_000
 
+-- | Checks if Value has tokens of CurrencySymbol
 hasCurrency :: Value -> CurrencySymbol -> Bool
 hasCurrency (Value vals) cs = AssocMap.member cs vals
 
 currencyValue :: Value -> CurrencySymbol -> Value
 currencyValue (Value vals) cs = maybe mempty (Value . AssocMap.singleton cs) $ AssocMap.lookup cs vals
 
-mkMintNftTrx :: PaymentPubKeyHash -> PaymentPubKeyHash -> (TxOutRef, ChainIndexTxOut) -> Script -> Integer -> (Trx i o a, AssetClass)
-mkMintNftTrx self toWallet out@(oref, _) mkNftMp q =
-  let nftTn = TokenName . hashTxOutRefs $ [oref]
-      nftMp = MintingPolicy $ applyArguments mkNftMp [toData q, toData nftTn, toData oref]
-      nftCs = scriptCurrencySymbol nftMp
-      val = Value.singleton nftCs nftTn q
+-- | Makes a OneShot minting transaction that's validated by `coop-plutus`.Coop.Plutus.Aux.mkOneShotMp
+mkMintOneShotTrx :: PaymentPubKeyHash -> PaymentPubKeyHash -> (TxOutRef, ChainIndexTxOut) -> Script -> Integer -> (Trx i o a, AssetClass)
+mkMintOneShotTrx self toWallet out@(oref, _) mkOneShotMp q =
+  let oneShotTn = TokenName . hashTxInputs $ Map.fromList [out]
+      oneShotMp = MintingPolicy $ applyArguments mkOneShotMp [toData q, toData oneShotTn, toData oref]
+      oneShotCs = scriptCurrencySymbol oneShotMp
+      val = Value.singleton oneShotCs oneShotTn q
       lookups =
-        plutusV2MintingPolicy nftMp
+        plutusV2MintingPolicy oneShotMp
           <> unspentOutputs (fromList [out])
           <> ownPaymentPubKeyHash self
       constraints =
         mustMintValue val
           <> mustSpendPubKeyOutput oref
           <> mustPayToPubKey toWallet (val <> minUtxoAdaValue)
-   in (Trx lookups constraints, assetClass nftCs nftTn)
+   in (Trx lookups constraints, assetClass oneShotCs oneShotTn)
 
--- FIXME: Sort orefs to match the onchain order
--- TODO: Switch to using blake
-hashTxOutRefs :: [TxOutRef] -> BuiltinByteString
-hashTxOutRefs orefs =
-  let ixs = fmap (fromInteger . txOutRefIdx) orefs
-      txIds = fmap (fromBuiltin . getTxId . txOutRefId) orefs
-      hashedOref = convert @_ @ByteString . hashWith SHA3_256 . mconcat $ zipWith cons ixs txIds
-   in toBuiltin hashedOref
+{- | Hashes transaction inputs blake2b_256 on the concatenation of id:ix (used for onchain uniqueness)
 
-makeCollateralOuts :: PaymentPubKeyHash -> Integer -> Integer -> Contract w s Text TxId
-makeCollateralOuts self n lovelace = do
-  let logI m = logInfo @String ("makeCollateralOuts: " <> m)
-  logI "Starting"
-  adaOnlyOuts <- findOutsAtHoldingOnlyAda (pubKeyHashAddress self Nothing) (>= lovelace)
-  let adaOnlyOutsToMake = fromIntegral n - length adaOnlyOuts
-  let lookups = ownPaymentPubKeyHash self
-      tx = mconcat $ replicate adaOnlyOutsToMake $ mustPayToPubKey self (lovelaceValueOf lovelace)
-  tx <- submitTxConstraintsWith @Void lookups tx
-  logI "Finished"
-  return $ getCardanoTxId tx
+TODO: Consolidate with the same `coop-plutus`.Coop.Plutus.Aux.hashTxInputs in a shared location
+-}
+hashTxInputs :: Map TxOutRef ChainIndexTxOut -> BuiltinByteString
+hashTxInputs inputs =
+  let orefs = [oref | (oref, _) <- Map.toList inputs]
+      sortedOrefs = sort orefs
+      ixs = fmap (fromInteger . txOutRefIdx) sortedOrefs
+      txIds = fmap (fromBuiltin . getTxId . txOutRefId) sortedOrefs
+      hashedOref = convert @_ @BuiltinByteString . hashWith Blake2b_256 . mconcat $ zipWith cons ixs txIds
+   in hashedOref
 
+-- | Tries to parse Data from ChainIndexTxOut which is surprisingly complicated
 datumFromTxOut :: forall (a :: Type) w s. Typeable a => FromData a => ChainIndexTxOut -> Contract w s Text (Maybe a)
 datumFromTxOut out =
   maybe
@@ -204,16 +193,6 @@ findOutsAtHolding addr ac = do
 findOutsAtHolding' :: PaymentPubKeyHash -> AssetClass -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
 findOutsAtHolding' wallet = findOutsAtHolding (pubKeyHashAddress wallet Nothing)
 
-findOutsAtHoldingOnlyAda :: Address -> (Integer -> Bool) -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
-findOutsAtHoldingOnlyAda addr pred = do
-  let logI m = logInfo @String ("findOutsAtHoldingOnlyAda: " <> m)
-  logI "Starting"
-
-  found <- findOutsAt @Void addr (\v _ -> isAdaOnlyValue v && pred (valueOf v adaSymbol adaToken))
-
-  logI "Finished"
-  return found
-
 toDatum :: ToData a => a -> Datum
 toDatum = Datum . toBuiltinData
 
@@ -222,33 +201,6 @@ toRedeemer = Redeemer . toBuiltinData
 
 fromDatum :: FromData a => Datum -> Maybe a
 fromDatum = fromBuiltinData . getDatum
-
-testDataRoundtrip :: (Typeable a, FromData a, ToData a, Eq a) => Validator -> a -> Contract w s Text TxId
-testDataRoundtrip val x = do
-  let logI m = logInfo @String ("testDataRoundtrip: " <> m)
-  self <- ownFirstPaymentPubKeyHash
-
-  let datum = toDatum x
-      lookups =
-        mconcat
-          [ plutusV1OtherScript val
-          , otherData datum
-          , ownPaymentPubKeyHash self
-          ]
-      tx = mustPayToOtherScript (validatorHash val) datum minUtxoAdaValue
-  logI $ "Sending datum: " <> show datum
-  tx <- submitTxConstraintsWith @Void lookups tx
-  waitNSlots 30
-  found <- findOutsAt (mkValidatorAddress val) (\_ mayX -> mayX == Just x)
-  bool
-    (logI "Found the datum that was sent")
-    (throwError "Must find the datum that was sent")
-    $ found == mempty
-  logI "Finished"
-  return $ getCardanoTxId tx
-
-testDataRoundtrip' :: (Typeable a, FromData a, ToData a, Eq a) => a -> Bool
-testDataRoundtrip' x = let datum = toDatum x; mayX = fromDatum datum in mayX == Just x
 
 ciValueOf :: AssetClass -> ChainIndexTxOut -> Integer
 ciValueOf ac out = let (cs, tn) = unAssetClass ac in valueOf (out ^. ciTxOutValue) cs tn
@@ -269,5 +221,6 @@ submitTrx (Trx lookups constraints) = do
   logInfo @String $ show (getCardanoTxInputs tx)
   awaitTxConfirmed (getCardanoTxId tx)
 
+-- | Creates an interval with Extended bounds
 interval' :: forall a. Extended a -> Extended a -> Interval a
 interval' from to = Interval (LowerBound from False) (UpperBound to False)
