@@ -5,9 +5,9 @@ import Test.Hspec (Expectation, Spec, describe, shouldBe)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (NonEmptyList (getNonEmpty), Positive (getPositive), choose, forAll, generate)
 
-import Coop.Plutus (certV, mkAuthMp, mkCertMp, mkFsMp, pmustSpendAtLeastAa)
+import Coop.Plutus (certV, fsV, mkAuthMp, mkCertMp, mkFsMp, pmustSpendAtLeastAa)
 import Coop.Plutus.Aux (hashTxInputs, pmustBurnOwnSingletonValue)
-import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorrectCertVSpendingCtx, genCorrectFsMpBurningCtx, genCorrectFsMpMintingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, genCorruptCertVSpendingCtx, genCorruptFsMpBurningCtx, genCorruptFsMpMintingCtx, genCorruptMustBurnOwnSingletonValueCtx, mkScriptContext)
+import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorrectCertVSpendingCtx, genCorrectFsMpBurningCtx, genCorrectFsMpMintingCtx, genCorrectFsVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, genCorruptCertVSpendingCtx, genCorruptFsMpBurningCtx, genCorruptFsMpMintingCtx, genCorruptFsVSpendingCtx, genCorruptMustBurnOwnSingletonValueCtx, mkScriptContext)
 import Coop.Plutus.Types (PAuthMpParams, PCertMpParams, PFsMpParams)
 import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), AuthParams (AuthParams), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint), FsMpParams (FsMpParams), FsMpRedeemer (FsMpBurn, FsMpMint))
 import Data.Foldable (Foldable (fold))
@@ -58,6 +58,9 @@ spec = do
   describe "pmustSpendAtLeastAa" $ do
     describe "should-succeed" $ do
       prop "hash-all-aa-inputs" $ -- TODO: Add a Plutip test for this
+      -- TODO: Add a Plutip test for this
+      -- TODO: Add a Plutip test for this
+      -- TODO: Add a Plutip test for this
         forAll (choose (1, 10)) $
           \aaQ ->
             forAll (genAaInputs aaAc aaQ) $ \aaIns -> do
@@ -244,7 +247,27 @@ spec = do
                       # pdataImpl (pconstant FsMpBurn)
                       # pconstant ctx
                   )
-  describe "@FsV" $ do return ()
+  describe "@FsV" $ do
+    describe "should-succeed" $ do
+      prop "spend $FS" $
+        forAll genCorrectFsVSpendingCtx $
+          \ctx ->
+            psucceeds
+              ( fsV
+                  # pconstant (toData ())
+                  # pconstant (toData ())
+                  # pconstant ctx
+              )
+    describe "should-fail" $ do
+      prop "spend $FS" $
+        forAll genCorruptFsVSpendingCtx $
+          \ctx ->
+            pfails
+              ( fsV
+                  # pconstant (toData ())
+                  # pconstant (toData ())
+                  # pconstant ctx
+              )
 
 _plog :: ClosedTerm a -> Expectation
 _plog p = _ptraces' p id []

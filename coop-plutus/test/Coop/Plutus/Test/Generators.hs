@@ -1,4 +1,4 @@
-module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx, genCorruptCertVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptMustBurnOwnSingletonValueCtx, genCorrectFsMpMintingCtx, genCorruptFsMpMintingCtx, genCorrectFsMpBurningCtx, genCorruptFsMpBurningCtx) where
+module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx, genCorruptCertVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptMustBurnOwnSingletonValueCtx, genCorrectFsMpMintingCtx, genCorruptFsMpMintingCtx, genCorrectFsMpBurningCtx, genCorruptFsMpBurningCtx, genCorrectFsVSpendingCtx, genCorruptFsVSpendingCtx) where
 
 import Test.QuickCheck (Arbitrary (arbitrary), Gen, choose, chooseAny, chooseEnum, chooseInt, chooseInteger, sublistOf, suchThat, vectorOf)
 
@@ -434,6 +434,32 @@ genCorruptFsMpBurningCtx fsMpParams fsCs = do
           ]
       )
       (not . null)
+
+  let corrupt = mkCorrupt corruptions
+
+  return $ corrupt ctx
+
+genCorrectFsVSpendingCtx :: Gen ScriptContext
+genCorrectFsVSpendingCtx = do
+  spendingIn <- genInput
+  someIns <- replicateM 10 genInput
+  (otherIns, otherMint, otherOuts) <- genOthers 5
+
+  let tokensToBurn = inv . fold $ [txOutValue inOut | TxInInfo _ inOut <- ins]
+      ins = otherIns <> someIns <> [spendingIn]
+      mint = otherMint <> tokensToBurn
+      outs = otherOuts
+  return $ mkScriptContext (Spending (txInInfoOutRef spendingIn)) ins [] mint outs []
+
+genCorruptFsVSpendingCtx :: Gen ScriptContext
+genCorruptFsVSpendingCtx = do
+  ctx <- genCorrectFsVSpendingCtx
+
+  otherAddr <- genAddress
+
+  -- Randomly pick corruptions
+  corruptions <-
+    suchThat (sublistOf [doPayInsteadOfBurn otherAddr]) (not . null)
 
   let corrupt = mkCorrupt corruptions
 
