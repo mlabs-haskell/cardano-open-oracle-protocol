@@ -1,4 +1,4 @@
-module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx, genCorruptCertVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptMustBurnOwnSingletonValueCtx, genCorrectFsMpMintingCtx, genCorruptFsMpMintingCtx) where
+module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx, genCorruptCertVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptMustBurnOwnSingletonValueCtx, genCorrectFsMpMintingCtx, genCorruptFsMpMintingCtx, genCorrectFsMpBurningCtx) where
 
 import Test.QuickCheck (Arbitrary (arbitrary), Gen, choose, chooseAny, chooseEnum, chooseInt, chooseInteger, sublistOf, suchThat, vectorOf)
 
@@ -13,11 +13,11 @@ import Data.Set qualified as Set
 import Data.Traversable (for)
 import PlutusLedgerApi.V1.Address (pubKeyHashAddress, scriptHashAddress)
 import PlutusLedgerApi.V1.Value (AssetClass, CurrencySymbol (CurrencySymbol), TokenName (TokenName), assetClass, assetClassValue, assetClassValueOf, flattenValue)
-import PlutusLedgerApi.V2 (Address, BuiltinByteString, Datum (Datum), Extended (Finite), Interval, LedgerBytes (LedgerBytes), OutputDatum (NoOutputDatum, OutputDatum), POSIXTime (POSIXTime), PubKeyHash (PubKeyHash), ScriptContext (ScriptContext, scriptContextTxInfo), ScriptPurpose (Minting, Spending), ToData, TxId (TxId), TxInInfo (TxInInfo, txInInfoOutRef), TxInfo (TxInfo, txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl), TxOut (TxOut, txOutAddress, txOutDatum, txOutValue), TxOutRef (TxOutRef), ValidatorHash (ValidatorHash), Value (Value, getValue), always, toBuiltin, toBuiltinData)
+import PlutusLedgerApi.V2 (Address, BuiltinByteString, Datum (Datum), Extended (Finite, PosInf), FromData (fromBuiltinData), Interval (Interval), LedgerBytes (LedgerBytes), LowerBound (LowerBound), OutputDatum (NoOutputDatum, OutputDatum), POSIXTime (POSIXTime), PubKeyHash (PubKeyHash), ScriptContext (ScriptContext, scriptContextTxInfo), ScriptPurpose (Minting, Spending), ToData, TxId (TxId), TxInInfo (TxInInfo, txInInfoOutRef), TxInfo (TxInfo, txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl), TxOut (TxOut, txOutAddress, txOutDatum, txOutValue), TxOutRef (TxOutRef), UpperBound (UpperBound), ValidatorHash (ValidatorHash), Value (Value, getValue), always, toBuiltin, toBuiltinData)
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
-import Coop.Types (AuthMpParams (amp'authAuthorityAc, amp'requiredAtLeastAaQ), AuthParams (ap'authTokenCs, ap'certTokenCs), CertDatum (CertDatum), CertMpParams (cmp'authAuthorityAc, cmp'certVAddress, cmp'requiredAtLeastAaQ), FsDatum (FsDatum), FsMpParams (fmp'authParams, fmp'fsVAddress))
+import Coop.Types (AuthMpParams (amp'authAuthorityAc, amp'requiredAtLeastAaQ), AuthParams (ap'authTokenCs, ap'certTokenCs), CertDatum (CertDatum), CertMpParams (cmp'authAuthorityAc, cmp'certVAddress, cmp'requiredAtLeastAaQ), FsDatum (FsDatum, fs'gcAfter, fs'submitter), FsMpParams (fmp'authParams, fmp'fsVAddress))
 import PlutusLedgerApi.V1.Interval (interval)
 import PlutusLedgerApi.V2 qualified as Value
 import PlutusTx.Prelude (Group (inv))
@@ -198,16 +198,17 @@ genValidity = chooseInteger (0, 50) >>= \l -> chooseInteger (l, 100) >>= \u -> r
 genCorrectCertMpBurningCtx :: CertMpParams -> CurrencySymbol -> AssetClass -> Gen ScriptContext
 genCorrectCertMpBurningCtx certMpParams certCs certRdmrAc = do
   let certVAddr = cmp'certVAddress certMpParams
-  validity <- genValidity
-  certIns <- genCertInputs certVAddr certCs certRdmrAc validity
+  certValidity <- genValidity
+  certIns <- genCertInputs certVAddr certCs certRdmrAc certValidity
   certRdmrIns <- genCertRdmrInputs certRdmrAc
   (otherIns, otherMint, otherOuts) <- genOthers 5
   let certTokensToBurn = inv . fold $ [txOutValue certInOut | TxInInfo _ certInOut <- certIns]
       ins = certIns <> certRdmrIns <> otherIns
       mint = otherMint <> certTokensToBurn
       outs = otherOuts
+      Interval _ (UpperBound upper _) = certValidity
       ctx = mkScriptContext (Minting certCs) ins [] mint outs []
-  return $ setValidity ctx validity
+  return $ setValidity ctx (interval' upper PosInf)
 
 genCorruptCertMpBurningCtx :: CertMpParams -> CurrencySymbol -> AssetClass -> Gen ScriptContext
 genCorruptCertMpBurningCtx certMpParams certCs certRdmrAc = do
@@ -383,6 +384,26 @@ genCorruptFsMpMintingCtx fsMpParams fsCs = do
   let corrupt = mkCorrupt corruptions
 
   return $ corrupt ctx
+
+genCorrectFsMpBurningCtx :: FsMpParams -> CurrencySymbol -> Gen ScriptContext
+genCorrectFsMpBurningCtx fsMpParams fsCs = do
+  let fsVAddr = fmp'fsVAddress fsMpParams
+  fsMintCtx <- genCorrectFsMpMintingCtx fsMpParams fsCs
+  (otherIns, otherMint, otherOuts) <- genOthers 5
+
+  let fsVOuts = [out | out <- txInfoOutputs . scriptContextTxInfo $ fsMintCtx, txOutAddress out == fsVAddr]
+
+  fsIns <- for fsVOuts (\fsOut -> TxInInfo <$> genTxOutRef <*> pure fsOut)
+
+  let fsDatums = [fsDat | out <- fsVOuts, OutputDatum (Datum dat) <- [txOutDatum out], fsDat <- maybe [] pure (fromBuiltinData @FsDatum dat)]
+      gcAfter = maximum [fs'gcAfter fsDatum | fsDatum <- fsDatums]
+      submitters = [fs'submitter fsDatum | fsDatum <- fsDatums]
+      fsBurned = mconcat [inv $ txOutValue fsVOut | fsVOut <- fsVOuts]
+      ins = otherIns <> fsIns
+      mint = otherMint <> fsBurned
+      outs = otherOuts
+      ctx = mkScriptContext (Minting fsCs) ins [] mint outs submitters
+  return $ setValidity ctx (interval' gcAfter PosInf)
 
 genInput :: Gen TxInInfo
 genInput = (\outRef val addr -> TxInInfo outRef (TxOut addr val NoOutputDatum Nothing)) <$> genTxOutRef <*> genSingletonValue <*> genAddress
@@ -578,3 +599,7 @@ normalizeValue v =
         , (tn, q) <- AssocMap.toList tokens
         ]
       )
+
+-- | Creates an interval with Extended bounds
+interval' :: forall a. Extended a -> Extended a -> Interval a
+interval' from to = Interval (LowerBound from False) (UpperBound to False)

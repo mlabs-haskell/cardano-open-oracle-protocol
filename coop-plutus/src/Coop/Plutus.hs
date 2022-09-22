@@ -76,18 +76,17 @@ fsMpBurn = phoistAcyclic $
   plam $ \_ ctx -> ptrace "FsMp burn" P.do
     ctx' <- pletFields @'["txInfo", "purpose"] ctx
     ownCs <- plet $ pownCurrencySymbol # ctx'.purpose
-    minted <- plet $ pfield @"mint" # ctx'.txInfo
 
     let foldFn shouldBurn txInInfo = P.do
           txOut <- plet $ pfield @"resolved" # txInInfo
           txIn <- pletFields @'["value", "address"] $ pfield @"resolved" # txInInfo
-          -- WARN(Andrea): this will error out on non-FsDatum inputs, such as wallet ones to cover fees.
-          --               The comment below refers to this line.
-          fsDatum <- pletFields @'["fd'submitter", "fd'gcAfter", "fd'fsId"] $ pdatumFromTxOut @PFsDatum # ctx # txOut
 
           pif
             (phasCurrency # ownCs # txIn.value)
             ( ptrace "FsMp burn: Found own input" P.do
+                fsDatum <- pletFields @'["fd'submitter", "fd'gcAfter", "fd'fsId"] $ pdatumFromTxOut @PFsDatum # ctx # txOut
+                ptrace "FsMp burn: Valid FsDatum attached"
+
                 _ <- plet $ pmustBeSignedBy # ctx # fsDatum.fd'submitter
                 ptrace "FsMp burn: Submitter signed"
 
@@ -100,14 +99,10 @@ fsMpBurn = phoistAcyclic $
             (ptrace "FsMp burn: Skipping foreign input" shouldBurn)
 
     -- Contains negative quantities
-    -- WARN[Andrea]: will fail parsing a `fsDatum` if non-fsV inputs are present.
-    --               It's possible extra pure Ada ones are needed to pay fees?
-    shouldBurnTotal <- plet $ pfoldTxInputs # ctx # plam foldFn # mempty
-    ownMinted <- plet $ pcurrencyValue # ownCs # minted
-    pif
-      (ownMinted #== shouldBurnTotal)
-      (ptrace "FsMp burn: $FS spent are valid and burned" $ popaque punit)
-      (ptraceError "FsMp mint: $FS spent must be valid and burned")
+    fsToBurn <- plet $ pfoldTxInputs # ctx # plam foldFn # mempty
+
+    _ <- plet $ pmustMintCurrency # ctx # ownCs # fsToBurn
+    ptrace "FsMp burn: $FS spent are valid and burned" $ popaque punit
 
 {- | Validates minting of $FS tokens.
 
