@@ -31,8 +31,7 @@
       flake = false;
     };
 
-    # TODO: Merge with upstream and use that.
-    plutarch.url = "github:bladyjoker/plutarch-plutus/bladyjoker/complete-v2-api-reexports";
+    plutarch.url = "github:plutonomicon/plutarch-plutus/staging";
     plutarch.inputs.nixpkgs.follows = "nixpkgs";
 
     iohk-nix.follows = "plutip/iohk-nix";
