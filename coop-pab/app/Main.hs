@@ -56,18 +56,14 @@ deployOpts =
           <> showDefault
       )
     <*> strOption
-      ( long "god-wallet-file"
-          <> metavar "GOD_WALLET_FILE"
-          <> help "God wallet"
-          <> value "TODO: Sort out wallet management"
-          <> showDefault
+      ( long "god-wallet"
+          <> metavar "GOD_WALLET"
+          <> help "God wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001)"
       )
     <*> strOption
-      ( long "aa-wallet-file"
-          <> metavar "AA_WALLET_FILE"
-          <> help "AA wallet"
-          <> value "TODO: Sort out wallet management"
-          <> showDefault
+      ( long "aa-wallet"
+          <> metavar "AA_WALLET"
+          <> help "AA wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001)"
       )
     <*> option
       auto
@@ -83,7 +79,7 @@ options =
   subparser $
     command
       "deploy"
-      (info (Deploy <$> deployOpts <* helper) (progDesc "Deploy COOP on the Cardano network and write the deployment information a file"))
+      (info (Deploy <$> deployOpts <* helper) (progDesc "Deploy COOP on the Cardano network and write the deployment information to a file"))
 
 parserInfo :: ParserInfo Command
 parserInfo = info (options <**> helper) (fullDesc <> progDesc "COOP PAB cli tools")

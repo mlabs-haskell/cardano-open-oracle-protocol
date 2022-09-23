@@ -150,6 +150,7 @@ executable coop-pab-cli
     , base
     , bot-plutus-interface
     , bytestring
+    , cardano-api
     , containers
     , coop-hs-types
     , coop-pab

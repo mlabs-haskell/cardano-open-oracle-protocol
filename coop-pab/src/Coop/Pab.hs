@@ -72,13 +72,16 @@ deployCoop coopPlutus self aaWallet atLeastAaQ = do
     o1 : o2 : _ -> return (o1, o2)
     _ -> throwError "deployCoop: Not enough outputs found to use for making $ONE-SHOTs"
 
+  logI $ printf "Using TxOutRef %s for minting $AA one-shot tokens" (show $ fst aaOut)
+  logI $ printf "Using TxOutRef %s for minting $COOP one-shot tokens" (show $ fst coopOut)
+
   let mkOneShotMp = cp'mkOneShotMp coopPlutus
       (mintAaTrx, aaAc) = mkMintOneShotTrx self aaWallet aaOut mkOneShotMp atLeastAaQ
       (mintCoopTrx, coopAc) = mkMintOneShotTrx self self coopOut mkOneShotMp 1
 
   submitTrx @Void (mintAaTrx <> mintCoopTrx)
-  logI $ "Created $COOP instance token: " <> show coopAc
-  logI $ "Created $AA authentication token: " <> show aaAc
+  logI $ printf "Created the $COOP instance token %s and sent it to God Wallet %s" (show coopAc) (show self)
+  logI $ printf "Created %d $AA (Authentication Authority) tokens %s and sent them to AA Wallet %s" atLeastAaQ (show aaAc) (show aaWallet)
 
   let authDeployment = mkAuthDeployment coopPlutus aaAc atLeastAaQ
       coopDeployment = mkCoopDeployment coopPlutus coopAc authDeployment

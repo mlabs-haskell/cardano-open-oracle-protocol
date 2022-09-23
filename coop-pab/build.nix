@@ -5,7 +5,7 @@ let
   cardanoCli = proj.hsPkgs.cardano-cli.components.exes.cardano-cli;
   proj = haskell-nix.cabalProject' {
     src = ./.;
-    name = "oracle-pab";
+    name = "coop-pab";
     inherit compiler-nix-name;
     index-state = "2022-05-16T00:00:00Z";
     inherit (plutip) cabalProjectLocal;

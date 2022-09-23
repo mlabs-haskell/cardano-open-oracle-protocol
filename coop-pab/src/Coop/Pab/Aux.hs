@@ -33,7 +33,7 @@ import Coop.Types (CoopPlutus)
 import Crypto.Hash (Blake2b_256 (Blake2b_256), hashWith)
 import Data.Aeson (ToJSON, decodeFileStrict)
 import Data.ByteArray (convert)
-import Data.ByteString (cons)
+import Data.ByteString (cons, putStr)
 import Data.Dynamic (Typeable)
 import Data.Kind (Type)
 import Data.List (sort)
@@ -89,6 +89,7 @@ runBpi pabConf contract = do
           , ceContractLogs = contractLogs
           , ceCollateral = collateral
           }
+  Prelude.putStr $ show contractEnv
   result <- runContract contractEnv contract
   pure (contractInstanceID, result)
 
