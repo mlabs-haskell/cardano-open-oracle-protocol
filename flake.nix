@@ -138,15 +138,28 @@
           inherit (pre-commit-check) shellHook;
         };
 
+        coopPlutusCli = coopPlutusProj.getComponent "coop-plutus:exe:coop-plutus-cli";
+
         coopPabProj = import ./coop-pab/build.nix {
-          inherit pkgs plutip;
+          inherit pkgs plutip coopPlutusCli;
           inherit (pkgsWithOverlay) haskell-nix;
           inherit (pre-commit-check) shellHook;
-          coopPlutusCli = coopPlutusProj.getComponent "coop-plutus:exe:coop-plutus-cli";
           coop-hs-types = ./coop-hs-types;
           compiler-nix-name = "ghc8107";
         };
         coopPabFlake = coopPabProj.flake { };
+
+        coopPabCli = pkgs.stdenv.mkDerivation {
+          name = "coop-pab-cli";
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+          phases = [ "installPhase" ];
+          installPhase = ''
+            mkdir -p $out/bin
+            cp ${coopPabProj.getComponent "coop-pab:exe:coop-pab-cli"}/bin/coop-pab-cli $out/bin/coop-pab-cli
+            chmod +x $out/bin/coop-pab-cli
+            wrapProgram  $out/bin/coop-pab-cli --prefix PATH ":" ${coopPlutusCli}/bin/coop-plutus-cli
+          '';
+        };
 
         renameAttrs = rnFn: pkgs.lib.attrsets.mapAttrs' (n: value: { name = rnFn n; inherit value; });
       in
@@ -155,7 +168,9 @@
         inherit pkgs pkgsWithOverlay pkgsForPlutarch;
 
         # Standard flake attributes
-        packages = coopPureFlake.packages // coopPlutusFlake.packages // coopPublisherFlake.packages // coopPabFlake.packages // coopHsTypesFlake.packages;
+        packages = coopPureFlake.packages // coopPlutusFlake.packages // coopPublisherFlake.packages // coopPabFlake.packages // coopHsTypesFlake.packages // {
+          "coop-pab-cli" = coopPabCli;
+        };
 
         devShells = rec {
           dev-proto = coopProtoDevShell;
