@@ -6,20 +6,16 @@ import BotPlutusInterface.Types (PABConfig (pcOwnPubKeyHash))
 import Coop.Pab qualified as Pab
 import Coop.Pab.Aux (DeployMode, loadCoopPlutus, runBpi)
 import Data.Aeson (encodeFile)
-import Data.ByteString as BL (
-  ByteString,
- )
-import Data.Hex (unhex)
 import Data.Text (Text)
-import Ledger (PaymentPubKeyHash (PaymentPubKeyHash, unPaymentPubKeyHash))
-import Plutus.V2.Ledger.Api (PubKeyHash (PubKeyHash), toBuiltin)
+import Ledger (PaymentPubKeyHash (PaymentPubKeyHash))
+import Plutus.V2.Ledger.Api (PubKeyHash)
 
 data DeployOpts = DeployOpts
   { do'mode :: DeployMode
   , do'pabConfig :: FilePath
   , do'deploymentFile :: FilePath
-  , do'godWalletPkh :: ByteString
-  , do'aaWalletPkh :: ByteString
+  , do'godWalletPkh :: PubKeyHash
+  , do'aaWalletPkh :: PubKeyHash
   , do'aaQ :: Integer
   }
   deriving stock (Show, Eq)
@@ -30,28 +26,16 @@ deploy opts = do
   pabConf <-
     either error id <$> loadPABConfig (do'pabConfig opts)
 
-  godWallet <- parsePkh $ do'godWalletPkh opts
-  aaWallet <- parsePkh $ do'aaWalletPkh opts
-
   (_, errOrCoopDeployment) <-
     runBpi @Text
       pabConf
-        { pcOwnPubKeyHash = unPaymentPubKeyHash godWallet
+        { pcOwnPubKeyHash = do'godWalletPkh opts
         }
       $ Pab.deployCoop @Text
         coopPlutus
-        godWallet
-        aaWallet
+        (PaymentPubKeyHash $ do'godWalletPkh opts)
+        (PaymentPubKeyHash $ do'aaWalletPkh opts)
         (do'aaQ opts)
   coopDeployment <- either (fail . show) pure errOrCoopDeployment
   encodeFile (do'deploymentFile opts) coopDeployment
   return ()
-
-parsePkh :: ByteString -> IO PaymentPubKeyHash
-parsePkh pkh = do
-  let pkhHashUnHex = unhex pkh
-  pkhBytes <- case pkhHashUnHex of
-    Left err -> do
-      error err
-    Right bs -> return bs
-  return $ PaymentPubKeyHash . PubKeyHash . toBuiltin $ pkhBytes

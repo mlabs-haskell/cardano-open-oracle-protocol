@@ -144,7 +144,12 @@ executable coop-pab-cli
   import:         common-language
   main-is:        Main.hs
   hs-source-dirs: app
-  other-modules:  Coop.Cli.Deploy
+  other-modules:
+    Coop.Cli.Aux
+    Coop.Cli.Deploy
+    Coop.Cli.MintAuth
+    Coop.Cli.MintCertRdmrs
+
   build-depends:
     , aeson
     , base

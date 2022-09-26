@@ -9,6 +9,7 @@ module Coop.Pab (
   mkMintCertTrx,
   mkMintAuthTrx,
   mkMintFsTrx,
+  mintAuthAndCert,
 ) where
 
 import Control.Lens ((^.))
@@ -33,9 +34,9 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Text (Text)
 import Data.Void (Void)
-import Ledger (PaymentPubKeyHash, applyArguments, getCardanoTxId)
+import Ledger (PaymentPubKeyHash, applyArguments, getCardanoTxId, interval)
 import Ledger.Tx (ChainIndexTxOut, ciTxOutValue)
-import Plutus.Contract (Contract, currentTime, submitTxConstraintsWith, throwError)
+import Plutus.Contract (Contract, currentTime, ownFirstPaymentPubKeyHash, submitTxConstraintsWith, throwError)
 import Plutus.Contract.Constraints (mustBeSignedBy, mustMintValueWithRedeemer, mustPayToOtherScript, mustPayToPubKey, mustSpendPubKeyOutput, mustSpendScriptOutput, mustValidateIn, otherData, ownPaymentPubKeyHash, plutusV2MintingPolicy, plutusV2OtherScript, unspentOutputs)
 import Plutus.Contract.Logging (logInfo)
 import Plutus.Script.Utils.V2.Address (mkValidatorAddress)
@@ -49,6 +50,7 @@ import Plutus.V2.Ledger.Api (
   Extended (Finite, PosInf),
   LedgerBytes (LedgerBytes),
   MintingPolicy (MintingPolicy),
+  POSIXTime,
   POSIXTimeRange,
   TokenName (TokenName),
   TxId,
@@ -119,10 +121,11 @@ mkCoopDeployment coopPlutus coopAc authDeployment =
         , ap'certTokenCs = scriptCurrencySymbol (ad'certMp authDeployment)
         }
 
-mintCertRedeemers :: CoopPlutus -> PaymentPubKeyHash -> PaymentPubKeyHash -> Integer -> Contract w s Text AssetClass
-mintCertRedeemers coopPlutus self certRedeemerWallet q = do
+mintCertRedeemers :: CoopPlutus -> Integer -> Contract w s Text AssetClass
+mintCertRedeemers coopPlutus q = do
   let logI m = logInfo @String ("mintCertR: " <> m)
   logI "Starting"
+  self <- ownFirstPaymentPubKeyHash
 
   outs <- findOutsAt' @Void self (\_ _ -> True)
   out <- case reverse . Map.toList $ outs of -- FIXME: If I don't shuffle this I get InsuficientCollateral
@@ -130,7 +133,7 @@ mintCertRedeemers coopPlutus self certRedeemerWallet q = do
     _ -> throwError "mintCertR: Not enough outputs found to use for making $ONE-SHOTs"
 
   let mkOneShotMp = cp'mkOneShotMp coopPlutus
-      (mintCertRTrx, certRAc) = mkMintOneShotTrx self certRedeemerWallet out mkOneShotMp q
+      (mintCertRTrx, certRAc) = mkMintOneShotTrx self self out mkOneShotMp q
 
   submitTrx @Void mintCertRTrx
   logI $ printf "Created $CertR redeemer token for redeeming $CERT outputs @CertV: %s" (show certRAc)
@@ -210,6 +213,28 @@ mkMintAuthTrx coopDeployment self authWallets authQEach aaOuts =
           <> mconcat ((`mustPayToPubKey` (authValEach <> minUtxoAdaValue)) <$> authWallets)
           <> mconcat (mustSpendPubKeyOutput <$> aaOrefs)
    in (Trx lookups constraints, assetClass authCs authTn)
+
+mintAuthAndCert ::
+  CoopDeployment ->
+  [PaymentPubKeyHash] ->
+  Integer ->
+  AssetClass ->
+  POSIXTime ->
+  POSIXTime ->
+  Contract w s Text (AssetClass, AssetClass)
+mintAuthAndCert coopDeployment authWallets nAuthTokensPerWallet certRdmrAc from to = do
+  let logI m = logInfo @String ("mintAuthAndCert: " <> m)
+  logI $ printf "Minting $AUTH and $CERT tokens with %d $AUTH wallets distributing %d $AUTH tokens to each with validity interval %s " (length authWallets) nAuthTokensPerWallet (show $ interval from to)
+  now <- currentTime
+  logI $ printf "Current time is %s" (show now)
+  self <- ownFirstPaymentPubKeyHash
+  aaOuts <- findOutsAtHoldingAa self coopDeployment
+  let validityInterval = interval from to
+  let (mintAuthTrx, authAc) = mkMintAuthTrx coopDeployment self authWallets nAuthTokensPerWallet aaOuts
+      (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRdmrAc validityInterval aaOuts
+  submitTrx @Void (mintAuthTrx <> mintCertTrx)
+  logI "Finished"
+  return (certAc, authAc)
 
 mkBurnAuthsTrx :: CoopDeployment -> PaymentPubKeyHash -> Map TxOutRef ChainIndexTxOut -> Trx i o a
 mkBurnAuthsTrx coopDeployment self authOuts = do
