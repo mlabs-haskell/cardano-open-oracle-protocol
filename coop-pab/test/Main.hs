@@ -8,7 +8,6 @@ import Control.Monad.Reader (ReaderT)
 import Coop.Pab (burnAuths, burnCerts, deployCoop, findOutsAtCertVWithCERT, findOutsAtHoldingAa, mintAuthAndCert, mintCertRedeemers, mkMintAuthTrx, mkMintCertTrx, mkMintFsTrx)
 import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), ciValueOf, datumFromTxOut, findOutsAt', findOutsAtHolding, findOutsAtHolding', interval', loadCoopPlutus, mkMintOneShotTrx, submitTrx)
 import Coop.Types (AuthDeployment (ad'authorityAc, ad'certV), CertDatum (cert'validity), CoopDeployment (cd'auth, cd'coopAc, cd'fsV), CoopPlutus (cp'mkOneShotMp), FsDatum (FsDatum))
-import Data.Bool (bool)
 import Data.Default (def)
 import Data.Foldable (Foldable (toList))
 import Data.List.NonEmpty (NonEmpty)
@@ -27,7 +26,6 @@ import Test.Plutip.LocalCluster (BpiWallet, withConfiguredCluster)
 import Test.Plutip.Options (TraceOption (ShowBudgets, ShowTraceButOnlyContext))
 import Test.Plutip.Predicate (shouldFail, shouldSucceed, shouldYield)
 import Test.Tasty (TestTree, defaultMain)
-import Text.Printf (printf)
 
 main :: IO ()
 main = do
@@ -115,7 +113,7 @@ tests coopPlutus =
           ( do
               (coopDeployment, certRdmrAc) <- godDeploysCoop coopPlutus
 
-              certAc <-
+              _ <-
                 withSuccessContract @String
                   1
                   ( \[_god, _certR] -> do
@@ -125,9 +123,8 @@ tests coopPlutus =
                       now <- currentTime
                       let certValidUntil = now + 5
                           validityInterval = interval now certValidUntil
-                          (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRdmrAc validityInterval aaOuts
+                          (mintCertTrx, _) = mkMintCertTrx coopDeployment self certRdmrAc validityInterval aaOuts
                       submitTrx @Void mintCertTrx
-                      return certAc
                   )
 
               withContractAs @String
@@ -135,15 +132,7 @@ tests coopPlutus =
                 ( \[_god, _aa] -> do
                     logInfo @String "Running as certRdmrWallet"
                     _ <- waitNSlots 5 -- NOTE: Should be enough for the $CERT to invalidate
-                    self <- ownFirstPaymentPubKeyHash
-                    certRdmrOuts <- findOutsAtHolding' self certRdmrAc
-                    certOuts <- findOutsAtHolding (mkValidatorAddress . ad'certV . cd'auth $ coopDeployment) certAc
-                    logInfo @String $ printf "Found %d $CERT ouputs at @CertV" (length certOuts)
-                    bool
-                      (throwError "There should be some $CERT inputs")
-                      (pure ())
-                      $ not (null certOuts)
-                    burnCerts coopDeployment self certOuts certRdmrOuts
+                    burnCerts coopDeployment certRdmrAc
                 )
           )
           [shouldSucceed]

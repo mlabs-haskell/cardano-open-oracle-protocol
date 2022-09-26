@@ -21,6 +21,8 @@ module Coop.Pab.Aux (
   findOutsAt',
   findOutsAtHolding',
   interval',
+  findOutsAtHoldingCurrency,
+  findOutsAtHoldingCurrency',
 ) where
 
 import BotPlutusInterface.Contract (runContract)
@@ -175,7 +177,6 @@ findOutsAt addr pred = do
     filterM
       ( \(_, out) -> do
           dat <- datumFromTxOut @a out
-          logI $ show (out ^. ciTxOutValue)
           return $ pred (out ^. ciTxOutValue) dat
       )
       (Map.toList outs)
@@ -185,6 +186,12 @@ findOutsAt addr pred = do
 
 findOutsAt' :: forall a w s. (Typeable a, FromData a) => PaymentPubKeyHash -> (Value -> Maybe a -> Bool) -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
 findOutsAt' ppkh = findOutsAt @a (pubKeyHashAddress ppkh Nothing)
+
+findOutsAtHoldingCurrency :: Address -> CurrencySymbol -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
+findOutsAtHoldingCurrency addr cs = findOutsAt @Void addr (\v _ -> hasCurrency v cs)
+
+findOutsAtHoldingCurrency' :: PaymentPubKeyHash -> CurrencySymbol -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
+findOutsAtHoldingCurrency' wallet = findOutsAtHoldingCurrency (pubKeyHashAddress wallet Nothing)
 
 findOutsAtHolding :: Address -> AssetClass -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
 findOutsAtHolding addr ac = do

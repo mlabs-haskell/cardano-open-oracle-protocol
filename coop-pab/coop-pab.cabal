@@ -147,6 +147,7 @@ executable coop-pab-cli
   other-modules:
     Coop.Cli.Aux
     Coop.Cli.Deploy
+    Coop.Cli.GarbageCollect
     Coop.Cli.MintAuth
     Coop.Cli.MintCertRdmrs
 

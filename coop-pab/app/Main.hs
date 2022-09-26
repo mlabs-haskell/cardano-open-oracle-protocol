@@ -5,6 +5,7 @@ import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG))
 
 import Control.Applicative (Alternative (many), (<**>))
 import Coop.Cli.Aux (assetClassOpt, posixTimeOpt, pubKeyHashOpt)
+import Coop.Cli.GarbageCollect (GarbageCollectOpts (GarbageCollectOpts), garbageCollect)
 import Coop.Cli.MintAuth (MintAuthOpts (MintAuthOpts), mintAuth)
 import Coop.Cli.MintCertRdmrs (MintCertRdmrsOpts (MintCertRdmrsOpts), mintCertRdmrs)
 import Options.Applicative (
@@ -34,6 +35,7 @@ data Command
   = Deploy DeployOpts
   | MintCertRdmrs MintCertRdmrsOpts
   | MintAuth MintAuthOpts
+  | GarbageCollect GarbageCollectOpts
 
 deployOpts :: Parser DeployOpts
 deployOpts =
@@ -164,6 +166,34 @@ mintAuthOpts =
           )
       )
 
+garbageCollectOpts :: Parser GarbageCollectOpts
+garbageCollectOpts =
+  GarbageCollectOpts
+    <$> strOption
+      ( long "pab-config"
+          <> metavar "PAB_CONFIG"
+          <> help "A bot-plutus-interface PAB config file"
+          <> value "resources/pabConfig.yaml"
+          <> showDefault
+      )
+    <*> strOption
+      ( long "deployment-file"
+          <> metavar "DEPLOYMENT_FILE"
+          <> help "A JSON file to write the deployment information to"
+          <> value "coop-deployment.json"
+          <> showDefault
+      )
+    <*> pubKeyHashOpt
+      ( long "cert-rdmr-wallet"
+          <> metavar "CERTRDMR_WALLET"
+          <> help "A wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001) holding $CERT-RDMR tokens"
+      )
+    <*> assetClassOpt
+      ( long "cert-rdmr-ac"
+          <> metavar "CERTRDMR_AC"
+          <> help "$CERT-RDMR asset class that can be used to garbage collect expired $CERT UTxOs locked at @CertV"
+      )
+
 options :: Parser Command
 options =
   subparser $
@@ -176,6 +206,9 @@ options =
       <> command
         "mint-auth"
         (info (MintAuth <$> mintAuthOpts <* helper) (progDesc "Mint and pay AUTH_Q_PER_WALLET $CERT and $AUTH tokens to each AUTH_WALLET and assign the cert validity and $CERT-RDMR asset class"))
+      <> command
+        "garbage-collect"
+        (info (GarbageCollect <$> garbageCollectOpts <* helper) (progDesc "Burn expired $CERT tokens locked at @CertV using $CERT-RDMR tokens"))
 
 parserInfo :: ParserInfo Command
 parserInfo = info (options <**> helper) (fullDesc <> progDesc "COOP PAB cli tools")
@@ -187,3 +220,4 @@ main = do
     Deploy opts -> deploy opts
     MintCertRdmrs opts -> mintCertRdmrs opts
     MintAuth opts -> mintAuth opts
+    GarbageCollect opts -> garbageCollect opts

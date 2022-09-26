@@ -13,7 +13,7 @@ module Coop.Pab (
 ) where
 
 import Control.Lens ((^.))
-import Coop.Pab.Aux (Trx (Trx), currencyValue, findOutsAt, findOutsAt', findOutsAtHolding', hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintOneShotTrx, submitTrx, toDatum, toRedeemer)
+import Coop.Pab.Aux (Trx (Trx), currencyValue, findOutsAt, findOutsAt', findOutsAtHolding', findOutsAtHoldingCurrency, hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintOneShotTrx, submitTrx, toDatum, toRedeemer)
 import Coop.Types (
   AuthDeployment (AuthDeployment, ad'authMp, ad'authorityAc, ad'certMp, ad'certV),
   AuthMpParams (AuthMpParams),
@@ -29,6 +29,7 @@ import Coop.Types (
   FsMpRedeemer (FsMpMint),
   cp'certV,
  )
+import Data.Bool (bool)
 import Data.Foldable (toList)
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -165,10 +166,19 @@ mkMintCertTrx coopDeployment self redeemerAc validityInterval aaOuts =
           <> mconcat (mustSpendPubKeyOutput <$> aaOrefs)
    in (Trx lookups constraints, assetClass certCs certTn)
 
-burnCerts :: CoopDeployment -> PaymentPubKeyHash -> Map TxOutRef ChainIndexTxOut -> Map TxOutRef ChainIndexTxOut -> Contract w s Text TxId
-burnCerts coopDeployment self certOuts certRdmrOuts = do
+burnCerts :: CoopDeployment -> AssetClass -> Contract w s Text TxId
+burnCerts coopDeployment certRdmrAc = do
   let logI m = logInfo @String ("burnCerts: " <> m)
   logI "Starting"
+  self <- ownFirstPaymentPubKeyHash
+  certRdmrOuts <- findOutsAtHolding' self certRdmrAc
+  certOuts <- findOutsAtHoldingCurrency (mkValidatorAddress . ad'certV . cd'auth $ coopDeployment) (scriptCurrencySymbol . ad'certMp . cd'auth $ coopDeployment)
+  logI $ printf "Found %d $CERT ouputs at @CertV" (length certOuts)
+  bool
+    (throwError "burnCerts: There should be some $CERT inputs")
+    (pure ())
+    $ not (null certOuts)
+
   now <- currentTime
   let certMp = (ad'certMp . cd'auth) coopDeployment
       certV = (ad'certV . cd'auth) coopDeployment
