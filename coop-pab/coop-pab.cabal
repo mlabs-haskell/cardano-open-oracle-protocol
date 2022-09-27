@@ -102,7 +102,6 @@ library
     , filepath
     , lens
     , memory
-    , plutip
     , plutus-contract
     , plutus-ledger
     , plutus-ledger-api

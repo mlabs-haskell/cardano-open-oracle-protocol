@@ -150,7 +150,7 @@ datumFromTxOut out =
     (out ^? ciTxOutScriptDatum)
   where
     logI m = logInfo @String ("datumFromTxOut: " <> m)
-    datumFromTxOut' :: forall w s (a :: Type). Typeable a => FromData a => (DatumHash, Maybe Datum) -> Contract w s Text (Maybe a)
+
     datumFromTxOut' (hash, mayDatum) = do
       dat <-
         maybe
@@ -168,7 +168,7 @@ datumFromTxOut out =
         (fromDatum dat)
 
 findOutsAt :: forall a w s. Typeable a => FromData a => Address -> (Value -> Maybe a -> Bool) -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
-findOutsAt addr pred = do
+findOutsAt addr p = do
   let logI m = logInfo @String ("findOutsAt: " <> m)
   logI "Starting"
 
@@ -177,7 +177,7 @@ findOutsAt addr pred = do
     filterM
       ( \(_, out) -> do
           dat <- datumFromTxOut @a out
-          return $ pred (out ^. ciTxOutValue) dat
+          return $ p (out ^. ciTxOutValue) dat
       )
       (Map.toList outs)
 
