@@ -16,7 +16,8 @@ data DeployOpts = DeployOpts
   , do'deploymentFile :: FilePath
   , do'godWalletPkh :: PubKeyHash
   , do'aaWalletPkh :: PubKeyHash
-  , do'aaQ :: Integer
+  , do'atLeastAaQRequired :: Integer
+  , do'aaQToMint :: Integer
   }
   deriving stock (Show, Eq)
 
@@ -33,9 +34,9 @@ deploy opts = do
         }
       $ Pab.deployCoop @Text
         coopPlutus
-        (PaymentPubKeyHash $ do'godWalletPkh opts)
         (PaymentPubKeyHash $ do'aaWalletPkh opts)
-        (do'aaQ opts)
+        (do'atLeastAaQRequired opts)
+        (do'aaQToMint opts)
   coopDeployment <- either (fail . show) pure errOrCoopDeployment
   encodeFile (do'deploymentFile opts) coopDeployment
   return ()

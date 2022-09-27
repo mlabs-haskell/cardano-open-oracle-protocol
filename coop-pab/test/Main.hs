@@ -69,7 +69,7 @@ tests coopPlutus =
               ( \[aaWallet] -> do
                   logInfo @String "Running as godWallet"
                   self <- ownFirstPaymentPubKeyHash
-                  coopDeployment <- deployCoop coopPlutus self aaWallet 3
+                  coopDeployment <- deployCoop coopPlutus aaWallet 3 6
                   let aaAc = ad'authorityAc . cd'auth $ coopDeployment
                       coopAc = cd'coopAc coopDeployment
                   aaOuts <- findOutsAtHolding' aaWallet aaAc
@@ -313,7 +313,6 @@ godDeploysCoop coopPlutus = do
     0
     ( \(aaWallet : _certRdmrWallet : _) -> do
         logInfo @String "Running as godWallet"
-        self <- ownFirstPaymentPubKeyHash
-        coopDeployment <- deployCoop coopPlutus self aaWallet 3
+        coopDeployment <- deployCoop coopPlutus aaWallet 3 6
         return (coopDeployment, certRdmrAc)
     )

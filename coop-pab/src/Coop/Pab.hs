@@ -65,10 +65,17 @@ import Test.Plutip.Internal.BotPlutusInterface.Setup ()
 import Test.Plutip.Internal.LocalCluster ()
 import Text.Printf (printf)
 
-deployCoop :: CoopPlutus -> PaymentPubKeyHash -> PaymentPubKeyHash -> Integer -> Contract w s Text CoopDeployment
-deployCoop coopPlutus self aaWallet atLeastAaQ = do
+deployCoop :: CoopPlutus -> PaymentPubKeyHash -> Integer -> Integer -> Contract w s Text CoopDeployment
+deployCoop coopPlutus aaWallet atLeastAaQ aaQToMint = do
   let logI m = logInfo @String ("deployCoop: " <> m)
   logI "Starting"
+
+  bool
+    (throwError "deployCoop: Must specify more or equal $AA tokens to mint than is required to authorize $AUTH/$CERT")
+    (return ())
+    (atLeastAaQ >= aaQToMint)
+
+  self <- ownFirstPaymentPubKeyHash
 
   outs <- findOutsAt' @Void self (\_ _ -> True)
   (aaOut, coopOut) <- case Map.toList outs of
@@ -79,7 +86,7 @@ deployCoop coopPlutus self aaWallet atLeastAaQ = do
   logI $ printf "Using TxOutRef %s for minting $COOP one-shot tokens" (show $ fst coopOut)
 
   let mkOneShotMp = cp'mkOneShotMp coopPlutus
-      (mintAaTrx, aaAc) = mkMintOneShotTrx self aaWallet aaOut mkOneShotMp atLeastAaQ
+      (mintAaTrx, aaAc) = mkMintOneShotTrx self aaWallet aaOut mkOneShotMp aaQToMint
       (mintCoopTrx, coopAc) = mkMintOneShotTrx self self coopOut mkOneShotMp 1
 
   submitTrx @Void (mintAaTrx <> mintCoopTrx)

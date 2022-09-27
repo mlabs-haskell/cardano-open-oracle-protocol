@@ -30,6 +30,8 @@ import Options.Applicative (
   subparser,
   value,
  )
+import Plutus.V1.Ledger.Value (AssetClass)
+import Plutus.V2.Ledger.Api (PubKeyHash)
 
 data Command
   = Deploy DeployOpts
@@ -37,181 +39,163 @@ data Command
   | MintAuth MintAuthOpts
   | GarbageCollect GarbageCollectOpts
 
-deployOpts :: Parser DeployOpts
-deployOpts =
+pabConfigOptP :: Parser [Char]
+pabConfigOptP =
+  strOption
+    ( long "pab-config"
+        <> metavar "PAB_CONFIG"
+        <> help "A bot-plutus-interface PAB config file"
+        <> value "resources/pabConfig.yaml"
+        <> showDefault
+    )
+
+deploymentFileOptP :: Parser [Char]
+deploymentFileOptP =
+  strOption
+    ( long "deployment-file"
+        <> metavar "DEPLOYMENT_FILE"
+        <> help "A JSON file to write the COOP deployment information to"
+        <> value "coop-deployment.json"
+        <> showDefault
+    )
+
+modeOptP :: Parser DeployMode
+modeOptP =
+  option
+    auto
+    ( long "mode"
+        <> metavar "DEPLOY_MODE"
+        <> help "Compilation mode for Plutus scripts that enables tracing logs (ie. DEPLOY_DEBUG|DEPLOY_PROD)"
+        <> value DEPLOY_DEBUG
+        <> showDefault
+    )
+
+aaWalletPkhOptP :: Parser PubKeyHash
+aaWalletPkhOptP =
+  pubKeyHashOpt
+    ( long "aa-wallet"
+        <> metavar "AA_WALLET"
+        <> help "A wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001) holding $AA tokens"
+    )
+
+certRdmrAcOptP :: Parser AssetClass
+certRdmrAcOptP =
+  assetClassOpt
+    ( long "cert-rdmr-ac"
+        <> metavar "CERTRDMR_AC"
+        <> help "$CERT-RDMR asset class that can be used to garbage collect expired $CERT UTxOs locked at @CertV"
+    )
+
+certRdmrWalletOptP :: Parser PubKeyHash
+certRdmrWalletOptP =
+  pubKeyHashOpt
+    ( long "cert-rdmr-wallet"
+        <> metavar "CERTRDMR_WALLET"
+        <> help "A wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001) holding $CERT-RDMR tokens that will perform `coop-pab-cli garbage-collect`"
+    )
+deployOptsP :: Parser DeployOpts
+deployOptsP =
   DeployOpts
-    <$> option
-      auto
-      ( long "mode"
-          <> metavar "DEPLOY_MODE"
-          <> help "Compilation mode for Plutus scripts (ie. DEPLOY_DEBUG|DEPLOY_PROD)"
-          <> value DEPLOY_DEBUG
-          <> showDefault
-      )
-    <*> strOption
-      ( long "pab-config"
-          <> metavar "PAB_CONFIG"
-          <> help "A bot-plutus-interface PAB config file"
-          <> value "resources/pabConfig.yaml"
-          <> showDefault
-      )
-    <*> strOption
-      ( long "deployment-file"
-          <> metavar "DEPLOYMENT_FILE"
-          <> help "A JSON file to write the deployment information to"
-          <> value "coop-deployment.json"
-          <> showDefault
-      )
+    <$> modeOptP
+    <*> pabConfigOptP
+    <*> deploymentFileOptP
     <*> pubKeyHashOpt
       ( long "god-wallet"
           <> metavar "GOD_WALLET"
-          <> help "God wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001)"
+          <> help "A wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001) used to perform the COOP genesis"
       )
-    <*> pubKeyHashOpt
-      ( long "aa-wallet"
-          <> metavar "AA_WALLET"
-          <> help "AA wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001)"
+    <*> aaWalletPkhOptP
+    <*> option
+      auto
+      ( long "at-least-aa-required"
+          <> metavar "AA_Q_REQUIRED"
+          <> help "$AA (authentication authority) token quantity required to mint authentication (ie. `coop-pab-cli mint-auth`)"
+          <> value 1
+          <> showDefault
       )
     <*> option
       auto
       ( long "aa-to-mint"
           <> metavar "AA_Q"
-          <> help "$AA (authentication authority) tokens to mint"
-          <> value 1
+          <> help "$AA (authentication authority) tokens to mint and pay to AA_WALLET"
+          <> value 3
           <> showDefault
       )
 
-mintCertRdmrsOpts :: Parser MintCertRdmrsOpts
-mintCertRdmrsOpts =
+mintCertRdmrsOptsP :: Parser MintCertRdmrsOpts
+mintCertRdmrsOptsP =
   MintCertRdmrsOpts
-    <$> option
-      auto
-      ( long "mode"
-          <> metavar "DEPLOY_MODE"
-          <> help "Compilation mode for Plutus scripts (ie. DEPLOY_DEBUG|DEPLOY_PROD)"
-          <> value DEPLOY_DEBUG
-          <> showDefault
-      )
-    <*> strOption
-      ( long "pab-config"
-          <> metavar "PAB_CONFIG"
-          <> help "A bot-plutus-interface PAB config file"
-          <> value "resources/pabConfig.yaml"
-          <> showDefault
-      )
-    <*> pubKeyHashOpt
-      ( long "cert-rdmr-wallet"
-          <> metavar "CERTRDMR_WALLET"
-          <> help "A wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001) holding $CERT-RDMR tokens"
-      )
+    <$> modeOptP
+    <*> pabConfigOptP
+    <*> certRdmrWalletOptP
     <*> option
       auto
       ( long "cert-rdmrs-to-mint"
           <> metavar "CERTRDMR_Q"
-          <> help "$CERT-RDMR (certificate redeemer) tokens to mint"
+          <> help "$CERT-RDMR (certificate redeemer) tokens to mint and pay to CERTRDMR_WALLET"
           <> value 100
           <> showDefault
       )
 
-mintAuthOpts :: Parser MintAuthOpts
-mintAuthOpts =
+mintAuthOptsP :: Parser MintAuthOpts
+mintAuthOptsP =
   MintAuthOpts
-    <$> strOption
-      ( long "pab-config"
-          <> metavar "PAB_CONFIG"
-          <> help "A bot-plutus-interface PAB config file"
-          <> value "resources/pabConfig.yaml"
-          <> showDefault
-      )
-    <*> strOption
-      ( long "deployment-file"
-          <> metavar "DEPLOYMENT_FILE"
-          <> help "A JSON file to write the deployment information to"
-          <> value "coop-deployment.json"
-          <> showDefault
-      )
-    <*> pubKeyHashOpt
-      ( long "aa-wallet"
-          <> metavar "AA_WALLET"
-          <> help "AA wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001)"
-      )
+    <$> pabConfigOptP
+    <*> deploymentFileOptP
+    <*> aaWalletPkhOptP
     <*> posixTimeOpt
       ( long "certificate-valid-from"
           <> metavar "CERT_VALID_FROM"
-          <> help "Certificate valid from POSIXTime"
+          <> help "POSIXTime denoting the Ledger time the certificate is valid from"
       )
     <*> posixTimeOpt
       ( long "certificate-valid-to"
           <> metavar "CERT_VALID_TO"
-          <> help "Certificate valid to POSIXTime"
+          <> help "POSIXTime denoting the Ledger time the certificate is valid until"
       )
     <*> option
       auto
-      ( long "n-auth-tokens-per-wallet"
+      ( long "auth-tokens-per-wallet-to-mint"
           <> metavar "AUTH_Q_PER_WALLET"
-          <> help "$AUTH tokens to mint per wallet"
+          <> help "$AUTH tokens to mint and pay to each specified Auth wallet (AUTH_WALLET)"
           <> value 100
           <> showDefault
       )
-    <*> assetClassOpt
-      ( long "cert-rdmr-ac"
-          <> metavar "CERTRDMR_AC"
-          <> help "$CERT-RDMR asset class that can be used to garbage collect expired $CERT UTxOs locked at @CertV"
-      )
+    <*> certRdmrAcOptP
     <*> many
       ( pubKeyHashOpt
           ( long "auth-wallet"
               <> metavar "AUTH_WALLET"
-              <> help "Wallet holding $AUTH tokens hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001)"
+              <> help "Wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001) holding $AUTH tokens"
           )
       )
 
-garbageCollectOpts :: Parser GarbageCollectOpts
-garbageCollectOpts =
+garbageCollectOptsP :: Parser GarbageCollectOpts
+garbageCollectOptsP =
   GarbageCollectOpts
-    <$> strOption
-      ( long "pab-config"
-          <> metavar "PAB_CONFIG"
-          <> help "A bot-plutus-interface PAB config file"
-          <> value "resources/pabConfig.yaml"
-          <> showDefault
-      )
-    <*> strOption
-      ( long "deployment-file"
-          <> metavar "DEPLOYMENT_FILE"
-          <> help "A JSON file to write the deployment information to"
-          <> value "coop-deployment.json"
-          <> showDefault
-      )
-    <*> pubKeyHashOpt
-      ( long "cert-rdmr-wallet"
-          <> metavar "CERTRDMR_WALLET"
-          <> help "A wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001) holding $CERT-RDMR tokens"
-      )
-    <*> assetClassOpt
-      ( long "cert-rdmr-ac"
-          <> metavar "CERTRDMR_AC"
-          <> help "$CERT-RDMR asset class that can be used to garbage collect expired $CERT UTxOs locked at @CertV"
-      )
+    <$> pabConfigOptP
+    <*> deploymentFileOptP
+    <*> certRdmrWalletOptP
+    <*> certRdmrAcOptP
 
-options :: Parser Command
-options =
+optionsP :: Parser Command
+optionsP =
   subparser $
     command
       "deploy"
-      (info (Deploy <$> deployOpts <* helper) (progDesc "Deploy COOP on the Cardano network and write the deployment information to a file"))
+      (info (Deploy <$> deployOptsP <* helper) (progDesc "Deploy COOP on the Cardano network and write the deployment information to a file"))
       <> command
         "mint-cert-redeemers"
-        (info (MintCertRdmrs <$> mintCertRdmrsOpts <* helper) (progDesc "Mint CERTRDMR_Q of $CERT-RDMR (one shot) tokens and pay them to the CERTRDMR_WALLET"))
+        (info (MintCertRdmrs <$> mintCertRdmrsOptsP <* helper) (progDesc "Mint $CERT-RDMR (one shot) tokens and pay them to a wallet that will perform garbage collection"))
       <> command
         "mint-auth"
-        (info (MintAuth <$> mintAuthOpts <* helper) (progDesc "Mint and pay AUTH_Q_PER_WALLET $CERT and $AUTH tokens to each AUTH_WALLET and assign the cert validity and $CERT-RDMR asset class"))
+        (info (MintAuth <$> mintAuthOptsP <* helper) (progDesc "Mint and pay to @CertV a $CERT token with a specified $CERT-RDMR asset class and validty range along with minting and paying associated $AUTH tokens to each Auth wallet"))
       <> command
         "garbage-collect"
-        (info (GarbageCollect <$> garbageCollectOpts <* helper) (progDesc "Burn expired $CERT tokens locked at @CertV using $CERT-RDMR tokens"))
+        (info (GarbageCollect <$> garbageCollectOptsP <* helper) (progDesc "Spend expired $CERT tokens locked at @CertV using $CERT-RDMR tokens"))
 
 parserInfo :: ParserInfo Command
-parserInfo = info (options <**> helper) (fullDesc <> progDesc "COOP PAB cli tools")
+parserInfo = info (optionsP <**> helper) (fullDesc <> progDesc "COOP PAB cli tools")
 
 main :: IO ()
 main = do
