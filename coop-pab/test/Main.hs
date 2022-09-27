@@ -79,7 +79,7 @@ tests coopPlutus =
                       <> [ciValueOf coopAc out | out <- toList coopOuts]
               )
           )
-          [shouldSucceed, shouldYield [3, 1]]
+          [shouldSucceed, shouldYield [6, 1]]
     , runAfter "deploy-coop" $
         assertExecutionWith
           testOpts
