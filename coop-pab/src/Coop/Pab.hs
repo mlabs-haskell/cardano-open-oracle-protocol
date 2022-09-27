@@ -125,10 +125,10 @@ mkCoopDeployment coopPlutus coopAc authDeployment =
             ]
    in CoopDeployment coopAc fsMp fsV authDeployment
   where
-    authParamsFromDeployment authDeployment =
+    authParamsFromDeployment ad =
       AuthParams
-        { ap'authTokenCs = scriptCurrencySymbol (ad'authMp authDeployment)
-        , ap'certTokenCs = scriptCurrencySymbol (ad'certMp authDeployment)
+        { ap'authTokenCs = scriptCurrencySymbol (ad'authMp ad)
+        , ap'certTokenCs = scriptCurrencySymbol (ad'certMp ad)
         }
 
 mintCertRedeemers :: CoopPlutus -> Integer -> Contract w s Text AssetClass
@@ -204,13 +204,13 @@ burnCerts coopDeployment certRdmrAc = do
           <> unspentOutputs certRdmrOuts
           <> unspentOutputs certOuts
 
-      tx =
+      constraints =
         mustMintValueWithRedeemer (toRedeemer CertMpBurn) certVal
           <> mconcat (mustSpendPubKeyOutput <$> certRdmdrOrefs)
           <> mconcat ((\oref -> mustSpendScriptOutput oref (toRedeemer ())) <$> certOrefs)
           <> mustValidateIn timeRange
 
-  tx <- submitTxConstraintsWith @Void lookups tx
+  tx <- submitTxConstraintsWith @Void lookups constraints
   logI "Finished"
   return (getCardanoTxId tx)
 
@@ -313,7 +313,7 @@ getState coopDeployment = do
 
 -- | Queries
 findOutsAtCertV :: CoopDeployment -> (Value -> CertDatum -> Bool) -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
-findOutsAtCertV coopDeployment pred = do
+findOutsAtCertV coopDeployment p = do
   let logI m = logInfo @String ("findOutsAtCertV: " <> m)
 
   logI "Starting"
@@ -321,7 +321,7 @@ findOutsAtCertV coopDeployment pred = do
   let certVAddr = (mkValidatorAddress . ad'certV . cd'auth) coopDeployment
   findOutsAt @CertDatum
     certVAddr
-    (maybe False . pred)
+    (maybe False . p)
 
 findOutsAtCertVWithCERT :: CoopDeployment -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
 findOutsAtCertVWithCERT coopDeployment = findOutsAtCertV coopDeployment (\v _ -> hasCurrency v ((scriptCurrencySymbol . ad'certMp . cd'auth) coopDeployment))

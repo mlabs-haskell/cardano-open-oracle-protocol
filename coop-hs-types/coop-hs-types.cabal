@@ -25,7 +25,8 @@ common common-language
     -Wname-shadowing -Wunused-foralls -fprint-explicit-foralls
     -fprint-explicit-kinds -fwarn-missing-import-lists
     -Wredundant-constraints -Wmissing-export-lists
-    -Wmissing-deriving-strategies
+    -Wmissing-deriving-strategies -Wname-shadowing -Wunused-packages
+    -Weverything
 
   if !flag(dev)
     ghc-options: -Werror

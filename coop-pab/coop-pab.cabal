@@ -18,7 +18,8 @@ common common-language
     -Wno-partial-type-signatures -Wmissing-export-lists
     -Wincomplete-record-updates -Wmissing-deriving-strategies
     -Wno-name-shadowing -Wunused-foralls -fprint-explicit-foralls
-    -fprint-explicit-kinds -fwarn-missing-import-lists
+    -fprint-explicit-kinds -fwarn-missing-import-lists -Wname-shadowing
+    -Wunused-packages
 
   if !flag(dev)
     ghc-options: -Werror
@@ -116,14 +117,12 @@ library
 test-suite coop-pab-tests
   import:         common-language
   build-depends:
-    , aeson
     , base
     , bot-plutus-interface
     , containers
     , coop-hs-types
     , coop-pab
     , data-default
-    , lens
     , mtl
     , plutip
     , plutus-contract
@@ -131,7 +130,6 @@ test-suite coop-pab-tests
     , plutus-ledger-api
     , plutus-script-utils
     , tasty
-    , tasty-hunit
     , text
 
   hs-source-dirs: test
@@ -157,18 +155,10 @@ executable coop-pab-cli
     , base
     , bot-plutus-interface
     , bytestring
-    , containers
     , coop-hs-types
     , coop-pab
-    , directory
-    , filepath
     , hex
     , optparse-applicative
-    , plutus-contract
     , plutus-ledger
     , plutus-ledger-api
-    , plutus-pab
-    , process
-    , stm
     , text
-    , uuid

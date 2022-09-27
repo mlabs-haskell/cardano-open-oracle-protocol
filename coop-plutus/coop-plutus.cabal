@@ -19,7 +19,7 @@ common common-language
     -Wname-shadowing -Wunused-foralls -fprint-explicit-foralls
     -fprint-explicit-kinds -fwarn-missing-import-lists
     -Wredundant-constraints -Wmissing-export-lists
-    -Wmissing-deriving-strategies
+    -Wmissing-deriving-strategies -Wname-shadowing -Wunused-packages
 
   if !flag(dev)
     ghc-options: -Werror
@@ -118,7 +118,6 @@ executable coop-plutus-cli
     , coop-plutus
     , optparse-applicative
     , plutarch
-    , plutus-ledger-api
 
 test-suite coop-plutus-tests
   import:         common-language
@@ -131,7 +130,6 @@ test-suite coop-plutus-tests
 
   build-depends:
     , base
-    , bytestring
     , containers
     , coop-hs-types
     , coop-plutus
