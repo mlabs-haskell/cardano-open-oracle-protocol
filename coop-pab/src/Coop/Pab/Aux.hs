@@ -55,7 +55,7 @@ import Plutus.PAB.Core.ContractInstance.STM (Activity (Active))
 import Plutus.Script.Utils.V2.Scripts (scriptCurrencySymbol)
 import Plutus.V1.Ledger.Value (AssetClass (unAssetClass), assetClass, valueOf)
 import Plutus.V1.Ledger.Value qualified as Value
-import Plutus.V2.Ledger.Api (Address, BuiltinByteString, CurrencySymbol, Datum (Datum, getDatum), DatumHash, Extended, FromData (fromBuiltinData), Interval (Interval), LowerBound (LowerBound), MintingPolicy (MintingPolicy), Redeemer (Redeemer), Script, ToData, TokenName (TokenName), TxId (getTxId), TxOutRef (txOutRefId, txOutRefIdx), UpperBound (UpperBound), Value (Value), fromBuiltin, toBuiltinData, toData)
+import Plutus.V2.Ledger.Api (Address, BuiltinByteString, CurrencySymbol, Datum (Datum, getDatum), Extended, FromData (fromBuiltinData), Interval (Interval), LowerBound (LowerBound), MintingPolicy (MintingPolicy), Redeemer (Redeemer), Script, ToData, TokenName (TokenName), TxId (getTxId), TxOutRef (txOutRefId, txOutRefIdx), UpperBound (UpperBound), Value (Value), fromBuiltin, toBuiltinData, toData)
 import PlutusTx.AssocMap qualified as AssocMap
 import System.Directory (getTemporaryDirectory)
 import System.FilePath ((</>))
