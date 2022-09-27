@@ -6,6 +6,7 @@ import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG))
 import Control.Applicative (Alternative (many), (<**>))
 import Coop.Cli.Aux (assetClassOpt, posixTimeOpt, pubKeyHashOpt)
 import Coop.Cli.GarbageCollect (GarbageCollectOpts (GarbageCollectOpts), garbageCollect)
+import Coop.Cli.GetState (GetStateOpts (GetStateOpts), getState)
 import Coop.Cli.MintAuth (MintAuthOpts (MintAuthOpts), mintAuth)
 import Coop.Cli.MintCertRdmrs (MintCertRdmrsOpts (MintCertRdmrsOpts), mintCertRdmrs)
 import Options.Applicative (
@@ -38,6 +39,7 @@ data Command
   | MintCertRdmrs MintCertRdmrsOpts
   | MintAuth MintAuthOpts
   | GarbageCollect GarbageCollectOpts
+  | GetState GetStateOpts
 
 pabConfigOptP :: Parser [Char]
 pabConfigOptP =
@@ -178,6 +180,19 @@ garbageCollectOptsP =
     <*> certRdmrWalletOptP
     <*> certRdmrAcOptP
 
+getStateOptsP :: Parser GetStateOpts
+getStateOptsP =
+  GetStateOpts
+    <$> pabConfigOptP
+    <*> deploymentFileOptP
+    <*> strOption
+      ( long "state-file"
+          <> metavar "STATE_FILE"
+          <> help "A JSON file to write the COOP state information to"
+          <> value "coop-state.json"
+          <> showDefault
+      )
+
 optionsP :: Parser Command
 optionsP =
   subparser $
@@ -193,6 +208,9 @@ optionsP =
       <> command
         "garbage-collect"
         (info (GarbageCollect <$> garbageCollectOptsP <* helper) (progDesc "Spend expired $CERT tokens locked at @CertV using $CERT-RDMR tokens"))
+      <> command
+        "get-state"
+        (info (GetState <$> getStateOptsP <* helper) (progDesc "Get COOP state"))
 
 parserInfo :: ParserInfo Command
 parserInfo = info (optionsP <**> helper) (fullDesc <> progDesc "COOP PAB cli tools")
@@ -205,3 +223,4 @@ main = do
     MintCertRdmrs opts -> mintCertRdmrs opts
     MintAuth opts -> mintAuth opts
     GarbageCollect opts -> garbageCollect opts
+    GetState opts -> getState opts

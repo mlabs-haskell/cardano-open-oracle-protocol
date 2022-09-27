@@ -14,6 +14,7 @@ module Coop.Types (
   CertMpParams (..),
   CertMpRedeemer (..),
   AuthDeployment (..),
+  CoopState (..),
 ) where
 
 import Control.Lens (makeFields)
@@ -61,6 +62,16 @@ data CoopDeployment = CoopDeployment
   -- ^ Deployed COOP Fact Statement validator
   , cd'auth :: AuthDeployment
   -- ^ Deployed COOP authentication deployment
+  }
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (ToJSON, FromJSON)
+
+-- | COOP state
+data CoopState = CoopState
+  { cs'certificates :: [CertDatum]
+  -- ^ COOP certificate datums attached at @CertV with $CERT datums
+  , cs'factStatements :: [FsDatum]
+  -- ^ COOP fact statement datums attached at @FsV with $FS datums
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)

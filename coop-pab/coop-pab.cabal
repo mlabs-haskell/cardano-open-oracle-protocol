@@ -148,6 +148,7 @@ executable coop-pab-cli
     Coop.Cli.Aux
     Coop.Cli.Deploy
     Coop.Cli.GarbageCollect
+    Coop.Cli.GetState
     Coop.Cli.MintAuth
     Coop.Cli.MintCertRdmrs
 
@@ -156,7 +157,6 @@ executable coop-pab-cli
     , base
     , bot-plutus-interface
     , bytestring
-    , cardano-api
     , containers
     , coop-hs-types
     , coop-pab

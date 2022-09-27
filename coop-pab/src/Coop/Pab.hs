@@ -10,10 +10,11 @@ module Coop.Pab (
   mkMintAuthTrx,
   mkMintFsTrx,
   mintAuthAndCert,
+  getState,
 ) where
 
 import Control.Lens ((^.))
-import Coop.Pab.Aux (Trx (Trx), currencyValue, findOutsAt, findOutsAt', findOutsAtHolding', findOutsAtHoldingCurrency, hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintOneShotTrx, submitTrx, toDatum, toRedeemer)
+import Coop.Pab.Aux (Trx (Trx), currencyValue, datumFromTxOut, findOutsAt, findOutsAt', findOutsAtHolding', findOutsAtHoldingCurrency, hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintOneShotTrx, submitTrx, toDatum, toRedeemer)
 import Coop.Types (
   AuthDeployment (AuthDeployment, ad'authMp, ad'authorityAc, ad'certMp, ad'certV),
   AuthMpParams (AuthMpParams),
@@ -24,6 +25,7 @@ import Coop.Types (
   CertMpRedeemer (CertMpBurn, CertMpMint),
   CoopDeployment (CoopDeployment, cd'auth, cd'fsMp, cd'fsV),
   CoopPlutus (cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkOneShotMp),
+  CoopState (CoopState),
   FsDatum,
   FsMpParams (FsMpParams),
   FsMpRedeemer (FsMpMint),
@@ -73,7 +75,7 @@ deployCoop coopPlutus aaWallet atLeastAaQ aaQToMint = do
   bool
     (throwError "deployCoop: Must specify more or equal $AA tokens to mint than is required to authorize $AUTH/$CERT")
     (return ())
-    (atLeastAaQ >= aaQToMint)
+    (atLeastAaQ <= aaQToMint)
 
   self <- ownFirstPaymentPubKeyHash
 
@@ -277,6 +279,37 @@ burnAuths coopDeployment self authOuts = do
   let trx = mkBurnAuthsTrx coopDeployment self authOuts
   submitTrx @Void trx
   logI "Finished"
+
+getState :: CoopDeployment -> Contract w s Text CoopState
+getState coopDeployment = do
+  let logI m = logInfo @String ("getState: " <> m)
+  logI "Starting"
+
+  let certVAddr = mkValidatorAddress . ad'certV . cd'auth $ coopDeployment
+      certCs = scriptCurrencySymbol . ad'certMp . cd'auth $ coopDeployment
+      fsVAddr = mkValidatorAddress . cd'fsV $ coopDeployment
+      fsCs = scriptCurrencySymbol . cd'fsMp $ coopDeployment
+
+  certOuts <- findOutsAtHoldingCurrency certVAddr certCs
+  fsOuts <- findOutsAtHoldingCurrency fsVAddr fsCs
+
+  certDatums <-
+    traverse
+      ( \(_, ciOut) -> do
+          mayDat <- datumFromTxOut @CertDatum ciOut
+          maybe (throwError "Can't parse CertDatum") return mayDat
+      )
+      (Map.toList certOuts)
+  fsDatums <-
+    traverse
+      ( \(_, ciOut) -> do
+          mayDat <- datumFromTxOut @FsDatum ciOut
+          maybe (throwError "Can't parse FsDatum") return mayDat
+      )
+      (Map.toList fsOuts)
+
+  logI "Finished"
+  return (CoopState certDatums fsDatums)
 
 -- | Queries
 findOutsAtCertV :: CoopDeployment -> (Value -> CertDatum -> Bool) -> Contract w s Text (Map TxOutRef ChainIndexTxOut)

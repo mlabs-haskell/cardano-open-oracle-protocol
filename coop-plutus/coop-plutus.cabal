@@ -135,9 +135,7 @@ test-suite coop-plutus-tests
     , containers
     , coop-hs-types
     , coop-plutus
-    , data-default
     , hspec
-    , hspec-core
     , plutarch
     , plutarch-test
     , plutus-ledger-api
