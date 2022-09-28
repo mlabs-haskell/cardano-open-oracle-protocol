@@ -1,29 +1,20 @@
 -- Calling the cli locally or through an ssh connection
 cliLocation:   local
 chainIndexUrl: "http://localhost:9083"
-networkId:     9
+networkId:     Mainnet
 
 -- Directory name of the script and data files
-scriptFileDir:      "./scripts"
+scriptFileDir:      ".work-dir/scripts"
 
 -- Directory for the signing key file(s)
-signingKeyFileDir:  "./signing-keys"
+signingKeyFileDir:  ".wallets"
 
 -- Directory where the encoded transaction files will be saved
-txFileDir:          "./txs"
-
--- Directory name of metadata files
-metadataDir: "./metadata"
-
--- Protocol params file location relative to the cardano-cli working directory (needed for the cli)
-protocolParamsFile: "./protocol.json"
+txFileDir:          ".work-dir/txs"
 
 -- Dry run mode will build the tx, but skip the submit step
-dryRun:             true
+dryRun:             false
 logLevel:           debug
-ownPubKeyHash:      "0f45aaf1b2959db6e5ff94dbb1f823bf257680c3c723ac2d49f97546"
-ownStakePubKeyHash: nothing
-tipPollingInterval: 10000000
 port:               9080
 enableTxEndpoint:   true
 

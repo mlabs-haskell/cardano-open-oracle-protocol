@@ -1,7 +1,7 @@
 { pkgs, haskell-nix, compiler-nix-name, plutip, shellHook }:
 haskell-nix.cabalProject' {
   src = ./.;
-  name = "oracle-hs-types";
+  name = "coop-hs-types";
   inherit compiler-nix-name;
   index-state = "2022-05-16T00:00:00Z";
   inherit (plutip) cabalProjectLocal;

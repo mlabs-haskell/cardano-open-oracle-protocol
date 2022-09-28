@@ -87,11 +87,11 @@
         "typed-protocols": "typed-protocols"
       },
       "locked": {
-        "lastModified": 1663073807,
-        "narHash": "sha256-CXfsY6ktsTu6Qn1pZcGisNu1+RZp1bM1S0audfZVdII=",
+        "lastModified": 1663932832,
+        "narHash": "sha256-PFlx3/e+BPoZtvfTGntfamjhEDtNBqLLAfClCZqGlN8=",
         "owner": "bladyjoker",
         "repo": "bot-plutus-interface",
-        "rev": "96c512d46514f5666f2310bc6a97ef1dd71e09aa",
+        "rev": "25f3d2b7afe319d6e97f2ecac1c6878fde55fa36",
         "type": "github"
       },
       "original": {

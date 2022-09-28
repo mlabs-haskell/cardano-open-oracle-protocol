@@ -6,6 +6,7 @@ module Main (main) where
 import Coop.Cli.Compile (CompileMode (COMPILE_DEBUG), CompileOpts (CompileOpts), compile)
 
 import Control.Applicative ((<**>))
+import Data.Kind (Type)
 import Options.Applicative (
   Parser,
   ParserInfo,
@@ -29,6 +30,7 @@ import Options.Applicative (
   value,
  )
 
+type Command :: Type
 data Command
   = Compile CompileOpts
 

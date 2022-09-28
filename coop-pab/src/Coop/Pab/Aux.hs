@@ -21,6 +21,8 @@ module Coop.Pab.Aux (
   findOutsAt',
   findOutsAtHolding',
   interval',
+  findOutsAtHoldingCurrency,
+  findOutsAtHoldingCurrency',
 ) where
 
 import BotPlutusInterface.Contract (runContract)
@@ -53,7 +55,7 @@ import Plutus.PAB.Core.ContractInstance.STM (Activity (Active))
 import Plutus.Script.Utils.V2.Scripts (scriptCurrencySymbol)
 import Plutus.V1.Ledger.Value (AssetClass (unAssetClass), assetClass, valueOf)
 import Plutus.V1.Ledger.Value qualified as Value
-import Plutus.V2.Ledger.Api (Address, BuiltinByteString, CurrencySymbol, Datum (Datum, getDatum), DatumHash, Extended, FromData (fromBuiltinData), Interval (Interval), LowerBound (LowerBound), MintingPolicy (MintingPolicy), Redeemer (Redeemer), Script, ToData, TokenName (TokenName), TxId (getTxId), TxOutRef (txOutRefId, txOutRefIdx), UpperBound (UpperBound), Value (Value), fromBuiltin, toBuiltinData, toData)
+import Plutus.V2.Ledger.Api (Address, BuiltinByteString, CurrencySymbol, Datum (Datum, getDatum), Extended, FromData (fromBuiltinData), Interval (Interval), LowerBound (LowerBound), MintingPolicy (MintingPolicy), Redeemer (Redeemer), Script, ToData, TokenName (TokenName), TxId (getTxId), TxOutRef (txOutRefId, txOutRefIdx), UpperBound (UpperBound), Value (Value), fromBuiltin, toBuiltinData, toData)
 import PlutusTx.AssocMap qualified as AssocMap
 import System.Directory (getTemporaryDirectory)
 import System.FilePath ((</>))
@@ -89,6 +91,7 @@ runBpi pabConf contract = do
           , ceContractLogs = contractLogs
           , ceCollateral = collateral
           }
+  Prelude.putStr $ show contractEnv
   result <- runContract contractEnv contract
   pure (contractInstanceID, result)
 
@@ -147,7 +150,7 @@ datumFromTxOut out =
     (out ^? ciTxOutScriptDatum)
   where
     logI m = logInfo @String ("datumFromTxOut: " <> m)
-    datumFromTxOut' :: forall w s (a :: Type). Typeable a => FromData a => (DatumHash, Maybe Datum) -> Contract w s Text (Maybe a)
+
     datumFromTxOut' (hash, mayDatum) = do
       dat <-
         maybe
@@ -165,7 +168,7 @@ datumFromTxOut out =
         (fromDatum dat)
 
 findOutsAt :: forall a w s. Typeable a => FromData a => Address -> (Value -> Maybe a -> Bool) -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
-findOutsAt addr pred = do
+findOutsAt addr p = do
   let logI m = logInfo @String ("findOutsAt: " <> m)
   logI "Starting"
 
@@ -174,8 +177,7 @@ findOutsAt addr pred = do
     filterM
       ( \(_, out) -> do
           dat <- datumFromTxOut @a out
-          logI $ show (out ^. ciTxOutValue)
-          return $ pred (out ^. ciTxOutValue) dat
+          return $ p (out ^. ciTxOutValue) dat
       )
       (Map.toList outs)
 
@@ -184,6 +186,12 @@ findOutsAt addr pred = do
 
 findOutsAt' :: forall a w s. (Typeable a, FromData a) => PaymentPubKeyHash -> (Value -> Maybe a -> Bool) -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
 findOutsAt' ppkh = findOutsAt @a (pubKeyHashAddress ppkh Nothing)
+
+findOutsAtHoldingCurrency :: Address -> CurrencySymbol -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
+findOutsAtHoldingCurrency addr cs = findOutsAt @Void addr (\v _ -> hasCurrency v cs)
+
+findOutsAtHoldingCurrency' :: PaymentPubKeyHash -> CurrencySymbol -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
+findOutsAtHoldingCurrency' wallet = findOutsAtHoldingCurrency (pubKeyHashAddress wallet Nothing)
 
 findOutsAtHolding :: Address -> AssetClass -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
 findOutsAtHolding addr ac = do

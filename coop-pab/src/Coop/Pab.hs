@@ -9,10 +9,12 @@ module Coop.Pab (
   mkMintCertTrx,
   mkMintAuthTrx,
   mkMintFsTrx,
+  mintAuthAndCert,
+  getState,
 ) where
 
 import Control.Lens ((^.))
-import Coop.Pab.Aux (Trx (Trx), currencyValue, findOutsAt, findOutsAt', findOutsAtHolding', hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintOneShotTrx, submitTrx, toDatum, toRedeemer)
+import Coop.Pab.Aux (Trx (Trx), currencyValue, datumFromTxOut, findOutsAt, findOutsAt', findOutsAtHolding', findOutsAtHoldingCurrency, hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintOneShotTrx, submitTrx, toDatum, toRedeemer)
 import Coop.Types (
   AuthDeployment (AuthDeployment, ad'authMp, ad'authorityAc, ad'certMp, ad'certV),
   AuthMpParams (AuthMpParams),
@@ -23,19 +25,21 @@ import Coop.Types (
   CertMpRedeemer (CertMpBurn, CertMpMint),
   CoopDeployment (CoopDeployment, cd'auth, cd'fsMp, cd'fsV),
   CoopPlutus (cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkOneShotMp),
+  CoopState (CoopState),
   FsDatum,
   FsMpParams (FsMpParams),
   FsMpRedeemer (FsMpMint),
   cp'certV,
  )
+import Data.Bool (bool)
 import Data.Foldable (toList)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Text (Text)
 import Data.Void (Void)
-import Ledger (PaymentPubKeyHash, applyArguments, getCardanoTxId)
+import Ledger (PaymentPubKeyHash, applyArguments, getCardanoTxId, interval)
 import Ledger.Tx (ChainIndexTxOut, ciTxOutValue)
-import Plutus.Contract (Contract, currentTime, submitTxConstraintsWith, throwError)
+import Plutus.Contract (Contract, currentTime, ownFirstPaymentPubKeyHash, submitTxConstraintsWith, throwError)
 import Plutus.Contract.Constraints (mustBeSignedBy, mustMintValueWithRedeemer, mustPayToOtherScript, mustPayToPubKey, mustSpendPubKeyOutput, mustSpendScriptOutput, mustValidateIn, otherData, ownPaymentPubKeyHash, plutusV2MintingPolicy, plutusV2OtherScript, unspentOutputs)
 import Plutus.Contract.Logging (logInfo)
 import Plutus.Script.Utils.V2.Address (mkValidatorAddress)
@@ -49,6 +53,7 @@ import Plutus.V2.Ledger.Api (
   Extended (Finite, PosInf),
   LedgerBytes (LedgerBytes),
   MintingPolicy (MintingPolicy),
+  POSIXTime,
   POSIXTimeRange,
   TokenName (TokenName),
   TxId,
@@ -62,23 +67,33 @@ import Test.Plutip.Internal.BotPlutusInterface.Setup ()
 import Test.Plutip.Internal.LocalCluster ()
 import Text.Printf (printf)
 
-deployCoop :: CoopPlutus -> PaymentPubKeyHash -> PaymentPubKeyHash -> Integer -> Contract w s Text CoopDeployment
-deployCoop coopPlutus self aaWallet atLeastAaQ = do
+deployCoop :: CoopPlutus -> PaymentPubKeyHash -> Integer -> Integer -> Contract w s Text CoopDeployment
+deployCoop coopPlutus aaWallet atLeastAaQ aaQToMint = do
   let logI m = logInfo @String ("deployCoop: " <> m)
   logI "Starting"
+
+  bool
+    (throwError "deployCoop: Must specify more or equal $AA tokens to mint than is required to authorize $AUTH/$CERT")
+    (return ())
+    (atLeastAaQ <= aaQToMint)
+
+  self <- ownFirstPaymentPubKeyHash
 
   outs <- findOutsAt' @Void self (\_ _ -> True)
   (aaOut, coopOut) <- case Map.toList outs of
     o1 : o2 : _ -> return (o1, o2)
     _ -> throwError "deployCoop: Not enough outputs found to use for making $ONE-SHOTs"
 
+  logI $ printf "Using TxOutRef %s for minting $AA one-shot tokens" (show $ fst aaOut)
+  logI $ printf "Using TxOutRef %s for minting $COOP one-shot tokens" (show $ fst coopOut)
+
   let mkOneShotMp = cp'mkOneShotMp coopPlutus
-      (mintAaTrx, aaAc) = mkMintOneShotTrx self aaWallet aaOut mkOneShotMp atLeastAaQ
+      (mintAaTrx, aaAc) = mkMintOneShotTrx self aaWallet aaOut mkOneShotMp aaQToMint
       (mintCoopTrx, coopAc) = mkMintOneShotTrx self self coopOut mkOneShotMp 1
 
   submitTrx @Void (mintAaTrx <> mintCoopTrx)
-  logI $ "Created $COOP instance token: " <> show coopAc
-  logI $ "Created $AA authentication token: " <> show aaAc
+  logI $ printf "Created the $COOP instance token %s and sent it to God Wallet %s" (show coopAc) (show self)
+  logI $ printf "Created %d $AA (Authentication Authority) tokens %s and sent them to AA Wallet %s" atLeastAaQ (show aaAc) (show aaWallet)
 
   let authDeployment = mkAuthDeployment coopPlutus aaAc atLeastAaQ
       coopDeployment = mkCoopDeployment coopPlutus coopAc authDeployment
@@ -110,16 +125,17 @@ mkCoopDeployment coopPlutus coopAc authDeployment =
             ]
    in CoopDeployment coopAc fsMp fsV authDeployment
   where
-    authParamsFromDeployment authDeployment =
+    authParamsFromDeployment ad =
       AuthParams
-        { ap'authTokenCs = scriptCurrencySymbol (ad'authMp authDeployment)
-        , ap'certTokenCs = scriptCurrencySymbol (ad'certMp authDeployment)
+        { ap'authTokenCs = scriptCurrencySymbol (ad'authMp ad)
+        , ap'certTokenCs = scriptCurrencySymbol (ad'certMp ad)
         }
 
-mintCertRedeemers :: CoopPlutus -> PaymentPubKeyHash -> PaymentPubKeyHash -> Integer -> Contract w s Text AssetClass
-mintCertRedeemers coopPlutus self certRedeemerWallet q = do
+mintCertRedeemers :: CoopPlutus -> Integer -> Contract w s Text AssetClass
+mintCertRedeemers coopPlutus q = do
   let logI m = logInfo @String ("mintCertR: " <> m)
   logI "Starting"
+  self <- ownFirstPaymentPubKeyHash
 
   outs <- findOutsAt' @Void self (\_ _ -> True)
   out <- case reverse . Map.toList $ outs of -- FIXME: If I don't shuffle this I get InsuficientCollateral
@@ -127,7 +143,7 @@ mintCertRedeemers coopPlutus self certRedeemerWallet q = do
     _ -> throwError "mintCertR: Not enough outputs found to use for making $ONE-SHOTs"
 
   let mkOneShotMp = cp'mkOneShotMp coopPlutus
-      (mintCertRTrx, certRAc) = mkMintOneShotTrx self certRedeemerWallet out mkOneShotMp q
+      (mintCertRTrx, certRAc) = mkMintOneShotTrx self self out mkOneShotMp q
 
   submitTrx @Void mintCertRTrx
   logI $ printf "Created $CertR redeemer token for redeeming $CERT outputs @CertV: %s" (show certRAc)
@@ -159,10 +175,19 @@ mkMintCertTrx coopDeployment self redeemerAc validityInterval aaOuts =
           <> mconcat (mustSpendPubKeyOutput <$> aaOrefs)
    in (Trx lookups constraints, assetClass certCs certTn)
 
-burnCerts :: CoopDeployment -> PaymentPubKeyHash -> Map TxOutRef ChainIndexTxOut -> Map TxOutRef ChainIndexTxOut -> Contract w s Text TxId
-burnCerts coopDeployment self certOuts certRdmrOuts = do
+burnCerts :: CoopDeployment -> AssetClass -> Contract w s Text TxId
+burnCerts coopDeployment certRdmrAc = do
   let logI m = logInfo @String ("burnCerts: " <> m)
   logI "Starting"
+  self <- ownFirstPaymentPubKeyHash
+  certRdmrOuts <- findOutsAtHolding' self certRdmrAc
+  certOuts <- findOutsAtHoldingCurrency (mkValidatorAddress . ad'certV . cd'auth $ coopDeployment) (scriptCurrencySymbol . ad'certMp . cd'auth $ coopDeployment)
+  logI $ printf "Found %d $CERT ouputs at @CertV" (length certOuts)
+  bool
+    (throwError "burnCerts: There should be some $CERT inputs")
+    (pure ())
+    $ not (null certOuts)
+
   now <- currentTime
   let certMp = (ad'certMp . cd'auth) coopDeployment
       certV = (ad'certV . cd'auth) coopDeployment
@@ -179,13 +204,13 @@ burnCerts coopDeployment self certOuts certRdmrOuts = do
           <> unspentOutputs certRdmrOuts
           <> unspentOutputs certOuts
 
-      tx =
+      constraints =
         mustMintValueWithRedeemer (toRedeemer CertMpBurn) certVal
           <> mconcat (mustSpendPubKeyOutput <$> certRdmdrOrefs)
           <> mconcat ((\oref -> mustSpendScriptOutput oref (toRedeemer ())) <$> certOrefs)
           <> mustValidateIn timeRange
 
-  tx <- submitTxConstraintsWith @Void lookups tx
+  tx <- submitTxConstraintsWith @Void lookups constraints
   logI "Finished"
   return (getCardanoTxId tx)
 
@@ -207,6 +232,28 @@ mkMintAuthTrx coopDeployment self authWallets authQEach aaOuts =
           <> mconcat ((`mustPayToPubKey` (authValEach <> minUtxoAdaValue)) <$> authWallets)
           <> mconcat (mustSpendPubKeyOutput <$> aaOrefs)
    in (Trx lookups constraints, assetClass authCs authTn)
+
+mintAuthAndCert ::
+  CoopDeployment ->
+  [PaymentPubKeyHash] ->
+  Integer ->
+  AssetClass ->
+  POSIXTime ->
+  POSIXTime ->
+  Contract w s Text (AssetClass, AssetClass)
+mintAuthAndCert coopDeployment authWallets nAuthTokensPerWallet certRdmrAc from to = do
+  let logI m = logInfo @String ("mintAuthAndCert: " <> m)
+  logI $ printf "Minting $AUTH and $CERT tokens with %d $AUTH wallets distributing %d $AUTH tokens to each with validity interval %s " (length authWallets) nAuthTokensPerWallet (show $ interval from to)
+  now <- currentTime
+  logI $ printf "Current time is %s" (show now)
+  self <- ownFirstPaymentPubKeyHash
+  aaOuts <- findOutsAtHoldingAa self coopDeployment
+  let validityInterval = interval from to
+  let (mintAuthTrx, authAc) = mkMintAuthTrx coopDeployment self authWallets nAuthTokensPerWallet aaOuts
+      (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRdmrAc validityInterval aaOuts
+  submitTrx @Void (mintAuthTrx <> mintCertTrx)
+  logI "Finished"
+  return (certAc, authAc)
 
 mkBurnAuthsTrx :: CoopDeployment -> PaymentPubKeyHash -> Map TxOutRef ChainIndexTxOut -> Trx i o a
 mkBurnAuthsTrx coopDeployment self authOuts = do
@@ -233,9 +280,40 @@ burnAuths coopDeployment self authOuts = do
   submitTrx @Void trx
   logI "Finished"
 
+getState :: CoopDeployment -> Contract w s Text CoopState
+getState coopDeployment = do
+  let logI m = logInfo @String ("getState: " <> m)
+  logI "Starting"
+
+  let certVAddr = mkValidatorAddress . ad'certV . cd'auth $ coopDeployment
+      certCs = scriptCurrencySymbol . ad'certMp . cd'auth $ coopDeployment
+      fsVAddr = mkValidatorAddress . cd'fsV $ coopDeployment
+      fsCs = scriptCurrencySymbol . cd'fsMp $ coopDeployment
+
+  certOuts <- findOutsAtHoldingCurrency certVAddr certCs
+  fsOuts <- findOutsAtHoldingCurrency fsVAddr fsCs
+
+  certDatums <-
+    traverse
+      ( \(_, ciOut) -> do
+          mayDat <- datumFromTxOut @CertDatum ciOut
+          maybe (throwError "Can't parse CertDatum") return mayDat
+      )
+      (Map.toList certOuts)
+  fsDatums <-
+    traverse
+      ( \(_, ciOut) -> do
+          mayDat <- datumFromTxOut @FsDatum ciOut
+          maybe (throwError "Can't parse FsDatum") return mayDat
+      )
+      (Map.toList fsOuts)
+
+  logI "Finished"
+  return (CoopState certDatums fsDatums)
+
 -- | Queries
 findOutsAtCertV :: CoopDeployment -> (Value -> CertDatum -> Bool) -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
-findOutsAtCertV coopDeployment pred = do
+findOutsAtCertV coopDeployment p = do
   let logI m = logInfo @String ("findOutsAtCertV: " <> m)
 
   logI "Starting"
@@ -243,7 +321,7 @@ findOutsAtCertV coopDeployment pred = do
   let certVAddr = (mkValidatorAddress . ad'certV . cd'auth) coopDeployment
   findOutsAt @CertDatum
     certVAddr
-    (maybe False . pred)
+    (maybe False . p)
 
 findOutsAtCertVWithCERT :: CoopDeployment -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
 findOutsAtCertVWithCERT coopDeployment = findOutsAtCertV coopDeployment (\v _ -> hasCurrency v ((scriptCurrencySymbol . ad'certMp . cd'auth) coopDeployment))

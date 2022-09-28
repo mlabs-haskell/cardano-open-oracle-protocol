@@ -7,11 +7,14 @@ import Coop.Plutus.Aux (mkOneShotMp)
 import Coop.Types (CoopPlutus (CoopPlutus, cp'certV, cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkOneShotMp))
 import Data.Aeson (encode)
 import Data.ByteString.Lazy (writeFile)
+import Data.Kind (Type)
 import Plutarch (Config (Config), TracingMode (DoTracing, NoTracing))
 import Plutarch qualified (compile)
 
+type CompileMode :: Type
 data CompileMode = COMPILE_PROD | COMPILE_DEBUG deriving stock (Show, Read, Eq)
 
+type CompileOpts :: Type
 data CompileOpts = CompileOpts
   { co'Mode :: CompileMode
   , co'File :: FilePath
