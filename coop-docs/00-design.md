@@ -13,18 +13,18 @@ The main design goals for this oracle protocol are:
 
 ## Features
 
-- 1. Users CAN find published Fact Statements
-  - Any user with access to the Cardano ledger can inspect unspent outputs at the fact statement validator script (ie. `@FsV`) associated with their trusted COOP Publisher to find fact statements
-- 1.1 Users CAN publish a fact statement
+- 1 Users CAN publish fact statements
   - Any user with access to a Cardano wallet and a COOP Publisher can publish a fact statement
-- 1.2 Submitters can eventually claim 'min UTxO $ADA'
+- 1.1 Users CAN find published fact statements
+  - Any user with access to the Cardano ledger can inspect unspent outputs at the fact statement validator script (ie. `@FsV`) associated with their trusted COOP Publisher to find fact statements
+- 1.2 Users can eventually claim minimal Ada locked at UTxOs they create
   - Each fact statement unspent output can be collected and spent by the Submitter after a pre-specified time had passed for the published fact statement
-- 1.3 Submitter SHOULD NOT pay for failed Publishing
-- 1.4 Consumer CAN verify that a FSUTxO and the Fact Statement it carries is authentic
-- 1.5 Consumer CAN assert the availability of published fact statements
-- 2. Publishers CAN collect fees
+- 1.3 Users SHOULD NOT pay for failed publishing
+- 1.4 Users CAN assert the authenticity of published fact statements
+- 1.5 Users CAN assert the availability of published fact statements
+- 2 Publishers CAN collect fees
   - Any COOP Publisher can include a fee for their service by including it in the fact statement minting transaction ([caveat](#fee-escrow))
-- 2.1 Publishers can collect 'min UTxO $ADA'
+- 2.1 Publishers can collect  minimal Ada locked at UTxOs they create
   - COOP Publisher can collect 'min UTxO $ADA' created by various operational transactions
 - 2.2 Publishers can manage security
   - By using a novel authentication scheme COOP Publisher are able to 'authorize' fact statement minting using ephemeral authentication tokens (ie. $AA/$AUTH/$CERT)
