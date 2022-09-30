@@ -55,29 +55,3 @@ Reference inputs are fundamentally important in the context of oracles, which ar
 Reference inputs may limit our design flexibility with respect to sharing publication costs/deposits equitably across stakeholders—once information is published on-chain, and as long as it remains available on-chain, no restrictions or conditions may be placed on anyone's ability to reference it in their transactions. This means that information from reference-input-based oracles is free to use after its first use. However, a sustainable business model for such oracles may still possible, as shown in the design below. Furthermore, freedom of information on the blockchain may itself be valuable according to the values of the decentralization movement.
 
 Inline datums and reference scripts are tools that may be useful in pursuit of financial sustainability for the oracle protocol by reducing transaction costs and infrastructure requirements. They are not essential to the oracle design, but should prove valuable in practice.
-
-### Fee Escrow
-
-**STATUS**: We're not implemeting the fee escrow due to added complexity, time lag and cost that it would introduce in the system.
-
-[From Wikipedia](https://en.wikipedia.org/wiki/Escrow)
-
-> An escrow is a contractual arrangement in which a third party (the stakeholder or escrow agent) receives and disburses money or property for the primary transacting parties, with the disbursement dependent on conditions agreed to by the transacting parties
-
-Fee escrow protocol SHOULD lock the **Publishing Fee** in a @FeeV Plutus validator via a Fee transaction cosigned by both Publisher and Submitter. The Publisher can claim the Fee by proving a successful Publishing and Submitter can claim the Fee back by proving a failed Publishing.
-
-#### Properties
-
-1. Publisher MUST be able assert the existence of the valid Fee escrow by inspecting the submitted Fee transaction, before proceeding to doing any additional work.
-2. Publisher MUST be able to claim the Fee by providing a proof of a successful Publishing.
-3. Submitter MUST be able to claim the Fee by providing a proof of a failed Publishing.
-4. Submitter MUST be able to reclaim the Cardano operational fees (ie. minUtxoAda).
-
-Pros:
-
-- Prop 2 is strongly satisfied
-
-Cons:
-
-- More transactions,
-- Added complexity, time lag and cost.
