@@ -2,7 +2,7 @@
 
 ## Protocol parameters
 
-Parameters used at Protocol Genesis.
+Parameters set at Protocol Genesis.
 
 ### <a name="total-aa-tokens">Total Authorization Authority tokens</a>
 
@@ -16,6 +16,26 @@ These tokens can be distributed to any number of [Authentication Authority](#aut
 
 Required quantity of [$AA](#aa-token) tokens that must be consumed when [minting authentication tokens](#mint-authentication-tx).
 These tokens can be in one or many inputs, enabling multi-signature scheme to be adopted.
+
+## Protocol deployment
+
+To following information is sufficient to operate the Protocol:
+
+1. [@FsV](#fs-validator) validator script (and address),
+2. [@CertV](#cert-validator) validator script (and address),
+3. [$CERT-policy](#cert-policy) minting policy script (and currency symbol),
+4. [$AUTH-policy](#auth-policy) minting policy script (and currency symbol),
+5. [$FS-policy](#fs-policy) minting policy script (and currency symbol).
+6. [Required Authorization Authority tokens](#required-aa-tokens)
+
+## Protocol state
+
+To understand the state of the Protocol it's sufficient to query the UTxOs at:
+
+1. [@CertV](#cert-validator) validator that holds the non-garbage-collected certificates,
+2. [@FsV](#fs-validator) validator that holds the non-garbage-collected fact statements.
+
+TODO: Add a relational schema to convey the state structure and semantics.
 
 ## <a name="transactions">Transactions</a>
 
@@ -374,6 +394,8 @@ Validation rules for burning [$CERT](#cert-token) tokens:
 ### <a name="fs-validator">@FsV</a>
 
 ### <a name="consumer-script">Consumer script</a>
+
+Any script that references COOP `Fact Statement UTxOs`.
 
 ## <a name="wallets">Wallets</a>
 
