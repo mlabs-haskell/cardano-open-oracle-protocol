@@ -2,7 +2,7 @@
 
 ## Protocol parameters
 
-Parameters set at Protocol Genesis.
+Parameters set at [Protocol genesis](#protocol-genesis).
 
 ### <a name="total-aa-tokens">Total Authorization Authority tokens</a>
 
@@ -17,16 +17,15 @@ These tokens can be distributed to any number of [Authentication Authority](#aut
 Required quantity of [$AA](#aa-token) tokens that must be consumed when [minting authentication tokens](#mint-authentication-tx).
 These tokens can be in one or many inputs, enabling multi-signature scheme to be adopted.
 
-## Protocol deployment
+## <a name="protocol-genesis">Protocol genesis</a>
 
-To following information is sufficient to operate the Protocol:
+To following is instantiated by [God](#god):
 
-1. [@FsV](#fs-validator) validator script (and address),
-2. [@CertV](#cert-validator) validator script (and address),
-3. [$CERT-policy](#cert-policy) minting policy script (and currency symbol),
-4. [$AUTH-policy](#auth-policy) minting policy script (and currency symbol),
-5. [$FS-policy](#fs-policy) minting policy script (and currency symbol).
-6. [Required Authorization Authority tokens](#required-aa-tokens)
+1. [@FsV](#fs-validator) validator script,
+2. [@CertV](#cert-validator) validator script,
+3. [$CERT-policy](#cert-policy) minting policy script,
+4. [$AUTH-policy](#auth-policy) minting policy script,
+5. [$FS-policy](#fs-policy) minting policy script.
 
 ## Protocol state
 
@@ -260,7 +259,7 @@ graph TD
 
 - Policy - [$AA-policy](#aa-policy)
 - Token Name - is set to a hash of the consumed output denoted by `oref` (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)),
-- Quantity - the total [$AA](#aa-token) tokens minted at protocol genesis (see [Total Authorization Authority tokens](#total-aa-tokens) protocol parameter),
+- Quantity - the total [$AA](#aa-token) tokens minted at [Protocol genesis](#protocol-genesis) (see [Total Authorization Authority tokens](#total-aa-tokens) protocol parameter),
 - Provenance - must be held by [Authentication Authority](#authentication-authority) wallets and kept safe in an isolated environment
   - Minted with [mint-aa-tx](#mint-aa-tx) transaction,
   - Burned never,
@@ -314,84 +313,92 @@ These tokens are spent from [Submitter](#submitter) wallets and paid to the [Fee
 
 ### <a name="aa-policy">$AA-policy</a>
 
-[$AA](#aa-token) minting policy script that validates minting of 'One Shot' [Authentication Authority](#authentication-authority) (ie. [$AA](#aa-token)) tokens in [minting authentication authority tokens](#mint-aa-tx) transaction.
+[$AA](#aa-token) minting policy script.
 
-Policy is implemented as `Coop.Plutus.Aux.mkOneShotMp quantity tokenName oref` such that
+Script is defined in `Coop.Plutus.Aux.mkOneShotMp` and is instantiated at [Protocol genesis](#protocol-genesis) with the following parameters:
 
 - `quantity` denotes the [total amount of [$AA](#aa-token) tokens to mint](#total-aa-tokens),
 - `tokenName` is set to a [hash of the of the 'oref' output](#hashing-for-uniqueness),
-- `oref` the output owned by the [Authentication Authority](#authentication-authority) wallet that must be consumed in order to validate minting.
+- `oref` the output owned by the [God](#god) wallet that must be consumed in order to validate minting.
 
-Validation rules:
+Participates in transactions:
 
-- check that a specified `TxOutRef` is consumed,
-- check that a specified quantity of tokens with a specified token name are minted,
-- no paying requirements are enforced.
+- [mint-aa-tx](#mint-aa-tx) mints [$AA](#aa-token) tokens and pays them to the [Authentication Authority](#authentication-authority).
+
+Script is invoked only once at [Protocol genesis](#protocol-genesis).
 
 ### <a name="cert-policy">$CERT-policy</a>
 
-[$CERT](#cert-token) minting policy script that validates minting of [$CERT](#cert-token) tokens in [minting authentication](#mint-authentication-tx) transactions.
+[$CERT](#cert-token) minting policy script.
 
-Policy is defined in `Coop.Plutus.mkCertMp` and is instantiated with the `CertMpParams` parameter:
+Script is defined in `Coop.Plutus.mkCertMp` and is instantiated at [Protocol genesis](#protocol-genesis) with the `Coop.Types.CertMpParams` parameter.
 
-```haskell
--- | CertMp initial parameters
-data CertMpParams = CertMpParams
-  { cmp'authAuthorityAc :: AssetClass
-  -- ^ $AA (Authentication authority) tokens required to authorize $CERT minting
-  , cmp'requiredAtLeastAaQ :: Integer
-  -- ^ $AA token quantity required to authorize $CERT minting
-  , cmp'certVAddress :: Address
-  -- ^ Certificate validator @CertV address to pay the $CERT tokens to
-  }
-```
+Participates in transactions:
 
-Policy support two redeemers:
+- [mint-authentication-tx](#mint-authentication-tx) mints [$CERT](#cert-token) tokens and pays them to the [@CertV](#cert-validator) validator,
+- [gc-certificate-tx](#gc-certificate-tx) burns [$CERT](#cert-token) tokens spent from to the [@CertV](#cert-validator) validator.
 
-```haskell
--- | CertMp redeemer denoting $CERT mint or burning actions
-data CertMpRedeemer = CertMpBurn | CertMpMint
-```
-
-Policy works with `CertDatum` datum:
-
-```haskell
--- | Datum locked at @CertV containing information about $AUTH tokens used in authorizing $FS minting
-data CertDatum = CertDatum
-  { cert'id :: LedgerBytes
-  -- ^ Certificate unique identifier (matches $CERT and $AUTH token names)
-  , cert'validity :: POSIXTimeRange
-  -- ^ Certificate validity interval after which associated $AUTH tokens can't be used to authorize $FS minting
-  , cert'redeemerAc :: AssetClass
-  -- ^ $CERT-RMDR asset class that must be spent to 'garbage collect' the @CertV UTxO after the certificate had expired
-  }
-```
-
-Validation rules for minting [$CERT](#cert-token) tokens:
-
-- `CertMpMint` redeemer is used,
-- check that the `CertMpParams.cmp'requiredAtLeastAaQ` quantity of `CertMpParams.cmp'authAuthorityAc` are spent (See [Required Authorization Authority tokens](#required-aa-tokens)),
-- accumulate and hash [$AA](#aa-token) inputs consumed into a [unique token name](#hashing-for-uniqueness) to use for the [$CERT](#cert-token) token minted,
-- check that `$CERT x 1` is paid to [@CertV](#cert-validator) validator as indicated in `CertMpParams.cmp'certVAddress`,
-- check that [$CERT](#cert-token) output at [@CertV](#cert-validator) contains a `CertDatum` such that `CertDatum.cert'id` matches the previously constructed unique token name.
-
-Validation rules for burning [$CERT](#cert-token) tokens:
-
-- `CertMpBurn` redeemer is used,
-- for `n` consumed input containing the [$CERT](#cert-token) token,
-  - check the transaction validates after the certificate validity period as indicated in the `CertDatum.cert'validity` field of the consumed datum,
-  - check that `$CERT-RDMR x 1` value as specified in the `CertDatum.cert'redeemerAc` is spent,
-  - accumulate the spent `$CERT x 1` value to burn,
-- check that all the spent `$CERT x n` are also burned
-- no paying requirements are enforced for [$CERT-RDMR](#cert-rdmr-token) tokens.
-
-### <a name="cert-validator">@CertV</a>
+Script is invoked throughout the Protocol lifetime.
 
 ### <a name="auth-policy">$AUTH-policy</a>
 
+[$AUTH](#auth-token) minting policy script.
+
+Script is defined in `Coop.Plutus.mkAuthMp` and is instantiated at [Protocol genesis](#protocol-genesis) with the `Coop.Types.AuthMpParams` parameter.
+
+Participates in transactions:
+
+- [mint-authentication-tx](#mint-authentication-tx) mints [$AUTH](#auth-token) tokens and pays them to the [Authenticator](#authenticator) wallet,
+- [mint-fact-statement-tx](#mint-fact-statement-tx) burns [$AUTH](#auth-token) tokens spent from [Authenticator](#authenticator) wallet.
+
+Scripts is invoked throughout the Protocol lifetime.
+
 ### <a name="fs-policy">$FS-policy</a>
 
+[$FS](#fs-token) minting policy script.
+
+Script is defined in `Coop.Plutus.mkFsMp` and is instantiated at [Protocol genesis](#protocol-genesis) with the `Coop.Types.FsMpParams` parameter.
+
+Participates in transactions:
+
+- [mint-fact-statement-tx](#mint-fact-statement-tx) mints [$FS](#fs-token) tokens and pays them to [@FsV](#fs-validator) validator,
+- [gc-fact-statement-tx](#gc-fact-statement-tx) burns [$FS](#fs-token) tokens spent from to [@FsV](#fs-validator) validator.
+
+Script is invoked throughout the Protocol lifetime.
+
+### <a name="cert-validator">@CertV</a>
+
+Script is defined in `Coop.Plutus.certV` and is instantiated at [Protocol genesis](#protocol-genesis).
+
+Validator guarding `Certificate UTxOs` that contain:
+
+1. `Coop.Types.CertDatum` datum,
+2. [$CERT](#cert-token) token.
+
+Participates in transactions:
+
+- [mint-authentication-tx](#mint-authentication-tx) pays to the `@CertV`,
+- [mint-fact-statement-tx](#mint-fact-statement-tx) references the `@CertV` outputs,
+- [gc-certificate-tx](#gc-certificate-tx) spends the `@CertV` outputs.
+
+Script is invoked throughout the Protocol lifetime.
+
 ### <a name="fs-validator">@FsV</a>
+
+Script is defined in `Coop.Plutus.fsV` and is instantiated at [Protocol genesis](#protocol-genesis).
+
+Validator guarding `Fact Statement UTxOs` that contain:
+
+1. `Coop.Types.FsDatum` datum,
+2. [$FS](#fs-token) token.
+
+Participates in transactions:
+
+- [mint-fact-statement-tx](#mint-fact-statement-tx) pays to the `@FsV`,
+- [ref-fact-statement-tx](#ref-fact-statement-tx) references the `@FsV` outputs,
+- [gc-fact-statement-tx](#gc-fact-statement-tx) spends the `@FsV` outputs.
+
+Script is invoked throughout the Protocol lifetime.
 
 ### <a name="consumer-script">Consumer script</a>
 
@@ -401,7 +408,7 @@ Any script that references COOP `Fact Statement UTxOs`.
 
 ### <a name="god">God</a>
 
-A wallet used to initialize the protocol (ie. Protocol Genesis). Can be discarded after use.
+A wallet used to initialize the protocol (ie. [Protocol genesis](#protocol-genesis)). Can be discarded after use.
 
 ### <a name="authentication-authority">Authentication Authority</a>
 
@@ -500,6 +507,22 @@ Examples:
 
 - `mint-sometokens-tx quantity tokenName`
 - `always-validates-tx`
+
+### <a name="hashing-for-uniqueness">Hashing inputs for uniqueness</a>
+
+Here we specify the procedure used by `COOP` to create unique identifiers on-chain.
+Once created these are used as `TokenName` and various identifiers.
+
+The procedure takes in a list of output references and returns a unique bytestring:
+
+1. Given a list of output references denoted as `orefs :: [(TxId, Int)]`,
+2. Order `orefs` to create `sortedOrefs :: [(TxId, Int)]`,
+3. Convert `TxId` and `OutputIndex` in `sortedOrefs` to a bytestring format to create `sortedOrefsB :: [(ByteString, ByteString)]`,
+4. Convert `sortedOrefsB` to a bytestring format by concatenating all the elements to create `normalized :: Bytestring`,
+5. Hash that `normalized` bytestring with [Blake2b_256](https://hackage.haskell.org/package/cryptonite-0.30/docs/Crypto-Hash-Algorithms.html#t:Blake2b_256) to create `unique :: ByteString`,
+6. Return `unique` bytestring.
+
+This procedure is implemented in `Coop.Pab.Aux.hashTxInputs` function used offchain, and `Coop.Plutus.Aux.hashTxInputs` function used onchain.
 
 ## References
 
