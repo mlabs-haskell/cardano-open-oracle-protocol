@@ -522,7 +522,7 @@ The procedure takes in a list of output references and returns a unique bytestri
 5. Hash that `normalized` bytestring with [Blake2b_256](https://hackage.haskell.org/package/cryptonite-0.30/docs/Crypto-Hash-Algorithms.html#t:Blake2b_256) to create `unique :: ByteString`,
 6. Return `unique` bytestring.
 
-This procedure is implemented in `Coop.Pab.Aux.hashTxInputs` function used offchain, and `Coop.Plutus.Aux.hashTxInputs` function used onchain.
+This procedure is implemented in `Coop.Pab.Aux.hashTxInputs` function used off-chain, and `Coop.Plutus.Aux.hashTxInputs` function used on-chain.
 
 ## References
 
