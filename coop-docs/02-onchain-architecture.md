@@ -23,7 +23,7 @@ These tokens can be in one or many inputs, enabling multi-signature scheme to be
 
 **Scripts invoked:**
 
-- [$AA-policy](#aa-policy) - [$AA](#aa-token) minting policy script
+- [$AA-policy](#aa-policy)
 
 **Signatories:**
 
@@ -31,7 +31,7 @@ These tokens can be in one or many inputs, enabling multi-signature scheme to be
 
 **Scenario:**
 
-`God` mints [$AA](#aa-token) tokens and sends them to a single [Authentication Authority](#authentication-authority).
+[God](#god) mints [$AA](#aa-token) tokens and sends them to a single [Authentication Authority](#authentication-authority).
 
 ```mermaid
 graph TD
@@ -46,14 +46,14 @@ graph TD
     MintAaTx ---> |"$AA/hash(oref) x quantity"|AaWallet
 ```
 
-The `TokenName` of the [$AA](#aa-token) token is set to a hash of the input pointed to by `oref` (See [Hashing inputs for uniqueness](#hashing-for-uniqueness)).
+The `TokenName` of the [$AA](#aa-token) token is set to a hash of the input pointed to by `oref` (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)).
 
 ### <a name="mint-authentication-tx">Mint authentication tokens - mint-authentication-tx</a>
 
 **Scripts invoked:**
 
-- [$AUTH-policy](#auth-policy) - [$AUTH](#auth-token) minting policy script
-- [$CERT-policy](#cert-policy) - [$CERT](#cert-token) minting policy script
+- [$AUTH-policy](#auth-policy)
+- [$CERT-policy](#cert-policy)
 
 **Signatories:**
 
@@ -62,7 +62,7 @@ The `TokenName` of the [$AA](#aa-token) token is set to a hash of the input poin
 
 **Scenario:**
 
-[Authentication Authority](#authentication-authority) mints authentication by minting a [$CERT](#cert-token) token and paying it to [@CertV](#cert-validator) validator, and minting `$AUTH x quantity` tokens and paying them to a single [Authenticator](#authenticator).
+Bob and Alice are [Authentication Authority](#authentication-authority) and they mint authentication by minting a [$CERT](#cert-token) token and paying it to the [@CertV](#cert-validator) validator, and minting [$AUTH](#auth-token) x `quantity` tokens and paying them to a single [Authenticator](#authenticator).
 
 ```mermaid
 graph TD
@@ -87,15 +87,16 @@ graph TD
     MintAuthTx -->|$AUTH/id x quantity|AuthWallet
 ```
 
-`id` is computed by hashing [$AA](#aa-token) inputs (See [Hashing inputs for uniqueness](#hashing-for-uniqueness)).
-The quantity of [$AA](#aa-token) tokens required are determined by the [Required Authorization Authority tokens](#required-aa-tokens) protocol parameter.
+`id` is computed by hashing [$AA](#aa-token) inputs consumed (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)).
+
+> The quantity of [$AA](#aa-token) tokens required are determined by the [Required Authorization Authority tokens](#required-aa-tokens) protocol parameter.
 
 ### <a name="mint-fact-statement-tx">Mint Fact Statement - mint-fact-statement-tx</a>
 
 **Scripts invoked:**
 
-- [$FS-policy](#fs-policy) - [$FS](#fs-token) minting policy script
-- [$AUTH-policy](#auth-policy) - [$AUTH](#auth-token) minting policy script
+- [$FS-policy](#fs-policy)
+- [$AUTH-policy](#auth-policy)
 
 **Signatories:**
 
@@ -104,7 +105,9 @@ The quantity of [$AA](#aa-token) tokens required are determined by the [Required
 
 **Scenario:**
 
-[Submitter](#submitter) publishes 2 `Fact Statements` within a single transaction. [Authenticator](#authenticator) provides [$AUTH](#auth-token) tokens for each of the published `Fact Statement` and adds a [$FEE](#fee-token) that will be paid by the [Submitter](#submitter) to the [Fee Collector](#fee-collector). The `Fact Statements` are made available at the [@FsV](#fs-validator) validator for future referencing.
+[Submitter](#submitter) publishes two `Fact Statements`, namely `fsA` and `fsB`, within a single transaction.
+[Authenticator](#authenticator) provides [$AUTH](#auth-token) tokens for each of the published `Fact Statement` and adds a [$FEE](#fee-token) that will be paid by the [Submitter](#submitter) to the [Fee Collector](#fee-collector).
+The `Fact Statements` are made available as UTxOs at the [@FsV](#fs-validator) validator for future referencing in [ref-fact-statement-tx](#ref-fact-statement-tx) transactions.
 
 ```mermaid
 graph TD
@@ -115,31 +118,29 @@ graph TD
     SubmitterWallet["Submitter wallet"]
     FeeCollector["$FEE collector"]
 
-    MintFactTx{"mint-fact-statement-tx
-      - fsA fsIdA gcAfterA submitter
-      - fsB fsIdB gcAfterB submitter
-      "}
+    MintFactTx{"mint-fact-statement-tx [fsA, fsB]"}
 
-    AuthWallet -->|"$AUTH/id x 1"|MintFactTx
-    AuthWallet -->|"$AUTH/id x 1"|MintFactTx
-    MintFactTx -->|"$AUTH/id x 2"|AuthMp
+    AuthWallet -->|"$AUTH/authId x 1"|MintFactTx
+    AuthWallet -->|"$AUTH/authId x 1"|MintFactTx
+    MintFactTx -->|"$AUTH/authId x 2"|AuthMp
 
-    FsMp -->|"$FS/unique1 x 1"|MintFactTx
-    FsMp -->|"$FS/unique2 x 1"|MintFactTx
-    MintFactTx -->|"$FS/unique1 x 1 + FsDatum(fsA, fsIdA, gcAfterA, submitter)"|FsV
-    MintFactTx -->|"$FS/unique2 x 1 + FsDatum(fsB, fsIdB, gcAfterB, submitter)"|FsV
+    FsMp -->|"$FS/fsId1 x 1"|MintFactTx
+    FsMp -->|"$FS/fsId2 x 1"|MintFactTx
+    MintFactTx -->|"$FS/fsId1 x 1 + fsA"|FsV
+    MintFactTx -->|"$FS/fsId2 x 1 + fsB"|FsV
 
     SubmitterWallet -->|"$FEE x feeQuantity"|MintFactTx
     MintFactTx -->|"$FEE x feeQuantity"|FeeCollector
 ```
 
-`uniqueId1` and `uniqueId2` are computed by hashing corresponding [$AUTH](#auth-token) inputs used to authenticate each produced `Fact Statement` (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)).
+`fsA` and `fsB` transaction parameters are isomorphic to `FsDatum` in that they contain a `Fact Statement`, along with its unique `Fact Statement ID` as provided by the Oracle's `Fact Statement Store`, the validity information and the [Submitter](#submitter) public key hash.
+The `fsId1` and `fsId2` are computed by hashing corresponding [$AUTH](#auth-token) inputs used to authenticate each produced `Fact Statement` (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)).
 
 ### <a name="gc-certificate-tx">Garbage collect obsolete certificate - gc-certificate-tx</a>
 
 **Scripts invoked:**
 
-- [$CERT-policy](#cert-policy) - [$CERT](#cert-token) minting policy script
+- [$CERT-policy](#cert-policy)
 
 **Signatories:**
 
@@ -174,7 +175,7 @@ graph TD
 
 **Scripts invoked:**
 
-- [$FS-policy](#fs-policy) - [$FS](#fs-token) minting policy script
+- [$FS-policy](#fs-policy)
 
 **Signatories:**
 
@@ -201,6 +202,37 @@ graph TD
     GcFsTx -->|"$FS/id1 x 1 <> $FS/id1 x 1"|FsMp
     GcFsTx -->|"$ADA x minUtxo x 2"|SubmitterWallet
 ```
+
+### <a name="ref-fact-statement-tx">Reference fact statement - ref-fact-statement-tx</a>
+
+**Scripts invoked:**
+
+- [Consumer script](#consumer-script)
+
+**Signatories:**
+
+- As required by the [Consumer script](#consumer-script)
+
+**Scenario:**
+
+User unlocks a reward by referencing two `Fact Statements`, namely `fsA` and `fsB`, and consumes a reward input from the [Consumer script](#consumer-script) that they pay to themselves.
+
+```mermaid
+graph TD
+    FsV["@FsV validator"]
+    ConsumerV["Consumer script"]
+    UserWallet["User"]
+    RefFsTx{"ref-fact-statement-tx"}
+
+
+    FsV -.->|"$FS/id1 x 1 + fsA"|RefFsTx
+    FsV -.->|"$FS/id2 x 1 + fsB"|RefFsTx
+    ConsumerV -->|"$REWARD"|RefFsTx
+
+    RefFsTx -->|"$REWARD"|UserWallet
+```
+
+> The [Consumer script](#consumer-script) must check that the referenced [@FsV](#fs-validator) validator inputs containing `Fact Statements` have the expected [$FS](#fs-token) `CurrencySymbol`.
 
 ## <a name="tokens">Tokens</a>
 
@@ -331,9 +363,11 @@ Validation rules for burning [$CERT](#cert-token) tokens:
 
 ### <a name="auth-policy">$AUTH-policy</a>
 
-### <a name="fact-statement-policy">$FS-policy</a>
+### <a name="fs-policy">$FS-policy</a>
 
-### <a name="fact-statement-validator">@FsV</a>
+### <a name="fs-validator">@FsV</a>
+
+### <a name="consumer-script">Consumer script</a>
 
 ## <a name="wallets">Wallets</a>
 
