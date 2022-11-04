@@ -89,7 +89,7 @@ graph TD
 
 `id` is computed by hashing [$AA](#aa-token) inputs consumed (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)).
 
-> The quantity of [$AA](#aa-token) tokens required are determined by the [Required Authorization Authority tokens](#required-aa-tokens) protocol parameter.
+> The quantity of [$AA](#aa-token) tokens required is determined by the [Required Authorization Authority tokens](#required-aa-tokens) protocol parameter.
 
 ### <a name="mint-fact-statement-tx">Mint Fact Statement - mint-fact-statement-tx</a>
 
@@ -283,6 +283,12 @@ These tokens are used in [gc-certificate-tx](#gc-certificate-tx) transactions to
   - Used to authenticate [@FsV][#fs-validator] validator reference inputs in [ref-fact-statement-tx](#ref-fact-statement-tx) transaction.
 
 > This token is used by COOP Consumers to authenticate the Fact Statement reference inputs.
+
+### <a name="fee-token">Fee token - $FEE</a>
+
+Any token the `Protocol Operator` wishes to use as a 'fee', which includes but is not exclusive to `$ADA`.
+
+These tokens are spent from [Submitter](#submitter) wallets and paid to the [Fee Collector](#fee-collector) in [mint-fact-statement-tx](#mint-fact-statement-tx) transactions.
 
 ## <a name="scripts">Scripts</a>
 
