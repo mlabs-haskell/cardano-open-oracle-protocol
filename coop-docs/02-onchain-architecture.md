@@ -6,15 +6,15 @@ Parameters used at Protocol Genesis.
 
 ### <a name="total-aa-tokens">Total Authorization Authority tokens</a>
 
-Total quantity of `$AA` tokens to mint.
-These tokens can be distributed to any number of `Authorization Authority` wallets to provide:
+Total quantity of [$AA](#aa-token) tokens to mint.
+These tokens can be distributed to any number of [Authentication Authority](#authentication-authority) wallets to provide:
 
 1. Backup and redundancy in case of loss,
 2. Multi-signature scheme for [minting authentication tokens](#mint-authentication-tx).
 
 ### <a name="required-aa-tokens">Required Authorization Authority tokens</a>
 
-Required quantity of `$AA` tokens that must be consumed when [minting authentication tokens](#mint-authentication-tx).
+Required quantity of [$AA](#aa-token) tokens that must be consumed when [minting authentication tokens](#mint-authentication-tx).
 These tokens can be in one or many inputs, enabling multi-signature scheme to be adopted.
 
 ## <a name="transactions">Transactions</a>
@@ -23,15 +23,15 @@ These tokens can be in one or many inputs, enabling multi-signature scheme to be
 
 **Scripts invoked:**
 
-- [$AA-policy](#aa-policy) - `$AA` minting policy script
+- [$AA-policy](#aa-policy) - [$AA](#aa-token) minting policy script
 
 **Signatories:**
 
-- [God](#god-wallet)
+- [God](#god)
 
 **Scenario:**
 
-`God` mints `$AA` tokens and sends them to a single `Authentication Authority`.
+`God` mints [$AA](#aa-token) tokens and sends them to a single [Authentication Authority](#authentication-authority).
 
 ```mermaid
 graph TD
@@ -46,23 +46,23 @@ graph TD
     MintAaTx ---> |"$AA/hash(oref) x quantity"|AaWallet
 ```
 
-The `TokenName` of the `$AA` token is set to a hash of the input pointed to by `oref` (See [Hashing inputs for uniqueness](#hashing-for-uniqueness)).
+The `TokenName` of the [$AA](#aa-token) token is set to a hash of the input pointed to by `oref` (See [Hashing inputs for uniqueness](#hashing-for-uniqueness)).
 
 ### <a name="mint-authentication-tx">Mint authentication tokens - mint-authentication-tx</a>
 
 **Scripts invoked:**
 
-- `$AUTH-policy` - `$AUTH` minting policy script
-- `$CERT-policy` - `$CERT` minting policy script
+- [$AUTH-policy](#auth-policy) - [$AUTH](#auth-token) minting policy script
+- [$CERT-policy](#cert-policy) - [$CERT](#cert-token) minting policy script
 
 **Signatories:**
 
-- Bob `Authentication Authority`
-- Alice `Authentication Authority`
+- Bob [Authentication Authority](#authentication-authority)
+- Alice [Authentication Authority](#authentication-authority)
 
 **Scenario:**
 
-`Authentication Authority` mints authentication by minting a `$CERT` token and paying it to `@CertV` validator, and minting `$AUTH x quantity` tokens and paying them to a single `Authenticator`.
+[Authentication Authority](#authentication-authority) mints authentication by minting a [$CERT](#cert-token) token and paying it to [@CertV](#cert-validator) validator, and minting `$AUTH x quantity` tokens and paying them to a single [Authenticator](#authenticator).
 
 ```mermaid
 graph TD
@@ -87,24 +87,24 @@ graph TD
     MintAuthTx -->|$AUTH/id x quantity|AuthWallet
 ```
 
-`id` is computed by hashing `$AA` inputs (TODO: See 'Hashing outputs for uniqueness').
-The quantity of `$AA` tokens required are determined by the `$AA required token quantity` protocol parameter (TODO: Add 'See Protocol parameters - $AA token quantity')
+`id` is computed by hashing [$AA](#aa-token) inputs (See [Hashing inputs for uniqueness](#hashing-for-uniqueness)).
+The quantity of [$AA](#aa-token) tokens required are determined by the [Required Authorization Authority tokens](#required-aa-tokens) protocol parameter.
 
 ### <a name="mint-fact-statement-tx">Mint Fact Statement - mint-fact-statement-tx</a>
 
 **Scripts invoked:**
 
-- `$FS-policy` - `$FS` minting policy script
-- `$AUTH-policy` - `$AUTH` minting policy script
+- [$FS-policy](#fs-policy) - [$FS](#fs-token) minting policy script
+- [$AUTH-policy](#auth-policy) - [$AUTH](#auth-token) minting policy script
 
 **Signatories:**
 
-- `Authenticator` wallets
-- `Submitter` wallet
+- [Authenticator](#authenticator)
+- [Submitter](#submitter)
 
 **Scenario:**
 
-`Submitter` publishes 2 `Fact Statements` within a single transaction. `Authenticator` provides `$AUTH` tokens for each of the published `Fact Statement` and adds a `$FEE` that will be paid by the `Submitter` to the `Fee Collector`. The `Fact Statements` are made available at the `@FsV` validator for future referencing.
+[Submitter](#submitter) publishes 2 `Fact Statements` within a single transaction. [Authenticator](#authenticator) provides [$AUTH](#auth-token) tokens for each of the published `Fact Statement` and adds a [$FEE](#fee-token) that will be paid by the [Submitter](#submitter) to the [Fee Collector](#fee-collector). The `Fact Statements` are made available at the [@FsV](#fs-validator) validator for future referencing.
 
 ```mermaid
 graph TD
@@ -133,22 +133,22 @@ graph TD
     MintFactTx -->|"$FEE x feeQuantity"|FeeCollector
 ```
 
-`uniqueId1` and `uniqueId2` are computed by hashing corresponding `$AUTH` inputs used to authenticate each produced `Fact Statement` (TODO: See 'Hashing outputs for uniqueness').
+`uniqueId1` and `uniqueId2` are computed by hashing corresponding [$AUTH](#auth-token) inputs used to authenticate each produced `Fact Statement` (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)).
 
-### <a name="gc-certificate-tx">Garbage collect obsolete certificates - gc-certificate-tx</a>
+### <a name="gc-certificate-tx">Garbage collect obsolete certificate - gc-certificate-tx</a>
 
 **Scripts invoked:**
 
-- `$CERT-policy` - `$CERT` minting policy script
+- [$CERT-policy](#cert-policy) - [$CERT](#cert-token) minting policy script
 
 **Signatories:**
 
-- `Certificate redeemers`
+- [Certificate redeemer](#certificate-redeemer)
 
 **Scenario:**
 
-`Certificate redeemer` garbage collects obsolete certificates from `@CertV` validator and reclaims the `Min UTxO Ada` held within.
-`CertDatum` indicates which `$CERT-RDMR` token must be spend in order to garbage collect an obsolete certificate.
+[Certificate redeemer](#certificate-redeemer) garbage collects obsolete certificates from [@CertV](#cert-validator) validator and reclaims the [Min UTxO Ada](https://docs.cardano.org/native-tokens/minimum-ada-value-requirement) held within.
+`CertDatum` indicates which [$CERT-RDMR](#cert-rdmr-token) token must be spend in order to garbage collect an obsolete certificate.
 
 ```mermaid
 graph TD
@@ -168,59 +168,101 @@ graph TD
     GcCertTx -->|"$CERT-RDMR x n <> $ADA x minUtxo x 2"|CertRdmrWallet
 ```
 
-`$CERT-RDMR` tokens are sent back to the `Certificate redeemer` and all obsolete `$CERT` tokens are burned.
+[$CERT-RDMR](#cert-rdmr-token) tokens are sent back to the [Certificate redeemer](#certificate-redeemer) and all obsolete [$CERT](#cert-token) tokens are burned.
+
+### <a name="gc-fact-statement-tx">Garbage collect obsolete fact statement - gc-fact-statement-tx</a>
+
+**Scripts invoked:**
+
+- [$FS-policy](#fs-policy) - [$FS](#fs-token) minting policy script
+
+**Signatories:**
+
+- [Submitter](#submitter)
+
+**Scenario:**
+
+The original [Submitter](#submitter) of the [mint-fact-statement-tx](#mint-fact-statement-tx) transaction, as indicated in the `FsDatum`, garbage collects the obsolete `Fact Statement UTxOs` available at [@FsV](#fs-validator).
+
+```mermaid
+graph TD
+    FsMp[("$FS-policy")]
+    FsV["@FsV validator"]
+    SubmitterWallet["Submitter"]
+
+    GcFsTx{"gc-fact-statement-tx"}
+
+
+    FsV -->|"$FS/id1 x 1 <> $ADA x minUtxo + FsDatum(id1, validity1, submitter)"|GcFsTx
+    FsV -->|"$FS/id2 x 1 <> $ADA x minUtxo + FsDatum(id2, validity2, submitter)"|GcFsTx
+
+    SubmitterWallet -->|"signature"|GcFsTx
+
+    GcFsTx -->|"$FS/id1 x 1 <> $FS/id1 x 1"|FsMp
+    GcFsTx -->|"$ADA x minUtxo x 2"|SubmitterWallet
+```
 
 ## <a name="tokens">Tokens</a>
 
 ### <a name="aa-token">Authentication Authority token - $AA</a>
 
-- Policy - `$AA-policy` (TODO: Add link)
-- Token Name - is set to a `UTxO hash` of the output denoted by `oref`,
-- Quantity - the `Authentication Authority` can decide how many `$AA` tokens to mint at protocol genesis,
-- Provenance - the `$AA` tokens must be held by `Authentication Authority` wallets and kept safe in an isolated environment
+- Policy - [$AA-policy](#aa-policy)
+- Token Name - is set to a hash of the consumed output denoted by `oref` (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)),
+- Quantity - the total [$AA](#aa-token) tokens minted at protocol genesis (see [Total Authorization Authority tokens](#total-aa-tokens) protocol parameter),
+- Provenance - must be held by [Authentication Authority](#authentication-authority) wallets and kept safe in an isolated environment
   - Minted with [mint-aa-tx](#mint-aa-tx) transaction,
   - Burned never,
-  - Used in [mint-authentication-tx](#mint-authentication-tx) transactions
+  - Used in [mint-authentication-tx](#mint-authentication-tx) transactions.
 
 ### <a name="cert-token">Certificate token - $CERT</a>
 
-- Policy - `$CERT-policy` (TODO: Add link)
-- Token Name - is set to a unique bytestring computed by hashing `$AA` inputs (TODO: See 'Hashing outputs for uniqueness'),
-- Quantity - Each `$CERT` token is unique and only 1 such token exists at any point in time. However, collectively there can be zero or more `$CERT` tokens in the protocol at any time,
-- Provenance - the `$CERT` tokens is held at `@CertV` validator
-  - Minted with `mint-authentication-tx` transaction,
-  - Burned with `burn-certificate-tx` transaction.
+- Policy - [$CERT-policy](#cert-policy)
+- Token Name - is set to a hash of the consumed [$AA](#aa-token) inputs (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)),
+- Quantity - Each [$CERT](#cert-token) token is unique and only 1 such token exists at any point in time. However, collectively there can be zero or more [$CERT](#cert-token) tokens in the protocol at any time,
+- Provenance - held at [@CertV](#cert-validator) validator
+  - Minted with [mint-authentication-tx](#mint-authentication-tx) transaction,
+  - Burned with [gc-certificate-tx][#gc-certificate-tx] transaction,
+  - Used to authenticate [@CertV][#cert-validator] validator reference inputs in [mint-fact-statement-tx](#mint-fact-statement-tx) transaction.
 
 ### <a name="cert-rdmr-token">Certificate redeemer token - $CERT-RDMR</a>
 
-> INFO[Andrea]: instead of a $CERT-RDMR token you could just have a
-> PKH in the @CertV datum, and check the burn $CERT transaction is
-> signed by that, like you do for burning $FS tokens and submitters.
-> This would only grant the PKH access to a small amount of Ada, so it
-> does not seem like the extra token indirection is warranted.
+Self managed token, the Protocol Design doesn't enforce how these tokens are obtained.
+For convenience, the implementation enables Protocol Operators to mint 'One Shot' tokens to be used as `$CERT-RMDR` tokens.
+
+These tokens are used in [gc-certificate-tx](#gc-certificate-tx) transactions to authenticate garbage collection of obsolete certificates.
 
 ### <a name="auth-token">Authentication token - $AUTH</a>
 
-- Policy - `AUTH-policy` (TODO: Add link)
-- Token Name - is set to a unique bytestring computed by hashing `$AA` inputs (TODO: See 'Hashing outputs for uniqueness'),
-- Quantity - Each `$CERT` token is unique and only 1 such token exists at any point in time. However, collectively there can be zero or more `$CERT` tokens in the protocol at any time,
-- Provenance - the `$AUTH` tokens is held at `Authentication` wallet
-  - Minted with `mint-authentication-tx` transaction,
-  - Burned with `mint-fact-statement-tx` transaction.
+- Policy - [$AUTH-policy](#auth-policy)
+- Token Name - is set to a hash of the consumed [$AA](#aa-token) inputs (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)),
+- Quantity - [$AUTH](#auth-token) tokens are minted in batch and their quantity is determined by the `Protocol Operator`. However, each batch shares the same unique token name,
+- Provenance - held at [Authenticator](#authenticator) wallet
+  - Minted with [mint-authentication-tx](#mint-authentication-tx) transaction,
+  - Burned with [mint-fact-statement-tx](#mint-fact-statement-tx) transaction.
 
 ### <a name="fs-token">Fact statement token - $FS</a>
+
+- Policy - [$FS-policy](#fs-policy)
+- Token Name - is set to a hash of the consumed [$AUTH](#auth-token) input used to authenticate a `Fact Statement` (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)),
+- Quantity - Each token is unique and there can be zero or more such tokens in the protocol at any point in time,
+- Provenance - held at [#FsV](#fs-validator) validator
+  - Minted with [mint-fact-statement-tx](#mint-fact-statement-tx) transaction,
+  - Burned with [gc-fact-statement-tx](#gc-fact-statement-tx) transaction.
+  - Used to authenticate [@FsV][#fs-validator] validator reference inputs in [ref-fact-statement-tx](#ref-fact-statement-tx) transaction.
+
+> This token is used by COOP Consumers to authenticate the Fact Statement reference inputs.
 
 ## <a name="scripts">Scripts</a>
 
 ### <a name="aa-policy">$AA-policy</a>
 
-`$AA` minting policy script that validates minting of 'One Shot' `Authentication Authority` (ie. `$AA`) tokens in [minting authentication authority tokens](#mint-aa-tx) transaction.
+[$AA](#aa-token) minting policy script that validates minting of 'One Shot' [Authentication Authority](#authentication-authority) (ie. [$AA](#aa-token)) tokens in [minting authentication authority tokens](#mint-aa-tx) transaction.
 
 Policy is implemented as `Coop.Plutus.Aux.mkOneShotMp quantity tokenName oref` such that
 
-- `quantity` denotes the [total amount of `$AA` tokens to mint](#total-aa-tokens),
+- `quantity` denotes the [total amount of [$AA](#aa-token) tokens to mint](#total-aa-tokens),
 - `tokenName` is set to a [hash of the of the 'oref' output](#hashing-for-uniqueness),
-- `oref` the output owned by the `Authentication Authority` wallet that must be consumed in order to validate minting.
+- `oref` the output owned by the [Authentication Authority](#authentication-authority) wallet that must be consumed in order to validate minting.
 
 Validation rules:
 
@@ -230,7 +272,7 @@ Validation rules:
 
 ### <a name="cert-policy">$CERT-policy</a>
 
-`$CERT` minting policy script that validates minting of `$CERT` tokens in [minting authentication](#mint-authentication-tx) transactions.
+[$CERT](#cert-token) minting policy script that validates minting of [$CERT](#cert-token) tokens in [minting authentication](#mint-authentication-tx) transactions.
 
 Policy is defined in `Coop.Plutus.mkCertMp` and is instantiated with the `CertMpParams` parameter:
 
@@ -267,23 +309,23 @@ data CertDatum = CertDatum
   }
 ```
 
-Validation rules for minting `$CERT` tokens:
+Validation rules for minting [$CERT](#cert-token) tokens:
 
 - `CertMpMint` redeemer is used,
 - check that the `CertMpParams.cmp'requiredAtLeastAaQ` quantity of `CertMpParams.cmp'authAuthorityAc` are spent (See [Required Authorization Authority tokens](#required-aa-tokens)),
-- accumulate and hash `$AA` inputs consumed into a [unique token name](#hashing-for-uniqueness) to use for the `$CERT` token minted,
-- check that `$CERT x 1` is paid to `@CertV` validator as indicated in `CertMpParams.cmp'certVAddress`,
-- check that `$CERT` output at `@CertV` contains a `CertDatum` such that `CertDatum.cert'id` matches the previously constructed unique token name.
+- accumulate and hash [$AA](#aa-token) inputs consumed into a [unique token name](#hashing-for-uniqueness) to use for the [$CERT](#cert-token) token minted,
+- check that `$CERT x 1` is paid to [@CertV](#cert-validator) validator as indicated in `CertMpParams.cmp'certVAddress`,
+- check that [$CERT](#cert-token) output at [@CertV](#cert-validator) contains a `CertDatum` such that `CertDatum.cert'id` matches the previously constructed unique token name.
 
-Validation rules for burning `$CERT` tokens:
+Validation rules for burning [$CERT](#cert-token) tokens:
 
 - `CertMpBurn` redeemer is used,
-- for `n` consumed input containing the `$CERT` token,
+- for `n` consumed input containing the [$CERT](#cert-token) token,
   - check the transaction validates after the certificate validity period as indicated in the `CertDatum.cert'validity` field of the consumed datum,
   - check that `$CERT-RDMR x 1` value as specified in the `CertDatum.cert'redeemerAc` is spent,
   - accumulate the spent `$CERT x 1` value to burn,
 - check that all the spent `$CERT x n` are also burned
-- no paying requirements are enforced for `$CERT-RDMR` tokens.
+- no paying requirements are enforced for [$CERT-RDMR](#cert-rdmr-token) tokens.
 
 ### <a name="cert-validator">@CertV</a>
 
@@ -301,36 +343,36 @@ A wallet used to initialize the protocol (ie. Protocol Genesis). Can be discarde
 
 ### <a name="authentication-authority">Authentication Authority</a>
 
-`Authentication Authority` wallets holding `$AA` tokens used to authenticate [minting ephemeral authentication tokens](#mint-authentication-tx).
+[Authentication Authority](#authentication-authority) wallets holding [$AA](#aa-token) tokens used to authenticate [minting ephemeral authentication tokens](#mint-authentication-tx).
 Note that there can be any number of such wallets and it's left to the `Protocol Operator` to manage their distribution.
 
 > Must be held in a safe environment as compromising $AA wallets can undermine the entire protocol.
 
 ### <a name="authenticator">Authenticator</a>
 
-`Authenticator` wallets hold the `$AUTH` ephemeral tokens that are attached to each [Fact Statement minting](#mint-fact-statement-tx)
+[Authenticator](#authenticator) wallets hold the [$AUTH](#auth-token) ephemeral tokens that are attached to each [Fact Statement minting](#mint-fact-statement-tx)
 transaction to denote 'authentication' by the `Publisher`.
 
-`Authenticators` are used extensively by the Fact Statement publishing backend and as such should be kept safe. However, unlike the [Authentication Authority](#authentication-authority) wallets, if compromised these wallets only impact the integrity of the Protocol for the duration of `$AUTH` tokens held within. After that point compromised wallets can be discarded and replaced with fresh ones, which would then receive new `$AUTH` tokens.
+`Authenticators` are used extensively by the Fact Statement publishing backend and as such should be kept safe. However, unlike the [Authentication Authority](#authentication-authority) wallets, if compromised these wallets only impact the integrity of the Protocol for the duration of [$AUTH](#auth-token) tokens held within. After that point compromised wallets can be discarded and replaced with fresh ones, which would then receive new [$AUTH](#auth-token) tokens.
 
-> Protocol Operators manage how many `$AUTH` tokens are minted, how long they are valid and which Authenticator wallets will receive them.
+> Protocol Operators manage how many [$AUTH](#auth-token) tokens are minted, how long they are valid and which Authenticator wallets will receive them.
 
 ### <a name="submitter">Submitter</a>
 
-`Submitter` is a wallet used by the user that submits the [Fact Statement minting transactions](#mint-fact-statement-tx) transaction obtained in the `Fact Statement Publishing` protocol.
+[Submitter](#submitter) is a wallet used by the user that submits the [Fact Statement minting transactions](#mint-fact-statement-tx) transaction obtained in the `Fact Statement Publishing` protocol.
 
-The wallet needs to provide enough `$FEE` tokens as indicated in the `Fact Statement Publishing` protocol.
+The wallet needs to provide enough [$FEE](#fee-token) tokens as indicated in the `Fact Statement Publishing` protocol.
 
 ### <a name="certificate-redeemer">Certificate redeemer</a>
 
-`Certificate redeemer` wallets hold the `$CERT-RDMR` tokens and are managed by the `Protocol Operator` similar to how [Authenticator](#authenticator) wallets are managed.
+[Certificate redeemer](#certificate-redeemer) wallets hold the [$CERT-RDMR](#cert-rdmr-token) tokens and are managed by the `Protocol Operator` similar to how [Authenticator](#authenticator) wallets are managed.
 In fact, both wallets can be consolidated in a single wallet for convenience.
 
-Certificate redeemer wallets are in charge of [garbage collecting obsolete certificates](#gc-certificates-tx) by providing the corresponding `$CERT-RDMR` tokens as indicated in the `CertDatum`.
+Certificate redeemer wallets are in charge of [garbage collecting obsolete certificates](#gc-certificates-tx) by providing the corresponding [$CERT-RDMR](#cert-rdmr-token) tokens as indicated in the `CertDatum`.
 
 ### <a name="fee-collector">Fee collector</a>
 
-`Fee collector` is any wallet or validator the `Protocol Operator` decides to use to collect `$FEE` tokens in [Fact Statement minting transactions](#mint-fact-statement-tx).
+`Fee collector` is any wallet or validator the `Protocol Operator` decides to use to collect [$FEE](#fee-token) tokens in [Fact Statement minting transactions](#mint-fact-statement-tx).
 
 ## Appendix
 
