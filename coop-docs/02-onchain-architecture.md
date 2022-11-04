@@ -4,7 +4,7 @@
 
 Parameters used at Protocol Genesis.
 
-### [Total Authorization Authority tokens](#total-aa-tokens)
+### <a name="total-aa-tokens">Total Authorization Authority tokens</a>
 
 Total quantity of `$AA` tokens to mint.
 These tokens can be distributed to any number of `Authorization Authority` wallets to provide:
