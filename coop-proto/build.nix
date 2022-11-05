@@ -7,6 +7,7 @@ pkgs.mkShell {
     nodePackages.npm
     nodejs
     grpcui
+    grpcurl
   ];
 
   inherit shellHook;

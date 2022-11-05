@@ -149,6 +149,7 @@ executable coop-pab-cli
     Coop.Cli.GetState
     Coop.Cli.MintAuth
     Coop.Cli.MintCertRdmrs
+    Coop.Cli.TxBuilderGrpc
 
   build-depends:
     , aeson
@@ -157,8 +158,16 @@ executable coop-pab-cli
     , bytestring
     , coop-hs-types
     , coop-pab
+    , coop-tx-builder-service-proto
     , hex
+    , http2-grpc-proto-lens
+    , http2-grpc-types
+    , microlens
     , optparse-applicative
     , plutus-ledger
     , plutus-ledger-api
+    , proto-lens
     , text
+    , warp
+    , warp-grpc
+    , warp-tls

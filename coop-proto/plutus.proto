@@ -1,14 +1,71 @@
 syntax = "proto3";
 
-import "coop.proto";
+import "google/protobuf/empty.proto";
 
-package coop.plutus;
+package plutus;
 
-message FactStatementDatum {
-  coop.PubKeyHash submittedBy = 1;
-  coop.PubKeyHash publishedBy = 2;
+message Transaction {
+  // CBOR+Base16 (hex) encoded transaction
+  string cbor_base16 = 1;
+}
 
-  coop.FsDescription fs_desc = 3;
-  oracle.FactStatement fact_statement = 3;
+message TransactionId {
+  // Base16 (hex) encoded transaction id
+  string base16 = 1;
+}
 
+message PubKeyHash {
+  // Base16 (hex) encoded public key hash
+  string base16 = 1;
+}
+
+message UTxORef {
+  // Transaction ID
+  TransactionId transaction_id = 1;
+  // The output index of the transaction denoted by the id
+  int32 output_index = 2;
+}
+
+message ExtendedLedgerTime {
+  enum Extended {
+    NEG_INF = 0;
+    FINITE = 1;
+    POS_INF = 2;
+  }
+  Extended extended = 1;
+  int32 finite_ledger_time = 2;
+}
+
+// https://github.com/input-output-hk/plutus/blob/6aa7ba8142a16ada1a7b73eaa7210c55b41ac382/plutus-core/plutus-core/src/PlutusCore/Data.hs#L40
+// data Data =
+//   Constr Integer [Data]
+//   | Map [(Data, Data)]
+//   | List [Data]
+//   | I Integer
+//   | B BS.ByteString
+message PlutusData {
+  oneof plutus_data {
+    uint64 pdint = 1;
+    bytes pdbytes = 2;
+    PlutusList pdlist = 3;
+    PlutusMap pdmap = 4;
+    PlutusConstr pdconstr = 5;
+  }
+}
+
+message PlutusList {
+  repeated PlutusData elements = 1;
+}
+
+message PlutusMap {
+  message KV {
+    PlutusData key = 1;
+    PlutusData value = 2;
+  }
+  repeated KV kvs = 1;
+}
+
+message PlutusConstr {
+  uint64 index = 1;
+  repeated PlutusData fields = 2;
 }

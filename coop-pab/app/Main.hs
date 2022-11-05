@@ -9,6 +9,7 @@ import Coop.Cli.GarbageCollect (GarbageCollectOpts (GarbageCollectOpts), garbage
 import Coop.Cli.GetState (GetStateOpts (GetStateOpts), getState)
 import Coop.Cli.MintAuth (MintAuthOpts (MintAuthOpts), mintAuth)
 import Coop.Cli.MintCertRdmrs (MintCertRdmrsOpts (MintCertRdmrsOpts), mintCertRdmrs)
+import Coop.Cli.TxBuilderGrpc (TxBuilderGrpcOpts (TxBuilderGrpcOpts), txBuilderService)
 import Options.Applicative (
   Parser,
   ParserInfo,
@@ -31,7 +32,7 @@ import Options.Applicative (
   subparser,
   value,
  )
-import Plutus.V1.Ledger.Value (AssetClass)
+import Plutus.V1.Ledger.Value (AssetClass, adaSymbol, adaToken, assetClass)
 import Plutus.V2.Ledger.Api (PubKeyHash)
 
 data Command
@@ -40,6 +41,7 @@ data Command
   | MintAuth MintAuthOpts
   | GarbageCollect GarbageCollectOpts
   | GetState GetStateOpts
+  | TxBuilderGrpc TxBuilderGrpcOpts
 
 pabConfigOptP :: Parser [Char]
 pabConfigOptP =
@@ -57,7 +59,7 @@ deploymentFileOptP =
     ( long "deployment-file"
         <> metavar "DEPLOYMENT_FILE"
         <> help "A JSON file to write the COOP deployment information to"
-        <> value "coop-deployment.json"
+        <> value "resources/coop-deployment.json"
         <> showDefault
     )
 
@@ -95,6 +97,36 @@ certRdmrWalletOptP =
         <> metavar "CERTRDMR_WALLET"
         <> help "A wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001) holding $CERT-RDMR tokens that will perform `coop-pab-cli garbage-collect`"
     )
+
+authWalletsOpt :: Parser [PubKeyHash]
+authWalletsOpt =
+  many
+    ( pubKeyHashOpt
+        ( long "auth-wallet"
+            <> metavar "AUTH_WALLET"
+            <> help "Wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001) holding $AUTH tokens"
+        )
+    )
+
+feeOptP :: Parser (AssetClass, Integer)
+feeOptP =
+  (,)
+    <$> assetClassOpt
+      ( long "fee-ac"
+          <> metavar "FEE_AC"
+          <> help "$FEE asset class used to pay the COOP Publisher for publishing Fact Statements"
+          <> value (assetClass adaSymbol adaToken)
+          <> showDefault
+      )
+    <*> option
+      auto
+      ( long "fee-quantity"
+          <> metavar "FEE_Q"
+          <> help "$FEE amount to pay the COOP Publisher for publishing Fact Statements"
+          <> value 1
+          <> showDefault
+      )
+
 deployOptsP :: Parser DeployOpts
 deployOptsP =
   DeployOpts
@@ -164,13 +196,7 @@ mintAuthOptsP =
           <> showDefault
       )
     <*> certRdmrAcOptP
-    <*> many
-      ( pubKeyHashOpt
-          ( long "auth-wallet"
-              <> metavar "AUTH_WALLET"
-              <> help "Wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001) holding $AUTH tokens"
-          )
-      )
+    <*> authWalletsOpt
 
 garbageCollectOptsP :: Parser GarbageCollectOpts
 garbageCollectOptsP =
@@ -189,7 +215,44 @@ getStateOptsP =
       ( long "state-file"
           <> metavar "STATE_FILE"
           <> help "A JSON file to write the COOP state information to"
-          <> value "coop-state.json"
+          <> value "resources/coop-state.json"
+          <> showDefault
+      )
+
+txBuilderGrpcOpts :: Parser TxBuilderGrpcOpts
+txBuilderGrpcOpts =
+  TxBuilderGrpcOpts
+    <$> pabConfigOptP
+    <*> deploymentFileOptP
+    <*> authWalletsOpt
+    <*> feeOptP
+    <*> strOption
+      ( long "address"
+          <> metavar "ADDR"
+          <> help "Local IP address or host name to bing the TxBuilder gRpc service to"
+          <> value "localhost"
+          <> showDefault
+      )
+    <*> option
+      auto
+      ( long "port"
+          <> metavar "PORT"
+          <> help "TCP port to bind the TxBuilder gRpc service to"
+          <> value 5081
+          <> showDefault
+      )
+    <*> strOption
+      ( long "cert-file"
+          <> metavar "CERT_FILE"
+          <> help "Certificate file to use for TLS"
+          <> value "resources/certificate.pem"
+          <> showDefault
+      )
+    <*> strOption
+      ( long "key-file"
+          <> metavar "KEY_FILE"
+          <> help "Private key file to use for TLS"
+          <> value "resources/key.pem"
           <> showDefault
       )
 
@@ -211,6 +274,9 @@ optionsP =
       <> command
         "get-state"
         (info (GetState <$> getStateOptsP <* helper) (progDesc "Get COOP state"))
+      <> command
+        "tx-builder-grpc"
+        (info (TxBuilderGrpc <$> txBuilderGrpcOpts <* helper) (progDesc "Run a TxBuilder gRpc service"))
 
 parserInfo :: ParserInfo Command
 parserInfo = info (optionsP <**> helper) (fullDesc <> progDesc "COOP PAB cli tools")
@@ -224,3 +290,4 @@ main = do
     MintAuth opts -> mintAuth opts
     GarbageCollect opts -> garbageCollect opts
     GetState opts -> getState opts
+    TxBuilderGrpc opts -> txBuilderService opts

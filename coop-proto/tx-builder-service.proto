@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+import "plutus.proto";
+
+package coop;
+
+service TxBuilder {
+  // Create a transaction that creates Fact Statement UTxOs (mint-fact-statement-tx)
+  rpc createMintFsTx(CreateMintFsTxReq) returns (CreateMintFsTxResp) {}
+  // Create a transaction that garbage collects obsolete Fact Statement UTxOs (gc-fact-statement-tx)
+  rpc createGcFsTx(CreateGcFsTxReq) returns (CreateGcFsTxResp) {}
+}
+
+message CreateMintFsTxReq {
+  repeated FactStatementInfo fact_statements = 1;
+}
+
+message CreateMintFsTxResp {
+  oneof transactionOrErr {
+    // Fact Statement Minting transaction (abbr. mint-fact-statement-tx) signed by the Authenticator
+    plutus.Transaction mint_fs_tx = 1;
+    // Error encountered when servicing the request
+    Error error = 2;
+  }
+}
+
+message FactStatementInfo {
+  // PlutusData encoding of a Fact Statement
+  plutus.PlutusData fs = 1;
+  // Extended ledger time after which the created Fact Statement UTxO can be garbage collected by the Submitter
+  plutus.ExtendedLedgerTime gc_after = 2;
+  // The PubKeyHash of the user wallet that will sign and submit the transaction (ie. Submitter)
+  plutus.PubKeyHash submitter  = 3;
+}
+
+
+message CreateGcFsTxReq {
+  // Fact Statement UTxOs to garbage collect
+  repeated plutus.UTxORef fs = 1;
+  // The PubKeyHash of the user that submitted the FSMintTx and will also submit the FSBurnTx
+  plutus.PubKeyHash submitter  = 2;
+  // Submitter owned UTxO to use as a collateral UTxO in the returned FSBurnTx
+  plutus.UTxORef collateral = 3;
+}
+
+message CreateGcFsTxResp {
+  oneof transactionOrErr {
+    // Fact Statement Burning transaction (abbr. FSBurnTx) to sign and submit
+    plutus.Transaction fs_burn_tx = 1;
+    // Error encountered when servicing the request
+    Error error = 2;
+  }
+}
+
+message Error {
+  message SubmitterNotFoundError {
+    // Public key hash of the Submitter's wallet that wasn't found
+    plutus.PubKeyHash submitter  = 1;
+  }
+  message TimeoutError {
+    // Timeout error message
+    string msg = 1;
+  }
+  message OtherError {
+    // Some other error message
+    string msg = 1;
+  }
+  oneof someError {
+    // Submitter wallet wasn't found
+    SubmitterNotFoundError submitter_not_found_err = 1;
+    // Timeout error
+    TimeoutError timeout_err = 2;
+    // Some other error
+    OtherError other_err = 3;
+  }
+}

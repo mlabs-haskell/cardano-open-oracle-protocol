@@ -10,7 +10,6 @@ haskell-nix.cabalProject' {
       subdirs = [
         "http2-client-grpc"
         "http2-grpc-proto-lens"
-        #"http2-grpc-proto3-wire"
         "http2-grpc-types"
         "warp-grpc"
       ];
@@ -56,7 +55,6 @@ haskell-nix.cabalProject' {
     additional = ps: [
       ps.http2-client-grpc
       ps.http2-grpc-proto-lens
-      #ps.http2-grpc-proto3-wire
       ps.http2-grpc-types
       ps.warp-grpc
       ps.coop-proto

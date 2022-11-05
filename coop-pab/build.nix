@@ -1,4 +1,4 @@
-{ pkgs, haskell-nix, compiler-nix-name, plutip, coopPlutusCli, coop-hs-types, shellHook }:
+{ pkgs, haskell-nix, compiler-nix-name, plutip, coopPlutusCli, coop-hs-types, txBuilderProtoHs, http2-grpc-native, shellHook }:
 let
   # FIXME: Use idiomatic cardano-node from bpi input
   cardanoNode = proj.hsPkgs.cardano-node.components.exes.cardano-node;
@@ -24,6 +24,14 @@ let
 
           # Don't use the new-ledger-namespace
           coop-hs-types.configureFlags = [ "-f-new-ledger-namespace" ];
+
+          # FIXME: This is annoying
+          # Add proto compilation execs
+          proto-lens-protobuf-types.components.library.build-tools = [
+            pkgs.protobuf
+            pkgs.haskellPackages.proto-lens-protoc
+          ];
+
         };
       }
     ];
@@ -37,6 +45,20 @@ let
         src = coop-hs-types;
         subdirs = [ "." ];
       }
+      {
+        src = http2-grpc-native;
+        subdirs = [
+          "http2-client-grpc"
+          "http2-grpc-proto-lens"
+          "http2-grpc-types"
+          "warp-grpc"
+        ];
+      }
+      {
+        src = txBuilderProtoHs;
+        subdirs = [ "." ];
+      }
+
     ];
 
     shell = {
@@ -54,12 +76,21 @@ let
         coopPlutusCli
         cardanoNode
         cardanoCli
+        grpcui
+        grpcurl
       ];
 
       additional = ps: [
         ps.bot-plutus-interface
         ps.plutip
         ps.coop-hs-types
+
+        # Needed to run the coop.TxBuilder gRpc service
+        ps.http2-client-grpc
+        ps.http2-grpc-proto-lens
+        ps.http2-grpc-types
+        ps.warp-grpc
+        ps.coop-tx-builder-service-proto
       ];
 
       tools = {

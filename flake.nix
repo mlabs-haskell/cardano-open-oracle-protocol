@@ -120,7 +120,7 @@
         coopHsProto = import ./nix/protobuf-hs.nix {
           inherit pkgs;
           src = ./coop-proto;
-          proto = "coop.proto";
+          protos = [ "coop.proto" ];
           cabalPackageName = "coop-proto";
         };
 
@@ -140,8 +140,15 @@
 
         coopPlutusCli = coopPlutusProj.getComponent "coop-plutus:exe:coop-plutus-cli";
 
+        txBuilderProtoHs = import ./nix/protobuf-hs.nix {
+          inherit pkgs;
+          src = ./coop-proto;
+          protos = [ "tx-builder-service.proto" "plutus.proto" ];
+          cabalPackageName = "coop-tx-builder-service-proto";
+        };
+
         coopPabProj = import ./coop-pab/build.nix {
-          inherit pkgs plutip coopPlutusCli;
+          inherit pkgs plutip coopPlutusCli txBuilderProtoHs http2-grpc-native;
           inherit (pkgsWithOverlay) haskell-nix;
           inherit (pre-commit-check) shellHook;
           coop-hs-types = ./coop-hs-types;
