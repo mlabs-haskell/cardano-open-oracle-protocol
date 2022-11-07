@@ -108,24 +108,29 @@ authWalletsOpt =
         )
     )
 
-feeOptP :: Parser (AssetClass, Integer)
+feeOptP :: Parser (PubKeyHash, AssetClass, Integer)
 feeOptP =
-  (,)
-    <$> assetClassOpt
-      ( long "fee-ac"
-          <> metavar "FEE_AC"
-          <> help "$FEE asset class used to pay the COOP Publisher for publishing Fact Statements"
-          <> value (assetClass adaSymbol adaToken)
-          <> showDefault
+  (,,)
+    <$> pubKeyHashOpt
+      ( long "fee-wallet"
+          <> metavar "FEE_WALLET"
+          <> help "Wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001) holding $FEE tokens"
       )
-    <*> option
-      auto
-      ( long "fee-quantity"
-          <> metavar "FEE_Q"
-          <> help "$FEE amount to pay the COOP Publisher for publishing Fact Statements"
-          <> value 1
-          <> showDefault
-      )
+      <*> assetClassOpt
+        ( long "fee-ac"
+            <> metavar "FEE_AC"
+            <> help "$FEE asset class used to pay the COOP Publisher for publishing Fact Statements"
+            <> value (assetClass adaSymbol adaToken)
+            <> showDefault
+        )
+      <*> option
+        auto
+        ( long "fee-quantity"
+            <> metavar "FEE_Q"
+            <> help "$FEE amount to pay the COOP Publisher for publishing Fact Statements"
+            <> value 1
+            <> showDefault
+        )
 
 deployOptsP :: Parser DeployOpts
 deployOptsP =

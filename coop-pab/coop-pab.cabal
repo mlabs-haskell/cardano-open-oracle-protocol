@@ -88,6 +88,7 @@ library
   exposed-modules:
     Coop.Pab
     Coop.Pab.Aux
+    Coop.ProtoAux
 
   hs-source-dirs:  src
   build-depends:
@@ -97,11 +98,14 @@ library
     , bytestring
     , containers
     , coop-hs-types
+    , coop-tx-builder-service-proto
     , cryptonite
     , directory
     , filepath
+    , hex
     , lens
     , memory
+    , microlens
     , plutip
     , plutus-contract
     , plutus-ledger
@@ -110,6 +114,7 @@ library
     , plutus-script-utils
     , plutus-tx
     , process
+    , proto-lens
     , stm
     , text
     , uuid

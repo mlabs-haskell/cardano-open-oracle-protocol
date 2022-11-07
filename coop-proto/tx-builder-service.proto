@@ -13,34 +13,47 @@ service TxBuilder {
 
 message CreateMintFsTxReq {
   repeated FactStatementInfo fact_statements = 1;
+  // The PubKeyHash of the user wallet that will sign and submit the transaction (ie. Submitter)
+  plutus.PubKeyHash submitter  = 2;
 }
 
 message CreateMintFsTxResp {
-  oneof transactionOrErr {
-    // Fact Statement Minting transaction (abbr. mint-fact-statement-tx) signed by the Authenticator
-    plutus.Transaction mint_fs_tx = 1;
+  oneof succOrErr {
+    // Successful Fact Statement Minting message
+    MintFsSuccess  mint_fs_success = 1;
     // Error encountered when servicing the request
     Error error = 2;
   }
 }
 
+message MintFsSuccess {
+  // Fact Statement Minting transaction (abbr. mint-fact-statement-tx) signed by Authenticators
+  plutus.Transaction mint_fs_tx = 1;
+  // A list of already published Fact Statements (Map FactStatementId TxOutRef)
+  message FsIdAndTxOutRef {
+    bytes fact_statement_id = 1;
+    plutus.TxOutRef fact_statement_utxo = 2;
+  }
+  repeated FsIdAndTxOutRef already_published = 2;
+}
+
 message FactStatementInfo {
+  // Fact Statement ID
+  bytes fsId = 1;
   // PlutusData encoding of a Fact Statement
-  plutus.PlutusData fs = 1;
+  plutus.PlutusData fs = 2;
   // Extended ledger time after which the created Fact Statement UTxO can be garbage collected by the Submitter
-  plutus.ExtendedLedgerTime gc_after = 2;
-  // The PubKeyHash of the user wallet that will sign and submit the transaction (ie. Submitter)
-  plutus.PubKeyHash submitter  = 3;
+  plutus.ExtendedLedgerTime gc_after = 3;
 }
 
 
 message CreateGcFsTxReq {
   // Fact Statement UTxOs to garbage collect
-  repeated plutus.UTxORef fs = 1;
+  repeated plutus.TxOutRef fs = 1;
   // The PubKeyHash of the user that submitted the FSMintTx and will also submit the FSBurnTx
   plutus.PubKeyHash submitter  = 2;
   // Submitter owned UTxO to use as a collateral UTxO in the returned FSBurnTx
-  plutus.UTxORef collateral = 3;
+  plutus.TxOutRef collateral = 3;
 }
 
 message CreateGcFsTxResp {

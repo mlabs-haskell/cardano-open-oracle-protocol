@@ -11,33 +11,23 @@ module Coop.Pab (
   mkMintFsTrx,
   mintAuthAndCert,
   getState,
+  runMintFsTx,
 ) where
 
-import Control.Lens ((^.))
-import Coop.Pab.Aux (Trx (Trx), currencyValue, datumFromTxOut, findOutsAt, findOutsAt', findOutsAtHolding', findOutsAtHoldingCurrency, hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintOneShotTrx, submitTrx, toDatum, toRedeemer)
-import Coop.Types (
-  AuthDeployment (AuthDeployment, ad'authMp, ad'authorityAc, ad'certMp, ad'certV),
-  AuthMpParams (AuthMpParams),
-  AuthMpRedeemer (AuthMpBurn, AuthMpMint),
-  AuthParams (AuthParams, ap'authTokenCs, ap'certTokenCs),
-  CertDatum (CertDatum),
-  CertMpParams (CertMpParams),
-  CertMpRedeemer (CertMpBurn, CertMpMint),
-  CoopDeployment (CoopDeployment, cd'auth, cd'fsMp, cd'fsV),
-  CoopPlutus (cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkOneShotMp),
-  CoopState (CoopState),
-  FsDatum,
-  FsMpParams (FsMpParams),
-  FsMpRedeemer (FsMpMint),
-  cp'certV,
- )
+import Control.Lens ((&), (.~), (^.))
+import Control.Monad (guard)
+import Coop.Pab.Aux (Trx (Trx), currencyValue, datumFromTxOut, datumFromTxOutOrFail, findOutsAt, findOutsAt', findOutsAtHolding', findOutsAtHoldingCurrency, hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintOneShotTrx, submitTrx, toDatum, toRedeemer)
+import Coop.ProtoAux (ProtoCardano (fromCardano, toCardano))
+import Coop.Types (AuthBatchId, AuthDeployment (AuthDeployment, ad'authMp, ad'authorityAc, ad'certMp, ad'certV), AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), AuthParams (AuthParams, ap'authTokenCs, ap'certTokenCs), CertDatum (CertDatum, cert'id, cert'validity), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint), CoopDeployment (CoopDeployment, cd'auth, cd'fsMp, cd'fsV), CoopPlutus (cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkOneShotMp), CoopState (CoopState), FactStatementId, FsDatum (FsDatum, fd'fsId), FsMpParams (FsMpParams), FsMpRedeemer (FsMpMint), cp'certV)
 import Data.Bool (bool)
 import Data.Foldable (toList)
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.ProtoLens (Message (defMessage))
 import Data.Text (Text)
+import Data.Traversable (for)
 import Data.Void (Void)
-import Ledger (PaymentPubKeyHash, applyArguments, getCardanoTxId, interval)
+import Ledger (Address, PaymentPubKeyHash (PaymentPubKeyHash, unPaymentPubKeyHash), ValidatorHash, after, applyArguments, getCardanoTxId, interval)
 import Ledger.Tx (ChainIndexTxOut, ciTxOutValue)
 import Plutus.Contract (Contract, currentTime, ownFirstPaymentPubKeyHash, submitTxConstraintsWith, throwError)
 import Plutus.Contract.Constraints (mustBeSignedBy, mustMintValueWithRedeemer, mustPayToOtherScript, mustPayToPubKey, mustSpendPubKeyOutput, mustSpendScriptOutput, mustValidateIn, otherData, ownPaymentPubKeyHash, plutusV2MintingPolicy, plutusV2OtherScript, unspentOutputs)
@@ -47,22 +37,30 @@ import Plutus.Script.Utils.V2.Scripts (scriptCurrencySymbol, validatorHash)
 import Plutus.V1.Ledger.Value (
   AssetClass,
   assetClass,
+  assetClassValue,
  )
 import Plutus.V1.Ledger.Value qualified as Value
 import Plutus.V2.Ledger.Api (
+  CurrencySymbol,
   Extended (Finite, PosInf),
-  LedgerBytes (LedgerBytes),
+  Interval (ivTo),
+  LedgerBytes (LedgerBytes, getLedgerBytes),
   MintingPolicy (MintingPolicy),
   POSIXTime,
   POSIXTimeRange,
   TokenName (TokenName),
   TxId,
   TxOutRef,
+  UpperBound (UpperBound),
   Validator (Validator),
   Value,
+  toBuiltin,
   toData,
  )
+import PlutusTx (toBuiltinData)
 import PlutusTx.Prelude (Group (inv))
+import Proto.TxBuilderService (CreateMintFsTxReq, MintFsSuccess'FsIdAndTxOutRef)
+import Proto.TxBuilderService_Fields (factStatementId, factStatementUtxo, factStatements, fs, fsId, gcAfter, submitter)
 import Test.Plutip.Internal.BotPlutusInterface.Setup ()
 import Test.Plutip.Internal.LocalCluster ()
 import Text.Printf (printf)
@@ -367,3 +365,252 @@ mkMintFsTrx coopDeployment self trxValidRange fsDatum authOut (certOut, certDatu
         mkBurnAuthsTrx coopDeployment self (Map.fromList [authOut])
           <> Trx lookups constraints
    in (mintFsTrx, assetClass fsCs fsTn)
+
+deplCertVAddress :: CoopDeployment -> Address
+deplCertVAddress = mkValidatorAddress . ad'certV . cd'auth
+
+deplFsVAddress :: CoopDeployment -> Address
+deplFsVAddress depl =
+  let fsV = cd'fsV depl in mkValidatorAddress fsV
+
+deplFsVHash :: CoopDeployment -> ValidatorHash
+deplFsVHash depl =
+  let fsV = cd'fsV depl in validatorHash fsV
+
+deplCertCs :: CoopDeployment -> CurrencySymbol
+deplCertCs = scriptCurrencySymbol . ad'certMp . cd'auth
+
+deplAuthCs :: CoopDeployment -> CurrencySymbol
+deplAuthCs = scriptCurrencySymbol . ad'authMp . cd'auth
+
+deplAuthMp :: CoopDeployment -> MintingPolicy
+deplAuthMp = ad'authMp . cd'auth
+
+deplFsCs :: CoopDeployment -> CurrencySymbol
+deplFsCs = scriptCurrencySymbol . cd'fsMp
+
+data CoopOnchainState = CoopOnchainState
+  { _authBatches :: Map AuthBatchId CoopAuthBatch
+  , _published :: Map FactStatementId TxOutRef
+  }
+
+data CoopAuthBatch = CoopAuthBatch
+  { auth'certDatum :: CertDatum
+  , auth'certOut :: (TxOutRef, ChainIndexTxOut)
+  , auth'authOutsByWallet :: Map PaymentPubKeyHash (Map TxOutRef ChainIndexTxOut)
+  , auth'isExpired :: Bool
+  }
+
+findPublished :: CoopDeployment -> Contract w s Text (Map FactStatementId TxOutRef)
+findPublished coopDeployment = do
+  let fsVAddr = deplFsVAddress coopDeployment
+      fsCs = deplFsCs coopDeployment
+  fsOuts <- Map.toList <$> findOutsAtHoldingCurrency fsVAddr fsCs
+  fsOrefsByFsId <-
+    for
+      fsOuts
+      ( \(fsOref, fsOut) -> do
+          fsDatum <- datumFromTxOutOrFail fsOut "@FsV UTxOs must have a FsDatum"
+          return (fd'fsId fsDatum, fsOref)
+      )
+  return $ Map.fromList fsOrefsByFsId
+
+findAuthentication :: CoopDeployment -> [PaymentPubKeyHash] -> Contract w s Text (Map LedgerBytes CoopAuthBatch)
+findAuthentication coopDeployment authenticators = do
+  let certCs = deplCertCs coopDeployment
+      authCs = deplAuthCs coopDeployment
+      certVAddr = deplCertVAddress coopDeployment
+  now <- currentTime
+  certOuts <- Map.toList <$> findOutsAtHoldingCurrency certVAddr certCs
+  authBatches <-
+    for
+      certOuts
+      ( \(certOref, certOut) -> do
+          certDatum <- datumFromTxOutOrFail certOut "@CertV UTxOs must have a CertDatum"
+          let certId = cert'id certDatum
+              authAc = assetClass authCs (TokenName . getLedgerBytes $ certId)
+              isExpired = after now (cert'validity certDatum)
+          authOutsByWallet <-
+            for
+              authenticators
+              ( \auth -> do
+                  authOuts <- findOutsAtHolding' auth authAc
+                  return (auth, authOuts)
+              )
+          return (certId, CoopAuthBatch certDatum (certOref, certOut) (Map.fromList authOutsByWallet) isExpired)
+      )
+
+  return (Map.fromList authBatches)
+
+findOnchainState :: CoopDeployment -> [PaymentPubKeyHash] -> Contract w s Text CoopOnchainState
+findOnchainState coopDeployment authenticators =
+  CoopOnchainState
+    <$> findAuthentication coopDeployment authenticators
+    <*> findPublished coopDeployment
+
+toCardanoC :: ProtoCardano (Either Text) proto cardano => proto -> Contract w s Text cardano
+toCardanoC proto = let x = toCardano @(Either Text) proto in either throwError return x
+
+mkPublishingSpec :: CoopDeployment -> [PaymentPubKeyHash] -> CreateMintFsTxReq -> Contract w s Text (PublishingSpec, [MintFsSuccess'FsIdAndTxOutRef])
+mkPublishingSpec coopDeployment authenticators req = do
+  CoopOnchainState authBatches published <- findOnchainState coopDeployment authenticators
+  submitterPPkh <- PaymentPubKeyHash <$> toCardanoC (req ^. submitter)
+  let alreadyPublished' =
+        [ defMessage
+          & factStatementId .~ fsInfo ^. fsId
+          & factStatementUtxo .~ fsOref'
+        | fsInfo <- req ^. factStatements
+        , fsOref <- maybe [] return $ Map.lookup (LedgerBytes . toBuiltin $ fsInfo ^. fsId) published
+        , fsOref' <- fromCardano fsOref
+        ]
+      fsInfosToPublish =
+        [ fsInfo
+        | fsInfo <- req ^. factStatements
+        , not $ Map.member (LedgerBytes . toBuiltin $ fsInfo ^. fsId) published
+        ]
+      authInfos = take (length fsInfosToPublish) $ flattenAuthBatches authBatches
+      txValidUntil = maximum $ (\(_, _, _, UpperBound ext _) -> ext) <$> authInfos
+  fsDatums <-
+    for
+      fsInfosToPublish
+      ( \fsInfo -> do
+          gc <- toCardanoC $ fsInfo ^. gcAfter
+          return $
+            FsDatum
+              (toBuiltinData $ fsInfo ^. fs)
+              (LedgerBytes . toBuiltin $ fsInfo ^. fsId)
+              gc
+              (unPaymentPubKeyHash submitterPPkh)
+      )
+  let fsInfosWithAuth =
+        zipWith
+          ( \(authBatch, authOut, authWallet, _) fsDatum -> FactStatementSpec fsDatum authOut authBatch authWallet
+          )
+          authInfos
+          fsDatums
+  if length fsInfosWithAuth /= length fsInfosToPublish
+    then throwError "Must have enough $AUTH outputs to authenticate each Fact Statement"
+    else return (PublishingSpec submitterPPkh fsInfosWithAuth txValidUntil, alreadyPublished')
+  where
+    flattenAuthBatches :: Map LedgerBytes CoopAuthBatch -> [(CoopAuthBatch, (TxOutRef, ChainIndexTxOut), PaymentPubKeyHash, UpperBound POSIXTime)]
+    flattenAuthBatches authBatches = do
+      batch <- toList authBatches
+      guard $ not (auth'isExpired batch)
+      (authWallet, authOuts) <- Map.toList $ auth'authOutsByWallet batch
+      authOut <- Map.toList authOuts
+      return (batch, authOut, authWallet, ivTo . cert'validity . auth'certDatum $ batch)
+
+runMintFsTx :: CoopDeployment -> [PaymentPubKeyHash] -> (Value, PaymentPubKeyHash) -> CreateMintFsTxReq -> Contract w s Text [MintFsSuccess'FsIdAndTxOutRef]
+runMintFsTx coopDeployment authenticators feeSpec req = do
+  (publishingSpec, alreadyPublished') <- mkPublishingSpec coopDeployment authenticators req
+  now <- currentTime
+  let mintFsTrx =
+        mkMintFsTrx'
+          coopDeployment
+          now
+          publishingSpec
+          feeSpec
+  submitTrx @Void mintFsTrx
+  -- TODO: Add the transaction body in cbor
+  return alreadyPublished'
+
+data PublishingSpec = PublishingSpec
+  { ps'submitter :: PaymentPubKeyHash
+  , ps'factStatementSpecs :: [FactStatementSpec]
+  , ps'validUntil :: Extended POSIXTime
+  }
+
+data FactStatementSpec = FactStatementSpec
+  { fss'fsDatum :: FsDatum
+  , fss'authOut :: (TxOutRef, ChainIndexTxOut)
+  , fss'authBatch :: CoopAuthBatch
+  , fss'authWallet :: PaymentPubKeyHash
+  }
+
+mkMintFsTrx' ::
+  CoopDeployment ->
+  POSIXTime ->
+  PublishingSpec ->
+  (Value, PaymentPubKeyHash) ->
+  Trx i o a
+mkMintFsTrx' coopDeployment now publishingSpec (feeVal, feeCollectorPpkh) = do
+  let fsMp = cd'fsMp coopDeployment
+      fsV = cd'fsV coopDeployment
+      fsVHash = deplFsVHash coopDeployment
+      fsCs = deplFsCs coopDeployment
+      certV = ad'certV . cd'auth $ coopDeployment
+      authCs = deplAuthCs coopDeployment
+      authMp = deplAuthMp coopDeployment
+
+      mkFsTn authOut = TokenName . hashTxInputs $ Map.fromList [authOut]
+      totalFsValToMint =
+        mconcat
+          [ Value.singleton fsCs (mkFsTn (fss'authOut fsSpec)) 1 | fsSpec <- ps'factStatementSpecs publishingSpec
+          ]
+
+      authValueFromBatch authBatch = assetClassValue (assetClass authCs (TokenName . getLedgerBytes . cert'id . auth'certDatum $ authBatch))
+      lookups =
+        -- TODO: Add ref inputs @CertV
+        -- Minting $FS tokens
+        plutusV2MintingPolicy fsMp
+          -- Paying to @FsV
+          <> plutusV2OtherScript fsV
+          -- Referencing @CertV
+          <> plutusV2OtherScript certV -- TODO: This necessary? Ref inputs and all
+          -- FsDatums
+          <> mconcat
+            [ otherData (toDatum (fss'fsDatum fsSpec))
+            | fsSpec <- ps'factStatementSpecs publishingSpec
+            ]
+          -- Self is the Submitter
+          <> ownPaymentPubKeyHash (ps'submitter publishingSpec)
+          -- Burning $AUTH tokens
+          <> plutusV2MintingPolicy authMp
+
+      constraints =
+        -- Mint all the $FS tokens associated with Fact Statements
+        mustMintValueWithRedeemer (toRedeemer FsMpMint) totalFsValToMint
+          -- Pay all the Fact Statements to @FsV
+          <> mconcat
+            [ mustPayToOtherScript
+              fsVHash
+              (toDatum (fss'fsDatum fsSpec))
+              (Value.singleton fsCs (mkFsTn (fss'authOut fsSpec)) 1 <> minUtxoAdaValue)
+            | fsSpec <- ps'factStatementSpecs publishingSpec
+            ]
+          -- Spend all Authenticator with $AUTH tokens
+          <> mconcat
+            [ mustSpendPubKeyOutput (fst (fss'authOut fsSpec))
+            | fsSpec <- ps'factStatementSpecs publishingSpec
+            ]
+          -- Must burn used $AUTH tokens
+          <> mconcat
+            [ mustMintValueWithRedeemer
+              (toRedeemer AuthMpBurn)
+              (authValueFromBatch (fss'authBatch fsSpec) 1)
+            | fsSpec <- ps'factStatementSpecs publishingSpec
+            ]
+          -- Pay back all unused value to Authenticator wallets
+          <> mconcat
+            [ mustPayToPubKey
+              (fss'authWallet fsSpec)
+              (snd (fss'authOut fsSpec) ^. ciTxOutValue <> authValueFromBatch (fss'authBatch fsSpec) (-1))
+            | fsSpec <- ps'factStatementSpecs publishingSpec
+            ]
+          -- TODO: Reference all necessary Certificate outputs
+          <> mconcat
+            [ mustSpendScriptOutput (fst . auth'certOut . fss'authBatch $ fsSpec) (toRedeemer ())
+            | fsSpec <- ps'factStatementSpecs publishingSpec
+            ]
+          -- Sign with all used Authenticators
+          <> mconcat
+            [ mustBeSignedBy (fss'authWallet fsSpec)
+            | fsSpec <- ps'factStatementSpecs publishingSpec
+            ]
+          -- Pay the $FEE to $FEE Collector
+          <> mustPayToPubKey feeCollectorPpkh feeVal
+          -- Sign with Submitter
+          <> mustBeSignedBy (ps'submitter publishingSpec)
+          -- Validation range needed to validate certificates
+          <> mustValidateIn (interval' (Finite now) (ps'validUntil publishingSpec))
+   in Trx lookups constraints

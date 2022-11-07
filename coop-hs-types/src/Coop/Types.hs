@@ -6,6 +6,7 @@ module Coop.Types (
   FsMpParams (..),
   FsMpRedeemer (..),
   FactStatement (),
+  FactStatementId (),
   FsDatum (..),
   CertDatum (..),
   AuthParams (..),
@@ -13,6 +14,7 @@ module Coop.Types (
   AuthMpRedeemer (..),
   CertMpParams (..),
   CertMpRedeemer (..),
+  AuthBatchId,
   AuthDeployment (..),
   CoopState (..),
 ) where
@@ -81,11 +83,14 @@ data CoopState = CoopState
 -- | A fact statement is just Plutus Data
 type FactStatement = BuiltinData
 
+-- | A fact statement ID is just bytes
+type FactStatementId = LedgerBytes
+
 -- | A datum holding the FactStatement that's locked at @FsV
 data FsDatum = FsDatum
   { fd'fs :: FactStatement
   -- ^ Fact statement
-  , fd'fsId :: LedgerBytes
+  , fd'fsId :: FactStatementId
   -- ^ Fact statement ID as provided by the oracle
   , fs'gcAfter :: Extended POSIXTime
   -- ^ After this time the Submitter can 'garbage collect' the @FsV UTxO
@@ -138,9 +143,12 @@ data AuthDeployment = AuthDeployment
   deriving stock (Show, Generic, Eq, Typeable)
   deriving anyclass (ToJSON, FromJSON)
 
+-- | Authentication batch identifier (certificates + authentication tokens)
+type AuthBatchId = LedgerBytes
+
 -- | Datum locked at @CertV containing information about $AUTH tokens used in authorizing $FS minting
 data CertDatum = CertDatum
-  { cert'id :: LedgerBytes
+  { cert'id :: AuthBatchId
   -- ^ Certificate unique identifier (matches $CERT and $AUTH token names)
   , cert'validity :: POSIXTimeRange
   -- ^ Certificate validity interval after which associated $AUTH tokens can't be used to authorize $FS minting

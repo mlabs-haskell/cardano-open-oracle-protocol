@@ -1,7 +1,5 @@
 syntax = "proto3";
 
-import "google/protobuf/empty.proto";
-
 package plutus;
 
 message Transaction {
@@ -9,9 +7,10 @@ message Transaction {
   string cbor_base16 = 1;
 }
 
-message TransactionId {
-  // Base16 (hex) encoded transaction id
-  string base16 = 1;
+// plutus-ledger-api Plutus.V1.Ledger.Tx.TxId
+message TxId {
+  // Transaction has is the transaction id
+  bytes transaction_hash = 1;
 }
 
 message PubKeyHash {
@@ -19,11 +18,12 @@ message PubKeyHash {
   string base16 = 1;
 }
 
-message UTxORef {
+// plutus-ledger-api Plutus.V1.Ledger.Tx.TxOutRef
+message TxOutRef {
   // Transaction ID
-  TransactionId transaction_id = 1;
+  TxId tx_id = 1;
   // The output index of the transaction denoted by the id
-  int32 output_index = 2;
+  int64 idx = 2;
 }
 
 message ExtendedLedgerTime {

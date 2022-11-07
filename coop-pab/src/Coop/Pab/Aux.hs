@@ -23,6 +23,7 @@ module Coop.Pab.Aux (
   interval',
   findOutsAtHoldingCurrency,
   findOutsAtHoldingCurrency',
+  datumFromTxOutOrFail,
 ) where
 
 import BotPlutusInterface.Contract (runContract)
@@ -46,7 +47,7 @@ import Data.Text (Text)
 import Data.Typeable (typeRep)
 import Data.UUID.V4 qualified as UUID
 import Data.Void (Void)
-import Ledger (ChainIndexTxOut, PaymentPubKeyHash, applyArguments, ciTxOutPublicKeyDatum, ciTxOutScriptDatum, ciTxOutValue, getCardanoTxData, getCardanoTxId, getCardanoTxInputs, pubKeyHashAddress)
+import Ledger (ChainIndexTxOut, DatumHash, PaymentPubKeyHash, applyArguments, ciTxOutPublicKeyDatum, ciTxOutScriptDatum, ciTxOutValue, getCardanoTxData, getCardanoTxId, getCardanoTxInputs, pubKeyHashAddress)
 import Ledger.Ada (lovelaceValueOf)
 import Ledger.Typed.Scripts (RedeemerType, ValidatorTypes (DatumType))
 import Plutus.Contract (AsContractError, Contract, ContractInstanceId, awaitTxConfirmed, datumFromHash, logInfo, submitTxConstraintsWith, throwError, utxosAt)
@@ -135,8 +136,12 @@ hashTxInputs inputs =
       hashedOref = convert @_ @BuiltinByteString . hashWith Blake2b_256 . mconcat $ zipWith cons ixs txIds
    in hashedOref
 
+type CoopContract w s = Contract w s Text
+
+data CoopContractError = MissingAuth | MissingDatumHash DatumHash
+
 -- | Tries to parse Data from ChainIndexTxOut which is surprisingly complicated
-datumFromTxOut :: forall (a :: Type) w s. Typeable a => FromData a => ChainIndexTxOut -> Contract w s Text (Maybe a)
+datumFromTxOut :: forall (a :: Type) w s. Typeable a => FromData a => ChainIndexTxOut -> CoopContract w s (Maybe a)
 datumFromTxOut out =
   maybe
     ( do
@@ -157,7 +162,7 @@ datumFromTxOut out =
           ( do
               logI $ printf "No datum trying datumFromHash %s" (show hash)
               mayDatum' <- datumFromHash hash
-              maybe (throwError "datumFromHash failed") pure mayDatum'
+              maybe (throwError "Missing datum hash") pure mayDatum'
           )
           (\d -> logI "Got inlined datum" >> pure d)
           mayDatum
@@ -166,6 +171,11 @@ datumFromTxOut out =
         (logI (printf "fromDatum failed: %s is not %s" (show (typeRep (Proxy @a))) (show dat)) >> pure Nothing)
         (pure . Just)
         (fromDatum dat)
+
+datumFromTxOutOrFail :: (FromData b, Typeable b) => ChainIndexTxOut -> Text -> Contract w s Text b
+datumFromTxOutOrFail out msg = do
+  mayDat <- datumFromTxOut out
+  maybe (throwError msg) return mayDat
 
 findOutsAt :: forall a w s. Typeable a => FromData a => Address -> (Value -> Maybe a -> Bool) -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
 findOutsAt addr p = do
