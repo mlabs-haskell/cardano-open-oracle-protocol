@@ -61,5 +61,5 @@ test-suite plutus-json-tests
     , text
 
   hs-source-dirs:   test
-  main-is:          Spec.hs
+  main-is:          Main.hs
   type:             exitcode-stdio-1.0
