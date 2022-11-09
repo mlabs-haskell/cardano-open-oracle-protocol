@@ -15,8 +15,7 @@ haskell-nix.cabalProject' (plutarch.applyPlutarchDep pkgs rec {
     packages = { };
   }];
   shell = {
-    # FIXME: withHoogle = true doesn't work
-    withHoogle = false;
+    withHoogle = true;
 
     exactDeps = true;
 
