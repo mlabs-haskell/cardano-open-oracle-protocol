@@ -168,6 +168,15 @@
           '';
         };
 
+        coopExtrasPlutusJson = import ./coop-extras/plutus-json/build.nix {
+          inherit plutarch;
+          pkgs = pkgsForPlutarch;
+          inherit (pkgsForPlutarch) haskell-nix;
+          inherit (pre-commit-check) shellHook;
+          compiler-nix-name = "ghc923";
+        };
+        coopExtrasPlutusJsonFlake = coopExtrasPlutusJson.flake { };
+
         renameAttrs = rnFn: pkgs.lib.attrsets.mapAttrs' (n: value: { name = rnFn n; inherit value; });
       in
       rec {
@@ -188,6 +197,7 @@
           dev-docs = coopDocsDevShell;
           dev-pab = coopPabFlake.devShell;
           dev-hs-types = coopHsTypesFlake.devShell;
+          dev-extras-plutus-json = coopExtrasPlutusJsonFlake.devShell;
           default = dev-proto;
         };
 
@@ -196,7 +206,9 @@
             coopPlutusFlake.checks //
             coopPublisherFlake.checks //
             coopPabFlake.checks //
-            coopHsTypesFlake.checks) //
+            coopHsTypesFlake.checks //
+            coopExtrasPlutusJsonFlake.checks
+          ) //
         { inherit pre-commit-check; } // devShells // packages;
       });
 }
