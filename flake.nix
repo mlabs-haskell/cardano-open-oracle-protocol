@@ -5,10 +5,10 @@
 
   inputs = {
     # Plutip maintains a compatible Plutus/Cardano derivation set
-    # TODO: Merge with upstream and use that.
-    bot-plutus-interface.url = "github:bladyjoker/bot-plutus-interface/bladyjoker/vasil-use-v2-scripts"; # "git+file:/home/bladyjoker/Desktop/bot-plutus-interface";
+    # TODO: Set to a stable release
+    bot-plutus-interface.url = "github:mlabs-haskell/bot-plutus-interface/sam/add-vasil-features";
 
-    plutip.url = "github:mlabs-haskell/plutip/f8f9e4650f09b448ffc5825434eb6f1714f9ddca"; # https://github.com/mlabs-haskell/plutip/releases/tag/vasil-compliant-v1.0.0
+    plutip.url = "github:mlabs-haskell/plutip/bladyjoker/upgrade-to-sam-vasil"; # https://github.com/mlabs-haskell/plutip/releases/tag/vasil-compliant-v1.0.0
     plutip.inputs.bot-plutus-interface.follows = "bot-plutus-interface";
     plutip.inputs.haskell-nix.follows = "bot-plutus-interface/haskell-nix";
     plutip.inputs.iohk-nix.follows = "bot-plutus-interface/iohk-nix";
@@ -31,7 +31,7 @@
       flake = false;
     };
 
-    plutarch.url = "github:plutonomicon/plutarch-plutus/staging";
+    plutarch.url = "github:plutonomicon/plutarch-plutus/c32001b2ae3007572cb6d5256072a2529c1a3407";
     plutarch.inputs.nixpkgs.follows = "nixpkgs";
 
     iohk-nix.follows = "plutip/iohk-nix";
@@ -71,7 +71,7 @@
         pkgsFourmolu = import nixpkgs-fourmolu {
           inherit system;
         };
-        fourmolu = pkgsFourmolu.haskell.packages.ghc924.fourmolu_0_6_0_0;
+        fourmolu = pkgsFourmolu.haskell.packages.ghc924.fourmolu;
         pre-commit-check = pre-commit-hooks.lib.${system}.run (import ./pre-commit-check.nix { inherit fourmolu; });
         pre-commit-devShell = pkgs.mkShell {
           inherit (pre-commit-check) shellHook;

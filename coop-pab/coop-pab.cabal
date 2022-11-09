@@ -115,6 +115,7 @@ library
     , plutus-tx
     , process
     , proto-lens
+    , safe
     , stm
     , text
     , uuid
@@ -124,16 +125,20 @@ test-suite coop-pab-tests
   build-depends:
     , base
     , bot-plutus-interface
+    , bytestring
     , containers
     , coop-hs-types
     , coop-pab
+    , coop-tx-builder-service-proto
     , data-default
+    , lens
     , mtl
     , plutip
     , plutus-contract
     , plutus-ledger
     , plutus-ledger-api
     , plutus-script-utils
+    , proto-lens
     , tasty
     , text
 

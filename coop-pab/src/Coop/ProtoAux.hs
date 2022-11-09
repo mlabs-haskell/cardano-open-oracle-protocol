@@ -10,13 +10,14 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding (decodeUtf8)
 import Data.Text.Encoding qualified as Text
+import Data.Traversable (for)
 import Ledger qualified
 import Lens.Micro ((.~), (^.))
-import Plutus.V1.Ledger.Api (ToData (toBuiltinData), fromBuiltin, toBuiltin)
-import PlutusTx (builtinDataToData, dataToBuiltinData)
+import Plutus.V1.Ledger.Api (BuiltinData (BuiltinData), ToData (toBuiltinData), fromBuiltin, toBuiltin)
+import PlutusTx (FromData (fromBuiltinData), builtinDataToData, dataToBuiltinData)
 import PlutusTx qualified
 import Proto.Plutus qualified as Proto
-import Proto.Plutus_Fields (base16, elements, extended, fields, finiteLedgerTime, idx, index, key, kvs, maybe'plutusData, transactionHash, value)
+import Proto.Plutus_Fields (base16, elements, extended, fields, finiteLedgerTime, idx, index, key, kvs, maybe'plutusData, pdbytes, pdconstr, pdint, pdlist, pdmap, transactionHash, value)
 import Proto.Plutus_Fields qualified as PPlutus
 
 class (MonadFail m) => ProtoCardano m proto cardano where
@@ -66,17 +67,41 @@ instance (MonadFail m) => ProtoCardano m Proto.TxId Ledger.TxId where
     return $
       defMessage & transactionHash .~ fromBuiltin bs
 
---  fromCardano (Ledger.PubKeyHash bytes) = return $ defMessage & base16 .~ (toHex . fromBuiltin $ bytes)
-
 -- | PlutusData encoding
-instance ToData Proto.PlutusList where
-  toBuiltinData pl =
-    dataToBuiltinData $
-      PlutusTx.List [builtinDataToData . toBuiltinData $ el | el <- pl ^. elements]
+plDataToPrData :: PlutusTx.Data -> Maybe Proto.PlutusData
+plDataToPrData (PlutusTx.List xs) = do
+  pxs <- for xs plDataToPrData
+  return $ defMessage & pdlist . elements .~ pxs
+plDataToPrData (PlutusTx.Map plKvs) = do
+  prKvs <-
+    for
+      plKvs
+      ( \(k, v) -> do
+          k' <- plDataToPrData k
+          v' <- plDataToPrData v
+          return $
+            defMessage
+              & key .~ k'
+              & value .~ v'
+      )
+  return $ defMessage & pdmap . kvs .~ prKvs
+plDataToPrData (PlutusTx.Constr ix plFields) = do
+  prFields <- for plFields plDataToPrData
+  return $
+    defMessage
+      & pdconstr . index .~ fromInteger ix
+      & pdconstr . fields .~ prFields
+plDataToPrData (PlutusTx.I plInt) = return $ defMessage & pdint .~ fromInteger plInt
+plDataToPrData (PlutusTx.B plBs) = return $ defMessage & pdbytes .~ plBs
 
-instance ToData Proto.PlutusMap where
-  toBuiltinData pm =
-    dataToBuiltinData $
+plDataFromPrData :: Proto.PlutusData -> PlutusTx.Data
+plDataFromPrData prPlData = case prPlData ^. maybe'plutusData of
+  Nothing -> PlutusTx.toData (0 :: Integer)
+  Just pd' -> case pd' of
+    Proto.PlutusData'Pdint i -> PlutusTx.I . toInteger $ i
+    Proto.PlutusData'Pdbytes bs -> PlutusTx.B bs
+    Proto.PlutusData'Pdlist pl -> PlutusTx.List [builtinDataToData . toBuiltinData $ el | el <- pl ^. elements]
+    Proto.PlutusData'Pdmap pm ->
       PlutusTx.Map
         ( [ ( builtinDataToData . toBuiltinData $ kv ^. key
             , builtinDataToData . toBuiltinData $ kv ^. value
@@ -84,23 +109,16 @@ instance ToData Proto.PlutusMap where
           | kv <- pm ^. kvs
           ]
         )
-
-instance ToData Proto.PlutusConstr where
-  toBuiltinData pc =
-    dataToBuiltinData $
+    Proto.PlutusData'Pdconstr pc ->
       PlutusTx.Constr
         (toInteger $ pc ^. index)
         (builtinDataToData . toBuiltinData <$> pc ^. fields)
 
 instance ToData Proto.PlutusData where
-  toBuiltinData pd = case pd ^. maybe'plutusData of
-    Nothing -> toBuiltinData (0 :: Integer)
-    Just pd' -> case pd' of
-      Proto.PlutusData'Pdint i -> dataToBuiltinData . PlutusTx.I . toInteger $ i
-      Proto.PlutusData'Pdbytes bs -> dataToBuiltinData . PlutusTx.B $ bs
-      Proto.PlutusData'Pdlist pl -> toBuiltinData pl
-      Proto.PlutusData'Pdmap pm -> toBuiltinData pm
-      Proto.PlutusData'Pdconstr pc -> toBuiltinData pc
+  toBuiltinData = dataToBuiltinData . plDataFromPrData
+
+instance FromData Proto.PlutusData where
+  fromBuiltinData (BuiltinData d) = plDataToPrData d
 
 -- | Helpers
 toHex :: ByteString -> Text
