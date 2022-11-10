@@ -1,7 +1,10 @@
 {
   description = "cardano-open-oracle-protocol";
-  nixConfig.bash-prompt =
-    "\\[\\e[0m\\][\\[\\e[0;2m\\]nix-develop \\[\\e[0;1m\\]cardano-open-oracle-protocol \\[\\e[0;93m\\]\\w\\[\\e[0m\\]]\\[\\e[0m\\]$ \\[\\e[0m\\]";
+
+  nixConfig = {
+    bash-prompt =
+      "\\[\\e[0m\\][\\[\\e[0;2m\\]nix-develop \\[\\e[0;1m\\]cardano-open-oracle-protocol \\[\\e[0;93m\\]\\w\\[\\e[0m\\]]\\[\\e[0m\\]$ \\[\\e[0m\\]";
+  };
 
   inputs = {
     # Plutip maintains a compatible Plutus/Cardano derivation set
@@ -177,6 +180,23 @@
         };
         coopExtrasPlutusJsonFlake = coopExtrasPlutusJson.flake { };
 
+        factStatementStoreProtoHs = import ./nix/protobuf-hs.nix {
+          inherit pkgs;
+          src = ./coop-proto;
+          protos = [ "fact-statement-store-service.proto" "coop.proto" "plutus.proto" ];
+          cabalPackageName = "coop-fact-statement-store-service-proto";
+        };
+
+        coopExtrasJsonFactStatementStore = import ./coop-extras/json-fact-statement-store/build.nix {
+          inherit pkgs plutip http2-grpc-native;
+          inherit (pkgsWithOverlay) haskell-nix;
+          inherit (pre-commit-check) shellHook;
+          inherit factStatementStoreProtoHs;
+          plutusJson = ./coop-extras/plutus-json;
+          compiler-nix-name = "ghc8107";
+        };
+        coopExtrasJsonFactStatementStoreFlake = coopExtrasJsonFactStatementStore.flake { };
+
         renameAttrs = rnFn: pkgs.lib.attrsets.mapAttrs' (n: value: { name = rnFn n; inherit value; });
       in
       rec {
@@ -198,6 +218,8 @@
           dev-pab = coopPabFlake.devShell;
           dev-hs-types = coopHsTypesFlake.devShell;
           dev-extras-plutus-json = coopExtrasPlutusJsonFlake.devShell;
+          dev-extras-json-store = coopExtrasJsonFactStatementStoreFlake.devShell;
+
           default = dev-proto;
         };
 
@@ -207,7 +229,8 @@
             coopPublisherFlake.checks //
             coopPabFlake.checks //
             coopHsTypesFlake.checks //
-            coopExtrasPlutusJsonFlake.checks
+            coopExtrasPlutusJsonFlake.checks //
+            coopExtrasJsonFactStatementStoreFlake.checks
           ) //
         { inherit pre-commit-check; } // devShells // packages;
       });

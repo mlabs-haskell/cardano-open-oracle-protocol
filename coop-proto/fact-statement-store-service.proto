@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+import "plutus.proto";
+import "coop.proto";
+
+package coop;
+
+service FactStatementStore {
+  // Fetch a PlutusData encoded Fact Statement with a given ID
+  rpc getFactStatement(GetFactStatementRequest) returns (GetFactStatementResponse) {}
+}
+
+message GetFactStatementRequest {
+  repeated coop.FactStatementId fs_ids = 1;
+}
+
+message GetFactStatementResponse {
+  message FsIdAndPlutus {
+    bytes fs_id = 1;
+    plutus.PlutusData plutus_data = 2;
+  }
+  message Success {
+    repeated FsIdAndPlutus fs_ids_with_plutus = 1;
+  }
+  message Error {
+    string msg = 1;
+  }
+  oneof factStatementsOrErr {
+    // Fetched Fact Statements in PlutusData form
+    Success success = 1;
+    // Error encountered when servicing the request
+    Error error = 2;
+  }
+}
