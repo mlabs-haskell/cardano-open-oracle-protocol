@@ -1,4 +1,4 @@
-{ src, protos, cabalPackageName, pkgs }:
+{ src, protos, cabalPackageName, buildDepends ? [ ], pkgs }:
 let
   cabalTemplate = pkgs.writeTextFile {
     name = "protobuf-hs-cabal-template";
@@ -19,7 +19,8 @@ let
           build-depends:
               base,
               proto-lens-runtime,
-              proto-lens-protobuf-types
+              proto-lens-protobuf-types,
+              ${builtins.concatStringsSep "," buildDepends}
     '';
   };
 in

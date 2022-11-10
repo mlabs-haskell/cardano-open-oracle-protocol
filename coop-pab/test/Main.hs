@@ -4,11 +4,11 @@ module Main (main) where
 
 import Aux (runAfter, withSuccessContract)
 import BotPlutusInterface.Types (LogContext (ContractLog), LogLevel (Debug), LogType (AnyLog, CollateralLog))
+import Cardano.Proto.Aux (fromCardano)
 import Control.Lens ((.~))
 import Control.Monad.Reader (ReaderT)
 import Coop.Pab (burnAuths, burnCerts, deployCoop, findOutsAtCertVWithCERT, findOutsAtHoldingAa, mintAuthAndCert, mintCertRedeemers, mkMintAuthTrx, mkMintCertTrx, runMintFsTx, runRedistributeAuthsTrx)
 import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), ciValueOf, datumFromTxOut, deplFsCs, deplFsVAddress, findOutsAt', findOutsAtHolding, findOutsAtHolding', findOutsAtHoldingCurrency, interval', loadCoopPlutus, mkMintOneShotTrx, submitTrx)
-import Coop.ProtoAux (fromCardano)
 import Coop.Types (AuthDeployment (ad'authorityAc, ad'certV), CoopDeployment (cd'auth, cd'coopAc), CoopPlutus (cp'mkOneShotMp), FsDatum)
 import Data.ByteString (ByteString)
 import Data.Default (def)
@@ -31,7 +31,7 @@ import Proto.TxBuilderService_Fields (factStatements, fs, fsId, gcAfter, submitt
 import Test.Plutip.Contract (assertExecutionWith, initAda, withCollateral, withContract, withContractAs)
 import Test.Plutip.Internal.Types (ClusterEnv)
 import Test.Plutip.LocalCluster (BpiWallet, withConfiguredCluster)
-import Test.Plutip.Options (TraceOption (ShowBudgets, ShowTraceButOnlyContext))
+import Test.Plutip.Options (TraceOption (ShowBudgets, ShowTrace, ShowTraceButOnlyContext))
 import Test.Plutip.Predicate (shouldSucceed, shouldYield)
 import Test.Tasty (TestTree, defaultMain)
 
@@ -44,7 +44,7 @@ slotsToWait :: Natural
 slotsToWait = 100
 
 testOpts :: [TraceOption]
-testOpts = [ShowTraceButOnlyContext ContractLog (Debug [AnyLog, CollateralLog]), ShowBudgets]
+testOpts = [ShowTraceButOnlyContext ContractLog (Debug [AnyLog, CollateralLog]), ShowBudgets, ShowTrace]
 
 tests :: CoopPlutus -> TestTree
 tests coopPlutus =

@@ -15,10 +15,12 @@ module Coop.Pab (
 ) where
 
 import BotPlutusInterface.Constraints (mustValidateInFixed)
+import Cardano.Proto.Aux (
+  ProtoCardano (fromCardano, toCardano),
+ )
 import Control.Lens ((&), (.~), (^.))
 import Control.Monad (guard)
 import Coop.Pab.Aux (Trx (Trx), currencyValue, datumFromTxOut, datumFromTxOutOrFail, deplAuthCs, deplAuthMp, deplCertCs, deplCertVAddress, deplFsCs, deplFsVAddress, deplFsVHash, findOutsAt, findOutsAt', findOutsAtHolding', findOutsAtHoldingCurrency, findOutsAtHoldingCurrency', hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintOneShotTrx, submitTrx, toDatum, toRedeemer)
-import Coop.ProtoAux (ProtoCardano (fromCardano, toCardano))
 import Coop.Types (AuthBatchId, AuthDeployment (AuthDeployment, ad'authMp, ad'authorityAc, ad'certMp, ad'certV), AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), AuthParams (AuthParams, ap'authTokenCs, ap'certTokenCs), CertDatum (CertDatum, cert'id, cert'validity), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint), CoopDeployment (CoopDeployment, cd'auth, cd'fsMp, cd'fsV), CoopPlutus (cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkOneShotMp), CoopState (CoopState), FactStatementId, FsDatum (FsDatum, fd'fsId), FsMpParams (FsMpParams), FsMpRedeemer (FsMpMint), cp'certV)
 import Data.Bool (bool)
 import Data.Foldable (toList)

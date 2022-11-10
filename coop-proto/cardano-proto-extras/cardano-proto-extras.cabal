@@ -1,12 +1,10 @@
 cabal-version: 3.0
-name:          coop-pab
+name:          cardano-proto-extras
 version:       0.1.0.0
 license:       MIT
-license-file:  LICENSE
 maintainer:    info@mlabs.city
 author:        mlabs-haskell
-description:
-  COOP BPI based PAB programs (Contracts) for testing and interacting with the Plutus counterpart
+description:   Cardano Google Protobuf library with conversion utilities
 
 flag dev
   description: Enable non-strict compilation for development
@@ -85,101 +83,16 @@ common common-language
 
 library
   import:          common-language
-  exposed-modules:
-    Coop.Pab
-    Coop.Pab.Aux
-
+  exposed-modules: Cardano.Proto.Aux
   hs-source-dirs:  src
   build-depends:
-    , aeson
     , base
-    , bot-plutus-interface
     , bytestring
-    , cardano-proto-extras
-    , containers
     , coop-cardano-proto
-    , coop-hs-types
-    , coop-tx-builder-service-proto
-    , cryptonite
-    , directory
-    , filepath
-    , lens
-    , memory
-    , microlens
-    , plutip
-    , plutus-contract
-    , plutus-ledger
-    , plutus-ledger-api
-    , plutus-pab
-    , plutus-script-utils
-    , plutus-tx
-    , process
-    , proto-lens
-    , safe
-    , stm
-    , text
-    , uuid
-
-test-suite coop-pab-tests
-  import:         common-language
-  build-depends:
-    , base
-    , bot-plutus-interface
-    , bytestring
-    , cardano-proto-extras
-    , containers
-    , coop-hs-types
-    , coop-pab
-    , coop-tx-builder-service-proto
-    , data-default
-    , lens
-    , mtl
-    , plutip
-    , plutus-contract
-    , plutus-ledger
-    , plutus-ledger-api
-    , plutus-script-utils
-    , proto-lens
-    , tasty
-    , text
-
-  hs-source-dirs: test
-  main-is:        Main.hs
-  other-modules:  Aux
-  ghc-options:    -Wall -threaded -rtsopts
-  type:           exitcode-stdio-1.0
-
-executable coop-pab-cli
-  import:         common-language
-  main-is:        Main.hs
-  hs-source-dirs: app
-  other-modules:
-    Coop.Cli.Aux
-    Coop.Cli.Deploy
-    Coop.Cli.GarbageCollect
-    Coop.Cli.GetState
-    Coop.Cli.MintAuth
-    Coop.Cli.MintCertRdmrs
-    Coop.Cli.TxBuilderGrpc
-
-  build-depends:
-    , aeson
-    , base
-    , bot-plutus-interface
-    , bytestring
-    , cardano-proto-extras
-    , coop-hs-types
-    , coop-pab
-    , coop-tx-builder-service-proto
     , hex
-    , http2-grpc-proto-lens
-    , http2-grpc-types
-    , microlens
-    , optparse-applicative
+    , lens
     , plutus-ledger
     , plutus-ledger-api
+    , plutus-tx
     , proto-lens
     , text
-    , warp
-    , warp-grpc
-    , warp-tls

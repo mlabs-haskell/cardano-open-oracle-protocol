@@ -20,9 +20,9 @@ import Proto.TxBuilderService (CreateGcFsTxReq, CreateGcFsTxResp, CreateMintFsTx
 
 import BotPlutusInterface.Config (loadPABConfig)
 import BotPlutusInterface.Types (pcOwnPubKeyHash)
+import Cardano.Proto.Aux (ProtoCardano (toCardano))
 import Coop.Pab (runMintFsTx)
 import Coop.Pab.Aux (runBpi)
-import Coop.ProtoAux (ProtoCardano (toCardano))
 import Coop.Types (CoopDeployment)
 import Data.Aeson (decodeFileStrict)
 import Data.Maybe (fromMaybe)

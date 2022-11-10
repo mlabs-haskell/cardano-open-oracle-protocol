@@ -1,4 +1,4 @@
-{ pkgs, haskell-nix, compiler-nix-name, plutip, coopPlutusCli, coop-hs-types, txBuilderProtoHs, http2-grpc-native, shellHook }:
+{ pkgs, haskell-nix, compiler-nix-name, plutip, coopPlutusCli, coop-hs-types, txBuilderProtoHs, cardanoProtoHs, cardanoProtoExtras, http2-grpc-native, shellHook }:
 let
   # FIXME: Use idiomatic cardano-node from bpi input
   cardanoNode = proj.hsPkgs.cardano-node.components.exes.cardano-node;
@@ -58,7 +58,14 @@ let
         src = txBuilderProtoHs;
         subdirs = [ "." ];
       }
-
+      {
+        src = cardanoProtoHs;
+        subdirs = [ "." ];
+      }
+      {
+        src = cardanoProtoExtras;
+        subdirs = [ "." ];
+      }
     ];
 
     shell = {
@@ -84,6 +91,8 @@ let
         ps.bot-plutus-interface
         ps.plutip
         ps.coop-hs-types
+        ps.cardano-proto-extras
+        ps.coop-cardano-proto
 
         # Needed to run the coop.TxBuilder gRpc service
         ps.http2-client-grpc

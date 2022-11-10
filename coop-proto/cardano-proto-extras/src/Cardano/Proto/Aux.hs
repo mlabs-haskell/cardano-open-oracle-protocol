@@ -1,7 +1,8 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Coop.ProtoAux (ProtoCardano (toCardano, fromCardano)) where
+module Cardano.Proto.Aux (ProtoCardano (toCardano, fromCardano)) where
 
+import Control.Lens ((.~), (^.))
 import Data.ByteString (ByteString)
 import Data.Function ((&))
 import Data.Hex (Hex (hex, unhex))
@@ -12,7 +13,6 @@ import Data.Text.Encoding (decodeUtf8)
 import Data.Text.Encoding qualified as Text
 import Data.Traversable (for)
 import Ledger qualified
-import Lens.Micro ((.~), (^.))
 import Plutus.V1.Ledger.Api (BuiltinData (BuiltinData), ToData (toBuiltinData), fromBuiltin, toBuiltin)
 import PlutusTx (FromData (fromBuiltinData), builtinDataToData, dataToBuiltinData)
 import PlutusTx qualified
