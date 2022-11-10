@@ -1,4 +1,4 @@
-{ pkgs, haskell-nix, compiler-nix-name, plutip, plutusJson, factStatementStoreProtoHs, http2-grpc-native, shellHook }:
+{ pkgs, haskell-nix, compiler-nix-name, plutip, plutusJson, factStatementStoreProtoHs, cardanoProtoExtras, cardanoProtoHs, http2-grpc-native, shellHook }:
 let
   proj = haskell-nix.cabalProject' {
     src = ./.;
@@ -41,7 +41,14 @@ let
         src = plutusJson;
         subdirs = [ "." ];
       }
-
+      {
+        src = cardanoProtoExtras;
+        subdirs = [ "." ];
+      }
+      {
+        src = cardanoProtoHs;
+        subdirs = [ "." ];
+      }
     ];
 
     shell = {
@@ -62,6 +69,8 @@ let
 
       additional = ps: [
         ps.plutus-json
+        ps.cardano-proto-extras
+        ps.coop-cardano-proto
 
         # Needed to run the coop.TxBuilder gRpc service
         ps.http2-client-grpc

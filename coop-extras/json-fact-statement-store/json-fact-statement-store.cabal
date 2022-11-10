@@ -84,16 +84,28 @@ executable json-fs-store-cli
   import:         common-language
   main-is:        Main.hs
   hs-source-dirs: app
-  other-modules:  FactStatementStoreGrpc
+  other-modules:
+    BeamConfig
+    FactStatementStoreGrpc
+    Genesis
+    InsertFs
+
   build-depends:
+    , aeson
     , base
+    , beam-core
+    , beam-sqlite
+    , bytestring
+    , cardano-proto-extras
     , coop-fact-statement-store-service-proto
     , http2-grpc-proto-lens
     , http2-grpc-types
     , lens
     , optparse-applicative
     , plutus-json
+    , plutus-tx
     , proto-lens
+    , sqlite-simple
     , text
     , warp
     , warp-grpc
