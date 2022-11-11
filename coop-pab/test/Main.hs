@@ -7,7 +7,7 @@ import BotPlutusInterface.Types (LogContext (ContractLog), LogLevel (Debug), Log
 import Cardano.Proto.Aux (fromCardano)
 import Control.Lens ((.~))
 import Control.Monad.Reader (ReaderT)
-import Coop.Pab (burnAuths, burnCerts, deployCoop, findOutsAtCertVWithCERT, findOutsAtHoldingAa, mintAuthAndCert, mintCertRedeemers, mkMintAuthTrx, mkMintCertTrx, runMintFsTx, runRedistributeAuthsTrx)
+import Coop.Pab (burnAuths, burnCerts, deployCoop, findOutsAtCertVWithCERT, findOutsAtHoldingAa, mintAuthAndCert, mintCertRedeemers, mkMintAuthTrx, mkMintCertTrx, runGcFsTx, runMintFsTx, runRedistributeAuthsTrx)
 import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), ciValueOf, datumFromTxOut, deplFsCs, deplFsVAddress, findOutsAt', findOutsAtHolding, findOutsAtHolding', findOutsAtHoldingCurrency, interval', loadCoopPlutus, mkMintOneShotTrx, submitTrx)
 import Coop.Types (AuthDeployment (ad'authorityAc, ad'certV), CoopDeployment (cd'auth, cd'coopAc), CoopPlutus (cp'mkOneShotMp), FsDatum)
 import Data.ByteString (ByteString)
@@ -70,7 +70,7 @@ tests coopPlutus =
     , runAfter "mint-one-shot" $
         assertExecutionWith
           testOpts
-          "deploy-coop"
+          "genesis"
           -- god <> aa
           (initAda [200, 200, 200] <> initAda [200])
           ( withContract @String
@@ -88,7 +88,7 @@ tests coopPlutus =
               )
           )
           [shouldSucceed, shouldYield [6, 1]]
-    , runAfter "deploy-coop" $
+    , runAfter "genesis" $
         assertExecutionWith
           testOpts
           "mint-cert"
@@ -115,7 +115,7 @@ tests coopPlutus =
     , runAfter "mint-cert" $
         assertExecutionWith
           testOpts
-          "burn-cert"
+          "gc-cert"
           -- WALLETS: god <> aa <> certR
           (withCollateral $ initAda [500, 500, 500] <> initAda [200] <> initAda [200])
           ( do
@@ -144,7 +144,7 @@ tests coopPlutus =
                 )
           )
           [shouldSucceed]
-    , runAfter "burn-cert" $
+    , runAfter "gc-cert" $
         assertExecutionWith
           testOpts
           "mint-auth"
@@ -243,9 +243,9 @@ tests coopPlutus =
           )
           [shouldSucceed, shouldYield [10, 10, 1]]
     , runAfter "mint-combined-cert-auth" $
-        assertExecutionWith -- FIXME: This test shouldSucceed
+        assertExecutionWith
           testOpts
-          "mint-fs"
+          "mint-fact-statement"
           -- WALLETS: god <> aa <> certRdmr <> authWallet <> submitterWallet <> feeWallet
           (withCollateral $ initAda [50, 50, 50] <> initAda [200] <> initAda [200] <> initAda [200] <> initAda [200] <> initAda [200])
           ( do
@@ -323,6 +323,98 @@ tests coopPlutus =
                 )
           )
           [shouldSucceed, shouldYield (1, 5)]
+    , runAfter "mint-fact-statement" $
+        assertExecutionWith -- FIXME: This test shouldSucceed
+          testOpts
+          "gc-fact-statement"
+          -- WALLETS: god <> aa <> certRdmr <> authWallet <> submitterWallet <> feeWallet
+          (withCollateral $ initAda [50, 50, 50] <> initAda [200] <> initAda [200] <> initAda [200] <> initAda [200] <> initAda [200])
+          ( do
+              (coopDeployment, certRdmrAc) <- genesis coopPlutus
+              _ <-
+                withSuccessContract @String
+                  1
+                  ( \[_god, _certR, authWallet, _sub, _fee] -> do
+                      self <- ownFirstPaymentPubKeyHash
+                      logInfo @String $ "Running as aaWallet " <> show self
+                      _ <- waitNSlots slotsToWait
+                      aaOuts <- findOutsAtHoldingAa self coopDeployment
+                      (_, now) <- currentNodeClientTimeRange
+                      let validityInterval = interval' (Finite now) PosInf
+                      let (mintAuthTrx, authAc) = mkMintAuthTrx coopDeployment self [authWallet] 5 aaOuts
+                          (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRdmrAc validityInterval aaOuts
+                      submitTrx @Void (mintAuthTrx <> mintCertTrx)
+                      return (authAc, certAc)
+                  )
+
+              _ <-
+                withSuccessContract @String
+                  3
+                  ( \[_god, _aa, _certR, _sub, _fee] -> do
+                      self <- ownFirstPaymentPubKeyHash
+                      logInfo @String $ "Running as authWallet " <> show self
+                      runRedistributeAuthsTrx coopDeployment self 5
+                  )
+
+              _ <-
+                withContractAs @String
+                  4
+                  ( \[_god, _aa, _certR, authWallet, feeWallet] -> do
+                      self <- ownFirstPaymentPubKeyHash
+                      logInfo @String $ "Running as submitterWallet " <> show self
+                      pSubmitter <- fromCardano (unPaymentPubKeyHash self)
+                      pNegInf <- fromCardano (NegInf :: Extended POSIXTime)
+                      bytesPrData <- maybe (throwError "Must bytes") return $ fromData . toData $ toBuiltin @ByteString "some bytes"
+                      intPrData <- maybe (throwError "Must int") return $ fromData . toData @Integer $ 1337
+                      listPrData <- maybe (throwError "Must list") return $ fromData . toData @[Integer] $ [1, 2, 3]
+                      mapPrData <- maybe (throwError "Must map") return $ fromData . toData @(AssocMap.Map Integer Integer) $ AssocMap.fromList [(1, 1), (2, 2)]
+                      constrPrData <- maybe (throwError "Must constr") return $ fromData . toData @(Maybe Integer) $ Just 12
+
+                      let fsInfos =
+                            [ defMessage
+                                & fsId .~ "fsIdA"
+                                & fs .~ bytesPrData
+                                & gcAfter .~ pNegInf
+                            , defMessage
+                                & fsId .~ "fsIdB"
+                                & fs .~ intPrData
+                                & gcAfter .~ pNegInf
+                            , defMessage
+                                & fsId .~ "fsIdC"
+                                & fs .~ listPrData
+                                & gcAfter .~ pNegInf
+                            , defMessage
+                                & fsId .~ "fsIdD"
+                                & fs .~ mapPrData
+                                & gcAfter .~ pNegInf
+                            , defMessage
+                                & fsId .~ "fsIdE"
+                                & fs .~ constrPrData
+                                & gcAfter .~ pNegInf
+                            ]
+                          req =
+                            defMessage
+                              & factStatements .~ fsInfos
+                              & submitter .~ pSubmitter
+                      logInfo @String (show fsInfos)
+                      _ <- runMintFsTx coopDeployment [authWallet] (adaValueOf 13, feeWallet) req
+
+                      outs <- findOutsAtHoldingCurrency (deplFsVAddress coopDeployment) (deplFsCs coopDeployment)
+                      feeOut <- findOutsAt' @Void feeWallet (\v _ -> v == adaValueOf 13)
+                      return (length feeOut, length [datumFromTxOut @FsDatum out | out <- toList outs])
+                  )
+
+              withContractAs @String
+                4
+                ( \[_god, _aa, _certR, _authWallet, _feeWallet] -> do
+                    self <- ownFirstPaymentPubKeyHash
+                    logInfo @String $ "Running as submitterWallet " <> show self
+                    runGcFsTx coopDeployment self
+                    outs <- findOutsAtHoldingCurrency (deplFsVAddress coopDeployment) (deplFsCs coopDeployment)
+                    return (length outs)
+                )
+          )
+          [shouldSucceed, shouldYield 0]
     ]
 
 genesis :: CoopPlutus -> ReaderT (ClusterEnv, NonEmpty BpiWallet) IO (CoopDeployment, AssetClass)

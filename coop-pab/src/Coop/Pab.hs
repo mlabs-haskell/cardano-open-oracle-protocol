@@ -12,6 +12,7 @@ module Coop.Pab (
   getState,
   runMintFsTx,
   runRedistributeAuthsTrx,
+  runGcFsTx,
 ) where
 
 import BotPlutusInterface.Constraints (mustValidateInFixed)
@@ -21,7 +22,7 @@ import Cardano.Proto.Aux (
 import Control.Lens ((&), (.~), (^.))
 import Control.Monad (guard)
 import Coop.Pab.Aux (Trx (Trx), currencyValue, datumFromTxOut, datumFromTxOutOrFail, deplAuthCs, deplAuthMp, deplCertCs, deplCertVAddress, deplFsCs, deplFsVAddress, deplFsVHash, findOutsAt, findOutsAt', findOutsAtHolding', findOutsAtHoldingCurrency, findOutsAtHoldingCurrency', hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintOneShotTrx, submitTrx, toDatum, toRedeemer)
-import Coop.Types (AuthBatchId, AuthDeployment (AuthDeployment, ad'authMp, ad'authorityAc, ad'certMp, ad'certV), AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), AuthParams (AuthParams, ap'authTokenCs, ap'certTokenCs), CertDatum (CertDatum, cert'id, cert'validity), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint), CoopDeployment (CoopDeployment, cd'auth, cd'fsMp, cd'fsV), CoopPlutus (cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkOneShotMp), CoopState (CoopState), FactStatementId, FsDatum (FsDatum, fd'fsId), FsMpParams (FsMpParams), FsMpRedeemer (FsMpMint), cp'certV)
+import Coop.Types (AuthBatchId, AuthDeployment (AuthDeployment, ad'authMp, ad'authorityAc, ad'certMp, ad'certV), AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), AuthParams (AuthParams, ap'authTokenCs, ap'certTokenCs), CertDatum (CertDatum, cert'id, cert'validity), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint), CoopDeployment (CoopDeployment, cd'auth, cd'fsMp, cd'fsV), CoopPlutus (cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkOneShotMp), CoopState (CoopState), FactStatementId, FsDatum (FsDatum, fd'fsId, fs'gcAfter, fs'submitter), FsMpParams (FsMpParams), FsMpRedeemer (FsMpBurn, FsMpMint), cp'certV)
 import Data.Bool (bool)
 import Data.Foldable (toList)
 import Data.List (nub)
@@ -480,7 +481,7 @@ runMintFsTx coopDeployment authenticators feeSpec req = do
   (publishingSpec, alreadyPublished') <- mkPublishingSpec coopDeployment authenticators req
   (_, now) <- currentNodeClientTimeRange
   let mintFsTrx =
-        mkMintFsTrx'
+        mkMintFsTrx
           coopDeployment
           now
           publishingSpec
@@ -502,13 +503,13 @@ data FactStatementSpec = FactStatementSpec
   , fss'authWallet :: PaymentPubKeyHash
   }
 
-mkMintFsTrx' ::
+mkMintFsTrx ::
   CoopDeployment ->
   POSIXTime ->
   PublishingSpec ->
   (Value, PaymentPubKeyHash) ->
   Trx i o a
-mkMintFsTrx' coopDeployment now publishingSpec (feeVal, feeCollectorPpkh) = do
+mkMintFsTrx coopDeployment now publishingSpec (feeVal, feeCollectorPpkh) = do
   let fsMp = cd'fsMp coopDeployment
       fsV = cd'fsV coopDeployment
       fsVHash = deplFsVHash coopDeployment
@@ -597,4 +598,71 @@ mkMintFsTrx' coopDeployment now publishingSpec (feeVal, feeCollectorPpkh) = do
 
       -- Validation range needed to validate certificates
       bpiConstraints = mustValidateInFixed (interval' (Finite now) (ps'validUntil publishingSpec))
+   in Trx lookups constraints bpiConstraints
+
+runGcFsTx :: CoopDeployment -> PaymentPubKeyHash -> Contract w s Text ()
+runGcFsTx coopDeployment self = do
+  fsOuts <- findOutsAtHoldingCurrency (deplFsVAddress coopDeployment) (deplFsCs coopDeployment)
+  (start, _) <- currentNodeClientTimeRange
+  fsOutsWithDatum <-
+    traverse
+      ( \out@(_, ciOut) -> do
+          mayDat <- datumFromTxOut @FsDatum ciOut
+          maybe
+            (throwError "Must parse FsDatum")
+            (\d -> return (out, d))
+            mayDat
+      )
+      (Map.toList fsOuts)
+  let submitterFsOutsWithDatum =
+        [ (out, fsDat)
+        | (out, fsDat) <- fsOutsWithDatum
+        , fs'submitter fsDat == unPaymentPubKeyHash self
+        , Finite start > fs'gcAfter fsDat
+        ]
+  let mintGcTrx =
+        mkGcFsTrx
+          coopDeployment
+          self
+          submitterFsOutsWithDatum
+          start
+  submitTrx @Void mintGcTrx
+
+mkGcFsTrx :: CoopDeployment -> PaymentPubKeyHash -> [((TxOutRef, ChainIndexTxOut), FsDatum)] -> POSIXTime -> Trx i o a
+mkGcFsTrx coopDeployment submitterPkh fsOutsWithDatum now = do
+  let fsMp = cd'fsMp coopDeployment
+      fsV = cd'fsV coopDeployment
+      fsCs = deplFsCs coopDeployment
+
+      totalFsValToBurn =
+        mconcat
+          [ inv $ currencyValue (out ^. ciTxOutValue) fsCs
+          | ((_, out), _) <- fsOutsWithDatum
+          ]
+
+      lookups =
+        -- Burning $FS tokens
+        plutusV2MintingPolicy fsMp
+          -- Spending from @FsV
+          <> plutusV2OtherScript fsV
+          -- \$FS @FsV UTxOs
+          <> unspentOutputs (Map.fromList $ fst <$> fsOutsWithDatum)
+          -- FsDatums
+          <> mconcat ((otherData . toDatum) . snd <$> fsOutsWithDatum)
+          -- Self is the Submitter
+          <> ownPaymentPubKeyHash submitterPkh
+
+      constraints =
+        -- Mint burn the $FS tokens associated with Fact Statements
+        mustMintValueWithRedeemer (toRedeemer FsMpBurn) totalFsValToBurn
+          -- Spend all the Fact Statements UTxOs from @FsV
+          <> mconcat
+            [ mustSpendScriptOutput oref (toRedeemer ())
+            | ((oref, _), _) <- fsOutsWithDatum
+            ]
+          -- Signed by the Submitter
+          <> mustBeSignedBy submitterPkh
+
+      -- Validation range needed <now, posInf>
+      bpiConstraints = mustValidateInFixed (interval' (Finite now) PosInf)
    in Trx lookups constraints bpiConstraints
