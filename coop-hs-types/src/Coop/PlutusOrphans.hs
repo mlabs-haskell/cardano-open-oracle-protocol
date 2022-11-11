@@ -1,5 +1,10 @@
 {-# LANGUAGE CPP #-}
+{-# OPTIONS_GHC -Wno-all-missed-specialisations #-}
+{-# OPTIONS_GHC -Wno-implicit-prelude #-}
+{-# OPTIONS_GHC -Wno-missing-local-signatures #-}
+{-# OPTIONS_GHC -Wno-missing-safe-haskell-mode #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-unsafe #-}
 
 module Coop.PlutusOrphans () where
 
@@ -81,14 +86,14 @@ instance FromJSON (UpperBound POSIXTime)
 instance ToJSON (Extended POSIXTime)
 instance FromJSON (Extended POSIXTime)
 
-instance ToJSON AssetClass
-instance FromJSON AssetClass
-
 instance ToJSON BuiltinByteString where
   toJSON = toJSON . fromBuiltin @_ @ByteString
 
 instance FromJSON BuiltinByteString where
   parseJSON v = toBuiltin <$> parseJSON @ByteString v
+
+instance ToJSON AssetClass
+instance FromJSON AssetClass
 
 instance ToJSON TxOutRef
 instance FromJSON TxOutRef

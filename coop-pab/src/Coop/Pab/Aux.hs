@@ -245,13 +245,14 @@ instance Semigroup (Trx i o a) where
 instance Monoid (Trx i o a) where
   mempty = Trx mempty mempty mempty
 
-submitTrx :: forall a e w s. (FromData (DatumType a), ToData (RedeemerType a), ToData (DatumType a), AsContractError e) => Trx (RedeemerType a) (DatumType a) a -> Contract w s e ()
+submitTrx :: forall a e w s. (FromData (DatumType a), ToData (RedeemerType a), ToData (DatumType a), AsContractError e) => Trx (RedeemerType a) (DatumType a) a -> Contract w s e TxId
 submitTrx (Trx lookups constraints bpiConstraints) = do
   tx <- submitBpiTxConstraintsWith lookups constraints bpiConstraints
   logInfo @String $ show (getCardanoTxData tx)
   logInfo @String $ show (getCardanoTxInputs tx)
   logWarn @String $ show (getCardanoTxId tx)
   awaitTxConfirmed (getCardanoTxId tx)
+  return $ getCardanoTxId tx
 
 -- | Creates an interval with Extended bounds
 interval' :: forall a. Extended a -> Extended a -> Interval a

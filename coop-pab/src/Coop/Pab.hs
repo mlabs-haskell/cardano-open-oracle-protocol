@@ -20,7 +20,7 @@ import Cardano.Proto.Aux (
   ProtoCardano (fromCardano, toCardano),
  )
 import Control.Lens ((&), (.~), (^.))
-import Control.Monad (guard)
+import Control.Monad (guard, void, when)
 import Coop.Pab.Aux (Trx (Trx), currencyValue, datumFromTxOut, datumFromTxOutOrFail, deplAuthCs, deplAuthMp, deplCertCs, deplCertVAddress, deplFsCs, deplFsVAddress, deplFsVHash, findOutsAt, findOutsAt', findOutsAtHolding', findOutsAtHoldingCurrency, findOutsAtHoldingCurrency', hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintOneShotTrx, submitTrx, toDatum, toRedeemer)
 import Coop.Types (AuthBatchId, AuthDeployment (AuthDeployment, ad'authMp, ad'authorityAc, ad'certMp, ad'certV), AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), AuthParams (AuthParams, ap'authTokenCs, ap'certTokenCs), CertDatum (CertDatum, cert'id, cert'validity), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint), CoopDeployment (CoopDeployment, cd'auth, cd'fsMp, cd'fsV), CoopPlutus (cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkOneShotMp), CoopState (CoopState), FactStatementId, FsDatum (FsDatum, fd'fsId, fs'gcAfter, fs'submitter), FsMpParams (FsMpParams), FsMpRedeemer (FsMpBurn, FsMpMint), cp'certV)
 import Data.Bool (bool)
@@ -28,11 +28,12 @@ import Data.Foldable (toList)
 import Data.List (nub)
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.Maybe (catMaybes)
 import Data.ProtoLens (Message (defMessage))
 import Data.Text (Text)
 import Data.Traversable (for)
 import Data.Void (Void)
-import Ledger (Language (PlutusV2), PaymentPubKeyHash (PaymentPubKeyHash, unPaymentPubKeyHash), TxOutRef, Versioned (Versioned), after, applyArguments, ciTxOutValue, interval)
+import Ledger (Language (PlutusV2), PaymentPubKeyHash (PaymentPubKeyHash, unPaymentPubKeyHash), TxId, TxOutRef, Versioned (Versioned), after, applyArguments, ciTxOutValue, interval)
 import Ledger.Tx (ChainIndexTxOut)
 import Plutus.Contract (Contract, currentNodeClientTimeRange, ownFirstPaymentPubKeyHash, throwError)
 import Plutus.Contract.Constraints (mintingPolicy, mustBeSignedBy, mustMintValueWithRedeemer, mustPayToOtherScriptWithInlineDatum, mustPayToPubKey, mustReferenceOutput, mustSpendPubKeyOutput, mustSpendScriptOutput, otherData, otherScript, ownPaymentPubKeyHash, plutusV2MintingPolicy, plutusV2OtherScript, unspentOutputs)
@@ -171,7 +172,6 @@ mkMintCertTrx coopDeployment self redeemerAc validityInterval aaOuts =
           ]
       constraints =
         mustMintValueWithRedeemer (toRedeemer CertMpMint) certVal
-          -- FIXME: Figure out why mustPayToOtherScriptWithDatumInline fails
           <> mustPayToOtherScriptWithInlineDatum certVAddr certDatum (certVal <> minUtxoAdaValue)
           <> mconcat (mustSpendPubKeyOutput <$> aaOrefs)
    in (Trx lookups constraints [], assetClass certCs certTn)
@@ -183,21 +183,33 @@ burnCerts coopDeployment certRdmrAc = do
   let certCs = deplCertCs coopDeployment
       certVAddr = deplCertVAddress coopDeployment
   self <- ownFirstPaymentPubKeyHash
+  (start, _) <- currentNodeClientTimeRange
   certRdmrOuts <- findOutsAtHolding' self certRdmrAc
   certOuts <- findOutsAtHoldingCurrency certVAddr certCs
   logI $ printf "Found %d $CERT ouputs at @CertV" (length certOuts)
-
   bool
     (throwError "burnCerts: There should be some $CERT inputs")
     (pure ())
     $ not (null certOuts)
 
+  obsoleteCertOuts <-
+    Map.fromList . catMaybes
+      <$> for
+        (Map.toList certOuts)
+        ( \out@(_, ciOut) -> do
+            certDat <- datumFromTxOutOrFail @CertDatum ciOut "Must have a CertDatum at @CertV"
+            let isExpired = after start (cert'validity certDat)
+            if isExpired then return $ Just out else return Nothing
+        )
+
+  when (null obsoleteCertOuts) (throwError "burnCerts: There should be some obsolete $CERT inputs")
+
   (now, _) <- currentNodeClientTimeRange
   let certMp = (ad'certMp . cd'auth) coopDeployment
       certV = (ad'certV . cd'auth) coopDeployment
       certRdmdrOrefs = Map.keys certRdmrOuts
-      certOrefs = Map.keys certOuts
-      certVal = foldMap (\out -> inv $ currencyValue (out ^. ciTxOutValue) certCs) (toList certOuts)
+      certOrefs = Map.keys obsoleteCertOuts
+      certVal = foldMap (\out -> inv $ currencyValue (out ^. ciTxOutValue) certCs) (toList obsoleteCertOuts)
       timeRange = interval' (Finite now) PosInf
 
   let lookups =
@@ -205,7 +217,7 @@ burnCerts coopDeployment certRdmrAc = do
           <> otherScript (Versioned certV PlutusV2)
           <> ownPaymentPubKeyHash self
           <> unspentOutputs certRdmrOuts
-          <> unspentOutputs certOuts
+          <> unspentOutputs obsoleteCertOuts
 
       constraints =
         mustMintValueWithRedeemer (toRedeemer CertMpBurn) certVal
@@ -219,11 +231,11 @@ burnCerts coopDeployment certRdmrAc = do
 
 mkMintAuthTrx :: CoopDeployment -> PaymentPubKeyHash -> [PaymentPubKeyHash] -> Integer -> Map TxOutRef ChainIndexTxOut -> (Trx i o a, AssetClass)
 mkMintAuthTrx coopDeployment self authWallets authQEach aaOuts =
-  let authMp = (ad'authMp . cd'auth) coopDeployment
+  let authMp = deplAuthMp coopDeployment
       aaOrefs = Map.keys aaOuts
       authId = hashTxInputs aaOuts
       authTn = TokenName authId
-      authCs = scriptCurrencySymbol authMp
+      authCs = deplAuthCs coopDeployment
       authValEach = Value.singleton authCs authTn authQEach
       authValTotal = Value.singleton authCs authTn (authQEach * (fromIntegral . length $ authWallets))
       lookups =
@@ -239,25 +251,42 @@ mkMintAuthTrx coopDeployment self authWallets authQEach aaOuts =
 runRedistributeAuthsTrx :: CoopDeployment -> PaymentPubKeyHash -> Int -> Contract w s Text ()
 runRedistributeAuthsTrx coopDeployment self howMany = do
   let authCs = deplAuthCs coopDeployment
+      eachQ = 1
   authOuts <- findOutsAtHoldingCurrency' self authCs
-  logInfo @String (show authOuts)
-  let authAcs =
-        [ assetClass cs tn
-        | out <- toList authOuts
-        , (cs, tn, q) <- Value.flattenValue (out ^. ciTxOutValue)
-        , q >= toInteger howMany
-        ]
-  case authAcs of
-    [] -> throwError "Must have at least $AUTH x howMany to redistribute"
-    authAc : _ -> do
-      let lookups = ownPaymentPubKeyHash self <> unspentOutputs authOuts
-          constraints =
-            mconcat (mustSpendPubKeyOutput <$> Map.keys authOuts)
-              <> mconcat (replicate howMany (mustPayToPubKey self (assetClassValue authAc 1)))
+  logInfo @String $ "Found " <> show (length authOuts) <> " $AUTH outputs"
+  lookupsAndConstraints <-
+    catMaybes
+      <$> for
+        (Map.toList authOuts)
+        ( \authOut@(oref, ciOut) -> do
+            case Value.flattenValue (currencyValue (ciOut ^. ciTxOutValue) authCs) of
+              (cs, tn, q) : _ -> do
+                let authAc = assetClass cs tn
+                if q >= eachQ * toInteger howMany
+                  then
+                    return $
+                      Just
+                        ( unspentOutputs $ Map.fromList [authOut]
+                        , mustSpendPubKeyOutput oref
+                            <> mconcat
+                              ( replicate
+                                  howMany
+                                  (mustPayToPubKey self (assetClassValue authAc eachQ <> minUtxoAdaValue))
+                              )
+                        )
+                  else do
+                    logInfo @String "Skipping $AUTH outputs that has insufficient $AUTH quantity"
+                    return Nothing
+              _ -> do
+                logInfo @String "Must have $AUTH outputs at Authenticator"
+                return Nothing
+        )
+  let lookups = ownPaymentPubKeyHash self <> mconcat (fst <$> lookupsAndConstraints)
+      constraints = mconcat (snd <$> lookupsAndConstraints)
 
-      submitTrx @Void (Trx lookups constraints [])
-      authOuts' <- findOutsAtHoldingCurrency' self authCs
-      logInfo @String (show authOuts')
+  submitTrx @Void (Trx lookups constraints [])
+  authOuts' <- findOutsAtHoldingCurrency' self authCs
+  logInfo @String (show authOuts')
 
 mintAuthAndCert ::
   CoopDeployment ->
@@ -333,9 +362,9 @@ getState coopDeployment = do
           maybe (throwError "Can't parse FsDatum") return mayDat
       )
       (Map.toList fsOuts)
-
+  (start, end) <- currentNodeClientTimeRange
   logI "Finished"
-  return (CoopState certDatums fsDatums)
+  return (CoopState certDatums fsDatums (start, end))
 
 -- | Queries
 findOutsAtCertV :: CoopDeployment -> (Value -> CertDatum -> Bool) -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
@@ -423,8 +452,10 @@ findOnchainState coopDeployment authenticators =
 toCardanoC :: ProtoCardano (Either Text) proto cardano => proto -> Contract w s Text cardano
 toCardanoC proto = let x = toCardano @(Either Text) proto in either throwError return x
 
-mkPublishingSpec :: CoopDeployment -> [PaymentPubKeyHash] -> CreateMintFsTxReq -> Contract w s Text (PublishingSpec, [MintFsSuccess'FsIdAndTxOutRef])
+mkPublishingSpec :: CoopDeployment -> [PaymentPubKeyHash] -> CreateMintFsTxReq -> Contract w s Text (Maybe PublishingSpec, [MintFsSuccess'FsIdAndTxOutRef])
 mkPublishingSpec coopDeployment authenticators req = do
+  when (null $ req ^. factStatements) (throwError "Must have at least one Fact Statement to process")
+
   CoopOnchainState authBatches published <- findOnchainState coopDeployment authenticators
   submitterPPkh <- PaymentPubKeyHash <$> toCardanoC (req ^. submitter)
   let alreadyPublished' =
@@ -440,55 +471,72 @@ mkPublishingSpec coopDeployment authenticators req = do
         | fsInfo <- req ^. factStatements
         , not $ Map.member (LedgerBytes . toBuiltin $ fsInfo ^. fsId) published
         ]
-      authInfos = take (length fsInfosToPublish) $ flattenAuthBatches authBatches
-  txValidUntil <-
-    maybe
-      (throwError "Must have sufficient $AUTH inputs")
-      return
-      (maximumMay $ (\(_, _, _, UpperBound ext _) -> ext) <$> authInfos)
-  fsDatums <-
-    for
-      fsInfosToPublish
-      ( \fsInfo -> do
-          gc <- toCardanoC $ fsInfo ^. gcAfter
-          return $
-            FsDatum
-              (toBuiltinData $ fsInfo ^. fs)
-              (LedgerBytes . toBuiltin $ fsInfo ^. fsId)
-              gc
-              (unPaymentPubKeyHash submitterPPkh)
+
+  if null fsInfosToPublish
+    then
+      ( do
+          logInfo @String "Nothing new to publish"
+          return (Nothing, alreadyPublished')
       )
-  let fsInfosWithAuth =
-        zipWith
-          ( \(authBatch, authOut, authWallet, _) fsDatum -> FactStatementSpec fsDatum authOut authBatch authWallet
+    else do
+      let stillValidAuthPairs' = stillValidAuthPairs authBatches
+          authInfos = take (length fsInfosToPublish) stillValidAuthPairs'
+
+      when (length fsInfosToPublish > length stillValidAuthPairs') $ throwError "Must have enough valid authentication pairs (cert+auth) to authenticate Fact Statements"
+
+      txValidUntil <-
+        maybe
+          (throwError "Must have sufficient $AUTH inputs")
+          return
+          (maximumMay $ (\(_, _, _, UpperBound ext _) -> ext) <$> authInfos)
+
+      fsDatums <-
+        for
+          fsInfosToPublish
+          ( \fsInfo -> do
+              gc <- toCardanoC $ fsInfo ^. gcAfter
+              return $
+                FsDatum
+                  (toBuiltinData $ fsInfo ^. fs)
+                  (LedgerBytes . toBuiltin $ fsInfo ^. fsId)
+                  gc
+                  (unPaymentPubKeyHash submitterPPkh)
           )
-          authInfos
-          fsDatums
-  if length fsInfosWithAuth /= length fsInfosToPublish
-    then throwError "Must have enough $AUTH outputs to authenticate each Fact Statement"
-    else return (PublishingSpec submitterPPkh fsInfosWithAuth txValidUntil, alreadyPublished')
+      let fsInfosWithAuth =
+            zipWith
+              ( \(authBatch, authOut, authWallet, _) fsDatum -> FactStatementSpec fsDatum authOut authBatch authWallet
+              )
+              authInfos
+              fsDatums
+      if length fsInfosWithAuth /= length fsInfosToPublish
+        then throwError "Must have enough $AUTH outputs to authenticate each Fact Statement"
+        else return (Just $ PublishingSpec submitterPPkh fsInfosWithAuth txValidUntil, alreadyPublished')
   where
-    flattenAuthBatches :: Map LedgerBytes CoopAuthBatch -> [(CoopAuthBatch, (TxOutRef, ChainIndexTxOut), PaymentPubKeyHash, UpperBound POSIXTime)]
-    flattenAuthBatches authBatches = do
+    stillValidAuthPairs :: Map LedgerBytes CoopAuthBatch -> [(CoopAuthBatch, (TxOutRef, ChainIndexTxOut), PaymentPubKeyHash, UpperBound POSIXTime)]
+    stillValidAuthPairs authBatches = do
       batch <- toList authBatches
       guard $ not (auth'isExpired batch)
       (authWallet, authOuts) <- Map.toList $ auth'authOutsByWallet batch
       authOut <- Map.toList authOuts
       return (batch, authOut, authWallet, ivTo . cert'validity . auth'certDatum $ batch)
 
-runMintFsTx :: CoopDeployment -> [PaymentPubKeyHash] -> (Value, PaymentPubKeyHash) -> CreateMintFsTxReq -> Contract w s Text [MintFsSuccess'FsIdAndTxOutRef]
+runMintFsTx :: CoopDeployment -> [PaymentPubKeyHash] -> (Value, PaymentPubKeyHash) -> CreateMintFsTxReq -> Contract w s Text (Maybe TxId, [MintFsSuccess'FsIdAndTxOutRef])
 runMintFsTx coopDeployment authenticators feeSpec req = do
-  (publishingSpec, alreadyPublished') <- mkPublishingSpec coopDeployment authenticators req
-  (_, now) <- currentNodeClientTimeRange
-  let mintFsTrx =
-        mkMintFsTrx
-          coopDeployment
-          now
-          publishingSpec
-          feeSpec
-  submitTrx @Void mintFsTrx
-  -- TODO: Add the transaction body in cbor
-  return alreadyPublished'
+  (mayPublishingSpec, alreadyPublished') <- mkPublishingSpec coopDeployment authenticators req
+  maybe
+    (return (Nothing, alreadyPublished'))
+    ( \publishingSpec -> do
+        (_, now) <- currentNodeClientTimeRange
+        let mintFsTrx =
+              mkMintFsTrx
+                coopDeployment
+                now
+                publishingSpec
+                feeSpec
+        txId <- submitTrx @Void mintFsTrx
+        return (Just txId, alreadyPublished')
+    )
+    mayPublishingSpec
 
 data PublishingSpec = PublishingSpec
   { ps'submitter :: PaymentPubKeyHash
@@ -597,7 +645,7 @@ mkMintFsTrx coopDeployment now publishingSpec (feeVal, feeCollectorPpkh) = do
           <> mustBeSignedBy (ps'submitter publishingSpec)
 
       -- Validation range needed to validate certificates
-      bpiConstraints = mustValidateInFixed (interval' (Finite now) (ps'validUntil publishingSpec))
+      bpiConstraints = mustValidateInFixed (interval' (Finite now) (Finite (now + 3 * 1_000))) -- (ps'validUntil publishingSpec))
    in Trx lookups constraints bpiConstraints
 
 runGcFsTx :: CoopDeployment -> PaymentPubKeyHash -> Contract w s Text ()
@@ -626,7 +674,7 @@ runGcFsTx coopDeployment self = do
           self
           submitterFsOutsWithDatum
           start
-  submitTrx @Void mintGcTrx
+  void $ submitTrx @Void mintGcTrx
 
 mkGcFsTrx :: CoopDeployment -> PaymentPubKeyHash -> [((TxOutRef, ChainIndexTxOut), FsDatum)] -> POSIXTime -> Trx i o a
 mkGcFsTrx coopDeployment submitterPkh fsOutsWithDatum now = do

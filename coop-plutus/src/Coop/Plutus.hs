@@ -48,7 +48,7 @@ fsV :: ClosedTerm PValidator
 fsV = phoistAcyclic $
   plam $ \_ _ ctx -> ptrace "@FsV" P.do
     _ <- plet $ pmustBurnOwnSingletonValue # ctx
-    ptrace "@CertV: Own spent singleton value is burned" $ popaque punit
+    ptrace "@FsV: Own spent singleton value is burned" $ popaque punit
 
 -- | Minting policy that validates minting and burning of $FS tokens
 mkFsMp :: ClosedTerm (PAsData PFsMpParams :--> PMintingPolicy)
@@ -73,7 +73,7 @@ NOTE: @FsV delegates spending validation to FsMp
 -}
 fsMpBurn :: ClosedTerm (PFsMpParams :--> PScriptContext :--> POpaque)
 fsMpBurn = phoistAcyclic $
-  plam $ \_ ctx -> ptrace "FsMp burn" P.do
+  plam $ \_ ctx -> ptrace "FsMpBurn" P.do
     ctx' <- pletFields @'["txInfo", "purpose"] ctx
     ownCs <- plet $ pownCurrencySymbol # ctx'.purpose
 
@@ -83,26 +83,26 @@ fsMpBurn = phoistAcyclic $
 
           pif
             (phasCurrency # ownCs # txIn.value)
-            ( ptrace "FsMp burn: Found own input" P.do
+            ( ptrace "FsMpBurn: Found own input" P.do
                 fsDatum <- pletFields @'["fd'submitter", "fd'gcAfter", "fd'fsId"] $ pdatumFromTxOut @PFsDatum # ctx # txOut
-                ptrace "FsMp burn: Valid FsDatum attached"
+                ptrace "FsMpBurn: Valid FsDatum attached"
 
                 _ <- plet $ pmustBeSignedBy # ctx # fsDatum.fd'submitter
-                ptrace "FsMp burn: Submitter signed"
+                ptrace "FsMpBurn: Submitter signed"
 
                 _ <- plet $ pmustValidateAfter # ctx # fsDatum.fd'gcAfter
-                ptrace "FsMp burn: Time validates"
+                ptrace "FsMpBurn: Time validates"
 
                 ownSpent <- plet $ pcurrencyValue # ownCs # txIn.value
                 shouldBurn <> inv ownSpent
             )
-            (ptrace "FsMp burn: Skipping foreign input" shouldBurn)
+            (ptrace "FsMpBurn: Skipping foreign input" shouldBurn)
 
     -- Contains negative quantities
     fsToBurn <- plet $ pfoldTxInputs # ctx # plam foldFn # mempty
 
     _ <- plet $ pmustMintCurrency # ctx # ownCs # fsToBurn
-    ptrace "FsMp burn: $FS spent are valid and burned" $ popaque punit
+    ptrace "FsMpBurn: $FS spent are valid and burned" $ popaque punit
 
 {- | Validates minting of $FS tokens.
 
@@ -112,9 +112,9 @@ fsMpBurn = phoistAcyclic $
 -}
 fsMpMint :: ClosedTerm (PFsMpParams :--> PScriptContext :--> POpaque)
 fsMpMint = phoistAcyclic $
-  plam $ \params ctx -> ptrace "FsMp mint" P.do
+  plam $ \params ctx -> ptrace "FsMpMint" P.do
     validAuthInputs <- plet $ validateAuthInputs # (pfield @"fmp'authParams" # params) # ctx
-    ptrace "FsMp mint: Validated authentication inputs"
+    ptrace "FsMpMint: Validated authentication inputs"
 
     ctx' <- pletFields @'["purpose"] ctx
     ownCs <- plet $ pownCurrencySymbol # ctx'.purpose
@@ -134,17 +134,17 @@ fsMpMint = phoistAcyclic $
           # ctx
           # plam foldFn
           # pcon (PPair mempty validAuthInputs)
-    ptrace "FsMp mint: Validated and authenticated Fact Statement outputs"
+    ptrace "FsMpMint: Validated and authenticated Fact Statement outputs"
 
     _ <-
       plet $
         pif
           (restAuths #== pnil)
-          (ptrace "FsMp mint: Auth inputs are all used" punit)
-          (ptraceError "FsMp mint: Auth inputs must ALL be used")
+          (ptrace "FsMpMint: Auth inputs are all used" punit)
+          (ptraceError "FsMpMint: Auth inputs must ALL be used")
 
     _ <- plet $ pmustMintCurrency # ctx # ownCs # fsToMint
-    ptrace "FsMp mint: $FS minted are paid to @FsV" $ popaque punit
+    ptrace "FsMpMint: $FS minted are paid to @FsV" $ popaque punit
 
 {- | Handles a transaction output that holds an $FS token.
 
@@ -430,7 +430,7 @@ Notes:
 -}
 certMpBurn :: ClosedTerm (PScriptContext :--> POpaque)
 certMpBurn = phoistAcyclic $
-  plam $ \ctx -> ptrace "CertMp burn" P.do
+  plam $ \ctx -> ptrace "CertMpBurn" P.do
     ctx' <- pletFields @'["txInfo", "purpose"] ctx
     ownCs <- plet $ pownCurrencySymbol # ctx'.purpose
 
@@ -439,7 +439,7 @@ certMpBurn = phoistAcyclic $
           txInVal <- plet $ pfield @"value" # txIn
           pif
             (phasCurrency # ownCs # txInVal)
-            ( ptrace "CertMp burn: Found own input" P.do
+            ( ptrace "CertMpBurn: Found own input" P.do
                 certDatum' <- plet $ pdatumFromTxOut @PCertDatum # ctx # txIn
                 certDatum <-
                   pletFields
@@ -448,34 +448,34 @@ certMpBurn = phoistAcyclic $
                       , "cert'redeemerAc"
                       ]
                     $ certDatum'
-                ptrace "CertMp burn: Parsed the CertDatum"
+                ptrace "CertMpBurn: Parsed the CertDatum"
 
                 certValidUntil <- plet $ pfield @"_0" #$ pfield @"to" # certDatum.cert'validity
                 _ <- plet $ pmustValidateAfter # ctx # certValidUntil
-                ptrace "CertMp burn: Can collect invalid cert"
+                ptrace "CertMpBurn: Can collect invalid cert"
 
                 redeemerAc <- pletFields @'["_0", "_1"] certDatum.cert'redeemerAc
                 -- TODO(perf): Consider adding a TxOutRef to the redeemer as it would make it more efficient to find the $CERT-RDMR input
                 _ <- plet $ pmustSpendAtLeast # ctx # redeemerAc._0 # redeemerAc._1 # 1
-                ptrace "CertMp burn: At least 1 $CERT-RDMR spent"
+                ptrace "CertMpBurn: At least 1 $CERT-RDMR spent"
 
                 certVal <- plet $ PValue.psingleton # ownCs # pcon (PTokenName $ certDatum.cert'id) # 1
                 _ <-
                   plet $
                     pif
                       (pcurrencyValue # ownCs # txInVal #== certVal)
-                      (ptrace "CertMp burn: Spent 1 $CERT token" punit)
-                      (ptraceError "CertMp burn: Must spend a 1 $CERT token")
+                      (ptrace "CertMpBurn: Spent 1 $CERT token" punit)
+                      (ptraceError "CertMpBurn: Must spend a 1 $CERT token")
 
                 shouldBurn <> inv certVal
             )
-            (ptrace "CertMp burn: Skipping foreign input" shouldBurn)
+            (ptrace "CertMpBurn: Skipping foreign input" shouldBurn)
 
     shouldBurn <- plet $ pfoldTxInputs # ctx # plam foldFn # mempty
 
     _ <- plet $ pmustMintCurrency # ctx # ownCs # shouldBurn
 
-    ptrace "CertMp burn: All $CERTs spent and burned" $ popaque punit
+    ptrace "CertMpBurn: All $CERTs spent and burned" $ popaque punit
 
 {- | Validates minting of $CERT tokens
 
@@ -489,17 +489,17 @@ Notes:
 -}
 certMpMint :: ClosedTerm (PCertMpParams :--> PScriptContext :--> POpaque)
 certMpMint = phoistAcyclic $
-  plam $ \params ctx -> ptrace "CertMp mint" P.do
+  plam $ \params ctx -> ptrace "CertMpMint" P.do
     ctx' <- pletFields @'["txInfo", "purpose"] ctx
     ownCs <- plet $ pownCurrencySymbol # ctx'.purpose
     certParams <- pletFields @'["cmp'authAuthorityAc", "cmp'requiredAtLeastAaQ", "cmp'certVAddress"] params
 
     tnBytes <- plet $ pmustSpendAtLeastAa # ctx # certParams.cmp'authAuthorityAc # certParams.cmp'requiredAtLeastAaQ
-    ptrace "CertMp mint: Spent at least a required quantity of $AA tokens"
+    ptrace "CertMpMint: Spent at least a required quantity of $AA tokens"
 
     certTn <- plet $ pcon $ PTokenName tnBytes
     _ <- plet $ pmustMintCurrency # ctx # ownCs # (PValue.psingleton # ownCs # certTn # 1)
-    ptrace "CertMp mint: Minted 1 $CERT"
+    ptrace "CertMpMint: Minted 1 $CERT"
 
     _ <-
       plet $
@@ -509,7 +509,7 @@ certMpMint = phoistAcyclic $
           # (PValue.psingleton # ownCs # certTn # 1)
           # plam (\(certDatum :: Term s PCertDatum) -> (pfield @"cert'id" # certDatum) #== tnBytes)
           # certParams.cmp'certVAddress
-    ptrace "CertMp mint: Paid 1 $CERT to @CertV and attached a valid datum" $ popaque punit
+    ptrace "CertMpMint: Paid 1 $CERT to @CertV and attached a valid CertDatum" $ popaque punit
 
 -- | $AUTH minting policy
 mkAuthMp :: ClosedTerm (PAsData PAuthMpParams :--> PMintingPolicy)
@@ -529,49 +529,38 @@ mkAuthMp = phoistAcyclic $
 -}
 authMpMint :: ClosedTerm (PAuthMpParams :--> PScriptContext :--> POpaque)
 authMpMint = phoistAcyclic $
-  plam $ \params ctx -> ptrace "AuthMp mint" P.do
+  plam $ \params ctx -> ptrace "AuthMpMint" P.do
     ctx' <- pletFields @'["txInfo", "purpose"] ctx
     ownCs <- plet $ pownCurrencySymbol # ctx'.purpose
     minted <- plet $ pfield @"mint" # ctx'.txInfo
     authMpParams <- pletFields @'["amp'authAuthorityAc", "amp'requiredAtLeastAaQ", "amp'certVAddress"] params
 
     authId <- plet $ pmustSpendAtLeastAa # ctx # authMpParams.amp'authAuthorityAc # authMpParams.amp'requiredAtLeastAaQ
-    ptrace "AuthMp mint: Spent at least a required quantity of $AA tokens"
+    ptrace "AuthMpMint: Spent at least a required quantity of $AA tokens"
 
     pif
       (0 #< (pcurrencyTokenQuantity # ownCs # pcon (PTokenName authId) # minted))
-      (ptrace "AuthMp mint: At least one $AUTH token is minted" $ popaque punit)
-      (ptraceError "AuthMp mint: Must mint at least one $AUTH token")
+      (ptrace "AuthMpMint: At least one $AUTH token is minted" $ popaque punit)
+      (ptraceError "AuthMpMint: Must mint at least one $AUTH token")
 
 {- | Validates burning of $AUTH tokens
 
-- accumulate all spent $AUTH tokens and check if all are burned
-
-Notes:
-- $AUTH tokens can be burned freely
+- Checks that all the $AUTH value in txMint is negative
 -}
 authMpBurn :: ClosedTerm (PScriptContext :--> POpaque)
 authMpBurn = phoistAcyclic $
-  plam $ \ctx -> ptrace "AuthMp burn $AUTH" P.do
-    ctx' <- pletFields @'["txInfo", "purpose"] ctx
-    ownCs <- plet $ pownCurrencySymbol # ctx'.purpose
+  plam $
+    \ctx -> ptrace "AuthMpBurn" P.do
+      ctx' <- pletFields @'["txInfo", "purpose"] ctx
+      ownCs <- plet $ pownCurrencySymbol # ctx'.purpose
+      minted <- plet $ pfield @"mint" # ctx'.txInfo
 
-    let foldFn shouldBurn txInInfo = P.do
-          txIn <- plet $ pfield @"resolved" # txInInfo
-          txInVal <- plet $ pfield @"value" # txIn
-          pif
-            (phasCurrency # ownCs # txInVal)
-            ( ptrace "AuthMp burn $AUTH: Found own input" P.do
-                ownSpent <- plet $ pcurrencyValue # ownCs # txInVal
-                shouldBurn <> inv ownSpent
-            )
-            (ptrace "AuthMp burn $AUTH: Skipping foreign input" shouldBurn)
+      ownValue <- plet $ pcurrencyValue # ownCs # minted
 
-    shouldBurn <- plet $ pfoldTxInputs # ctx # plam foldFn # mempty
-
-    _ <- plet $ pmustMintCurrency # ctx # ownCs # shouldBurn
-
-    ptrace "AuthMp burn: Burned all spent $AUTH tokens" $ popaque punit
+      pif
+        (ownValue #< mempty)
+        (ptrace "AuthMpBurn: Own value $AUTH in txMint is all burned" $ popaque punit)
+        (ptraceError "AuthMpBurn: Own value $AUTH in txMint must all be burned")
 
 {- | Checks for total spent $AA tokens and create a unique bytestring from them
 

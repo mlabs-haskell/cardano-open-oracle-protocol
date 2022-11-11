@@ -82,12 +82,14 @@ aaWalletPkhOptP =
         <> help "A wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001) holding $AA tokens"
     )
 
-certRdmrAcOptP :: Parser AssetClass
+certRdmrAcOptP :: Parser FilePath
 certRdmrAcOptP =
-  assetClassOpt
-    ( long "cert-rdmr-ac"
-        <> metavar "CERTRDMR_AC"
-        <> help "$CERT-RDMR asset class that can be used to garbage collect expired $CERT UTxOs locked at @CertV"
+  strOption
+    ( long "cert-rdmr-ac-file"
+        <> metavar "CERT_RDMR_AC_FILE"
+        <> help "A Haskell `serialise` encoded file containing the $CERT-RDMR AssetClass"
+        <> value ".coop-pab-cli/cert-rdmr-ac.show"
+        <> showDefault
     )
 
 certRdmrWalletOptP :: Parser PubKeyHash
@@ -175,6 +177,7 @@ mintCertRdmrsOptsP =
           <> value 100
           <> showDefault
       )
+    <*> certRdmrAcOptP
 
 mintAuthOptsP :: Parser MintAuthOpts
 mintAuthOptsP =
@@ -216,6 +219,11 @@ getStateOptsP =
   GetStateOpts
     <$> pabConfigOptP
     <*> deploymentFileOptP
+    <*> pubKeyHashOpt
+      ( long "any-wallet"
+          <> metavar "ANY_WALLET"
+          <> help "Wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001) used to run the query contracts"
+      )
     <*> strOption
       ( long "state-file"
           <> metavar "STATE_FILE"

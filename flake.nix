@@ -179,6 +179,7 @@
           coop-hs-types = ./coop-hs-types;
           cardanoProtoExtras = ./coop-proto/cardano-proto-extras;
           inherit cardanoProtoHs;
+          plutipLocalCluster = plutip.packages.${system}."plutip:exe:local-cluster";
           compiler-nix-name = "ghc8107";
         };
         coopPabFlake = coopPabProj.flake { };

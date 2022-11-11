@@ -1,6 +1,6 @@
 module Coop.Cli.TxBuilderGrpc (txBuilderService, TxBuilderGrpcOpts (..)) where
 
-import Lens.Micro ((&), (.~), (^.))
+import Control.Lens ((&), (.~), (^.))
 import Network.GRPC.HTTP2.Encoding as Encoding (
   gzip,
   uncompressed,
@@ -19,19 +19,25 @@ import Plutus.V2.Ledger.Api (PubKeyHash)
 import Proto.TxBuilderService (CreateGcFsTxReq, CreateGcFsTxResp, CreateMintFsTxReq, CreateMintFsTxResp, TxBuilder)
 
 import BotPlutusInterface.Config (loadPABConfig)
-import BotPlutusInterface.Types (pcOwnPubKeyHash)
+import BotPlutusInterface.Files (txFileName)
+import BotPlutusInterface.Types (PABConfig, pcOwnPubKeyHash, pcTxFileDir)
 import Cardano.Proto.Aux (ProtoCardano (toCardano))
 import Coop.Pab (runMintFsTx)
 import Coop.Pab.Aux (runBpi)
 import Coop.Types (CoopDeployment)
 import Data.Aeson (decodeFileStrict)
+import Data.ByteString qualified as ByteString
 import Data.Maybe (fromMaybe)
 import Data.ProtoLens (Message (defMessage))
-import Data.Text (Text)
+import Data.Text (Text, unpack)
+import Data.Text.Encoding (decodeUtf8')
 import GHC.Exts (fromString)
-import Ledger (PaymentPubKeyHash (PaymentPubKeyHash))
-import Proto.TxBuilderService_Fields (alreadyPublished, mintFsSuccess, msg, otherErr, submitter)
+import Ledger (PaymentPubKeyHash (PaymentPubKeyHash), TxId)
+import Proto.Plutus_Fields (cborBase16)
+import Proto.TxBuilderService_Fields (alreadyPublished, mintFsSuccess, mintFsTx, msg, otherErr, submitter)
 import Proto.TxBuilderService_Fields qualified as Proto.TxBuilderService
+import System.Directory (doesFileExist, makeAbsolute)
+import System.FilePath ((</>))
 
 data TxBuilderGrpcOpts = TxBuilderGrpcOpts
   { tbgo'pabConfig :: FilePath
@@ -66,7 +72,26 @@ txBuilderService opts = do
             (runMintFsTxOnReq req)
         either
           (\err -> return $ defMessage & Proto.TxBuilderService.error . otherErr . msg .~ err)
-          (\alreadyPublished' -> return $ defMessage & mintFsSuccess . alreadyPublished .~ alreadyPublished')
+          ( \(mayTxId, alreadyPublished') -> do
+              maybe
+                ( return $
+                    defMessage
+                      & mintFsSuccess . alreadyPublished .~ alreadyPublished'
+                )
+                ( \txId -> do
+                    mayRawTx <- readSignedTx pabConf txId
+                    maybe
+                      (return $ defMessage & Proto.TxBuilderService.error . otherErr . msg .~ "Unable to authenticate transaction")
+                      ( \rawTx ->
+                          return $
+                            defMessage
+                              & mintFsSuccess . alreadyPublished .~ alreadyPublished'
+                              & mintFsSuccess . mintFsTx . cborBase16 .~ rawTx
+                      )
+                      mayRawTx
+                )
+                mayTxId
+          )
           errOrAcs
 
       routes :: [ServiceHandler]
@@ -99,3 +124,15 @@ handleCreateGcFsTx _ _ =
   return $
     defMessage
       & Proto.TxBuilderService.error . otherErr . msg .~ "Finally"
+
+readSignedTx :: PABConfig -> TxId -> IO (Maybe Text)
+readSignedTx pabConf txId = do
+  txFolderPath <- makeAbsolute (unpack . pcTxFileDir $ pabConf)
+  let path :: FilePath
+      path = txFolderPath </> unpack (txFileName txId "signed")
+  fileExists <- doesFileExist path
+  if fileExists
+    then do
+      tx <- ByteString.readFile path
+      either (\_ -> return Nothing) (return . Just) $ decodeUtf8' tx
+    else return Nothing

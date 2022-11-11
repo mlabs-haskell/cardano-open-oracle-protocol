@@ -2,16 +2,19 @@ module Coop.Cli.GetState (GetStateOpts (..), getState) where
 
 import BotPlutusInterface.Config (loadPABConfig)
 
+import BotPlutusInterface.Types (PABConfig (pcOwnPubKeyHash))
 import Coop.Pab qualified as Pab
 import Coop.Pab.Aux (runBpi)
 import Coop.Types (CoopDeployment)
 import Data.Aeson (decodeFileStrict, encodeFile)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
+import Ledger (PubKeyHash)
 
 data GetStateOpts = GetStateOpts
   { gco'pabConfig :: FilePath
   , gco'coopDeploymentFile :: FilePath
+  , gco'anyPkh :: PubKeyHash
   , gco'coopStateFile :: FilePath
   }
   deriving stock (Show, Eq)
@@ -24,6 +27,8 @@ getState opts = do
   (_, errOrAcs) <-
     runBpi @Text
       pabConf
+        { pcOwnPubKeyHash = gco'anyPkh opts
+        }
       $ Pab.getState coopDeployment
   either
     (\err -> error $ "getState: " <> show err)

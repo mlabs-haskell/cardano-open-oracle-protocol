@@ -6,6 +6,7 @@ import Aux (runAfter, withSuccessContract)
 import BotPlutusInterface.Types (LogContext (ContractLog), LogLevel (Debug), LogType (AnyLog, CollateralLog))
 import Cardano.Proto.Aux (fromCardano)
 import Control.Lens ((.~))
+import Control.Monad (void)
 import Control.Monad.Reader (ReaderT)
 import Coop.Pab (burnAuths, burnCerts, deployCoop, findOutsAtCertVWithCERT, findOutsAtHoldingAa, mintAuthAndCert, mintCertRedeemers, mkMintAuthTrx, mkMintCertTrx, runGcFsTx, runMintFsTx, runRedistributeAuthsTrx)
 import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), ciValueOf, datumFromTxOut, deplFsCs, deplFsVAddress, findOutsAt', findOutsAtHolding, findOutsAtHolding', findOutsAtHoldingCurrency, interval', loadCoopPlutus, mkMintOneShotTrx, submitTrx)
@@ -61,7 +62,7 @@ tests coopPlutus =
                 self <- ownFirstPaymentPubKeyHash
                 outs <- findOutsAt' @Void self (\_ _ -> True)
                 let (trx, oneShotAc) = mkMintOneShotTrx self oneShotWallet (head . Map.toList $ outs) (cp'mkOneShotMp coopPlutus) 1
-                submitTrx @Void trx
+                void $ submitTrx @Void trx
                 found <- findOutsAtHolding' oneShotWallet oneShotAc
                 return $ length found
             )
@@ -106,7 +107,7 @@ tests coopPlutus =
                     (_, now) <- currentNodeClientTimeRange
                     let validityInterval = interval now (now + 100_000)
                         (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRdmrAc validityInterval aaOuts
-                    submitTrx @Void mintCertTrx
+                    void $ submitTrx @Void mintCertTrx
                     certOuts <- findOutsAtHolding (mkValidatorAddress . ad'certV . cd'auth $ coopDeployment) certAc
                     return [ciValueOf certAc out | out <- toList certOuts]
                 )
@@ -160,15 +161,16 @@ tests coopPlutus =
                     self <- ownFirstPaymentPubKeyHash
                     aaOuts <- findOutsAtHoldingAa self coopDeployment
                     let (authMintTrx, authAc) = mkMintAuthTrx coopDeployment self [authWalletGeorge, authWalletPeter] 10 aaOuts
-                    submitTrx @Void authMintTrx
+                    void $ submitTrx @Void authMintTrx
                     georgesOuts <- findOutsAtHolding' authWalletGeorge authAc
                     petersOuts <- findOutsAtHolding' authWalletPeter authAc
-                    return $
-                      [ciValueOf authAc out | out <- toList georgesOuts]
-                        <> [ciValueOf authAc out | out <- toList petersOuts]
+                    return
+                      ( (length georgesOuts, sum (ciValueOf authAc <$> toList georgesOuts))
+                      , (length petersOuts, sum (ciValueOf authAc <$> toList petersOuts))
+                      )
                 )
           )
-          [shouldSucceed, shouldYield [10, 10]]
+          [shouldSucceed, shouldYield ((1, 10), (1, 10))]
     , runAfter "mint-auth" $
         assertExecutionWith @_ @Text
           testOpts
@@ -247,7 +249,7 @@ tests coopPlutus =
           testOpts
           "mint-fact-statement"
           -- WALLETS: god <> aa <> certRdmr <> authWallet <> submitterWallet <> feeWallet
-          (withCollateral $ initAda [50, 50, 50] <> initAda [200] <> initAda [200] <> initAda [200] <> initAda [200] <> initAda [200])
+          (withCollateral $ initAda [50, 50, 50] <> initAda [100] <> initAda [100] <> initAda [100] <> initAda [100] <> initAda [100])
           ( do
               (coopDeployment, certRdmrAc) <- genesis coopPlutus
               _ <-
@@ -260,9 +262,9 @@ tests coopPlutus =
                       aaOuts <- findOutsAtHoldingAa self coopDeployment
                       (_, now) <- currentNodeClientTimeRange
                       let validityInterval = interval' (Finite now) PosInf
-                      let (mintAuthTrx, authAc) = mkMintAuthTrx coopDeployment self [authWallet] 5 aaOuts
+                      let (mintAuthTrx, authAc) = mkMintAuthTrx coopDeployment self [authWallet] 50 aaOuts
                           (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRdmrAc validityInterval aaOuts
-                      submitTrx @Void (mintAuthTrx <> mintCertTrx)
+                      void $ submitTrx @Void (mintAuthTrx <> mintCertTrx)
                       return (authAc, certAc)
                   )
 
@@ -324,11 +326,11 @@ tests coopPlutus =
           )
           [shouldSucceed, shouldYield (1, 5)]
     , runAfter "mint-fact-statement" $
-        assertExecutionWith -- FIXME: This test shouldSucceed
+        assertExecutionWith
           testOpts
           "gc-fact-statement"
           -- WALLETS: god <> aa <> certRdmr <> authWallet <> submitterWallet <> feeWallet
-          (withCollateral $ initAda [50, 50, 50] <> initAda [200] <> initAda [200] <> initAda [200] <> initAda [200] <> initAda [200])
+          (withCollateral $ initAda [50, 50, 50] <> initAda [200] <> initAda [500] <> initAda [500] <> initAda [500] <> initAda [200])
           ( do
               (coopDeployment, certRdmrAc) <- genesis coopPlutus
               _ <-
@@ -341,9 +343,9 @@ tests coopPlutus =
                       aaOuts <- findOutsAtHoldingAa self coopDeployment
                       (_, now) <- currentNodeClientTimeRange
                       let validityInterval = interval' (Finite now) PosInf
-                      let (mintAuthTrx, authAc) = mkMintAuthTrx coopDeployment self [authWallet] 5 aaOuts
+                      let (mintAuthTrx, authAc) = mkMintAuthTrx coopDeployment self [authWallet] 50 aaOuts
                           (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRdmrAc validityInterval aaOuts
-                      submitTrx @Void (mintAuthTrx <> mintCertTrx)
+                      void $ submitTrx @Void (mintAuthTrx <> mintCertTrx)
                       return (authAc, certAc)
                   )
 

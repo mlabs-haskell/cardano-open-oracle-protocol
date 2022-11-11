@@ -1,4 +1,4 @@
-{ pkgs, haskell-nix, compiler-nix-name, plutip, coopPlutusCli, coop-hs-types, txBuilderProtoHs, cardanoProtoHs, cardanoProtoExtras, http2-grpc-native, shellHook }:
+{ pkgs, haskell-nix, compiler-nix-name, plutip, coopPlutusCli, plutipLocalCluster, coop-hs-types, txBuilderProtoHs, cardanoProtoHs, cardanoProtoExtras, http2-grpc-native, shellHook }:
 let
   # FIXME: Use idiomatic cardano-node from bpi input
   cardanoNode = proj.hsPkgs.cardano-node.components.exes.cardano-node;
@@ -85,6 +85,8 @@ let
         cardanoCli
         grpcui
         grpcurl
+
+        plutipLocalCluster
       ];
 
       additional = ps: [

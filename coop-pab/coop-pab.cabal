@@ -19,7 +19,7 @@ common common-language
     -Wincomplete-record-updates -Wmissing-deriving-strategies
     -Wno-name-shadowing -Wunused-foralls -fprint-explicit-foralls
     -fprint-explicit-kinds -fwarn-missing-import-lists -Wname-shadowing
-    -Wunused-packages
+    -Wunused-packages -fprint-potential-instances
 
   if !flag(dev)
     ghc-options: -Werror
@@ -97,7 +97,6 @@ library
     , bytestring
     , cardano-proto-extras
     , containers
-    , coop-cardano-proto
     , coop-hs-types
     , coop-tx-builder-service-proto
     , cryptonite
@@ -105,7 +104,6 @@ library
     , filepath
     , lens
     , memory
-    , microlens
     , plutip
     , plutus-contract
     , plutus-ledger
@@ -168,17 +166,21 @@ executable coop-pab-cli
     , bot-plutus-interface
     , bytestring
     , cardano-proto-extras
+    , coop-cardano-proto
     , coop-hs-types
     , coop-pab
     , coop-tx-builder-service-proto
+    , directory
+    , filepath
     , hex
     , http2-grpc-proto-lens
     , http2-grpc-types
-    , microlens
+    , lens
     , optparse-applicative
     , plutus-ledger
     , plutus-ledger-api
     , proto-lens
+    , serialise
     , text
     , warp
     , warp-grpc
