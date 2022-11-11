@@ -503,7 +503,8 @@ certMpMint = phoistAcyclic $
 
     _ <-
       plet $
-        pmustPayCurrencyWithDatumTo # ctx
+        pmustPayCurrencyWithDatumTo
+          # ctx
           # ownCs
           # (PValue.psingleton # ownCs # certTn # 1)
           # plam (\(certDatum :: Term s PCertDatum) -> (pfield @"cert'id" # certDatum) #== tnBytes)

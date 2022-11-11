@@ -52,8 +52,8 @@ type family MkTypeId (a :: Arity) where
 
 type family MkPredecessor (arity :: Arity) (isSequential :: Bool) where
   MkPredecessor _ 'True = Void
--- this doesn't make sense, this should be left out if isn't
--- sequential (rewrite in terms of extendable records)
+  -- this doesn't make sense, this should be left out if isn't
+  -- sequential (rewrite in terms of extendable records)
   MkPredecessor 'Primitive 'False = PrevURIHash
   MkPredecessor 'Multiple 'False = [(PrevURIHash, URIHash)]
 
