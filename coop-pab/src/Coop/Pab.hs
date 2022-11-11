@@ -157,7 +157,7 @@ mkMintCertTrx coopDeployment self redeemerAc validityInterval aaOuts =
       aaOrefs = Map.keys aaOuts
       certId = hashTxInputs aaOuts
       certTn = TokenName certId
-      certCs = scriptCurrencySymbol certMp
+      certCs = deplCertCs coopDeployment
       certVal = Value.singleton certCs certTn 1
       certDatum = toDatum $ CertDatum (LedgerBytes certId) validityInterval redeemerAc
       lookups =
@@ -179,21 +179,23 @@ burnCerts :: CoopDeployment -> AssetClass -> Contract w s Text ()
 burnCerts coopDeployment certRdmrAc = do
   let logI m = logInfo @String ("burnCerts: " <> m)
   logI "Starting"
+  let certCs = deplCertCs coopDeployment
+      certVAddr = deplCertVAddress coopDeployment
   self <- ownFirstPaymentPubKeyHash
   certRdmrOuts <- findOutsAtHolding' self certRdmrAc
-  certOuts <- findOutsAtHoldingCurrency (mkValidatorAddress . ad'certV . cd'auth $ coopDeployment) (scriptCurrencySymbol . ad'certMp . cd'auth $ coopDeployment)
+  certOuts <- findOutsAtHoldingCurrency certVAddr certCs
   logI $ printf "Found %d $CERT ouputs at @CertV" (length certOuts)
+
   bool
     (throwError "burnCerts: There should be some $CERT inputs")
     (pure ())
     $ not (null certOuts)
 
-  (_, now) <- currentNodeClientTimeRange
+  (now, _) <- currentNodeClientTimeRange
   let certMp = (ad'certMp . cd'auth) coopDeployment
       certV = (ad'certV . cd'auth) coopDeployment
       certRdmdrOrefs = Map.keys certRdmrOuts
       certOrefs = Map.keys certOuts
-      certCs = scriptCurrencySymbol certMp
       certVal = foldMap (\out -> inv $ currencyValue (out ^. ciTxOutValue) certCs) (toList certOuts)
       timeRange = interval' (Finite now) PosInf
 

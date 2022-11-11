@@ -26,9 +26,9 @@ message GetFactStatementResponse {
     string msg = 1;
   }
   oneof factStatementsOrErr {
-    // Fetched Fact Statements in PlutusData form
-    Success success = 1;
     // Error encountered when servicing the request
-    Error error = 2;
+    Error error = 1;
+    // Fetched Fact Statements in PlutusData form
+    Success success = 2;
   }
 }

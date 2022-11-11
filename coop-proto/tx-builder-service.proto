@@ -19,10 +19,10 @@ message CreateMintFsTxReq {
 
 message CreateMintFsTxResp {
   oneof succOrErr {
-    // Successful Fact Statement Minting message
-    MintFsSuccess  mint_fs_success = 1;
     // Error encountered when servicing the request
-    Error error = 2;
+    Error error = 1;
+    // Successful Fact Statement Minting message
+    MintFsSuccess  mint_fs_success = 2;
   }
 }
 

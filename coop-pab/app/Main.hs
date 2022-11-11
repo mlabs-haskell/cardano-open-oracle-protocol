@@ -59,7 +59,7 @@ deploymentFileOptP =
     ( long "deployment-file"
         <> metavar "DEPLOYMENT_FILE"
         <> help "A JSON file to write the COOP deployment information to"
-        <> value "resources/coop-deployment.json"
+        <> value ".coop-pab-cli/coop-deployment.json"
         <> showDefault
     )
 
@@ -116,21 +116,21 @@ feeOptP =
           <> metavar "FEE_WALLET"
           <> help "Wallet hexed PubKeyHash (eq. 04efa495982b94e07511eaa07c738a0a7ec356729e4b751159d96001) holding $FEE tokens"
       )
-      <*> assetClassOpt
-        ( long "fee-ac"
-            <> metavar "FEE_AC"
-            <> help "$FEE asset class used to pay the COOP Publisher for publishing Fact Statements"
-            <> value (assetClass adaSymbol adaToken)
-            <> showDefault
-        )
-      <*> option
-        auto
-        ( long "fee-quantity"
-            <> metavar "FEE_Q"
-            <> help "$FEE amount to pay the COOP Publisher for publishing Fact Statements"
-            <> value 1
-            <> showDefault
-        )
+    <*> assetClassOpt
+      ( long "fee-ac"
+          <> metavar "FEE_AC"
+          <> help "$FEE asset class used to pay the COOP Publisher for publishing Fact Statements"
+          <> value (assetClass adaSymbol adaToken)
+          <> showDefault
+      )
+    <*> option
+      auto
+      ( long "fee-quantity"
+          <> metavar "FEE_Q"
+          <> help "$FEE amount to pay the COOP Publisher for publishing Fact Statements"
+          <> value 1
+          <> showDefault
+      )
 
 deployOptsP :: Parser DeployOpts
 deployOptsP =
@@ -220,7 +220,7 @@ getStateOptsP =
       ( long "state-file"
           <> metavar "STATE_FILE"
           <> help "A JSON file to write the COOP state information to"
-          <> value "resources/coop-state.json"
+          <> value ".coop-pab-cli/coop-state.json"
           <> showDefault
       )
 
@@ -250,14 +250,14 @@ txBuilderGrpcOpts =
       ( long "cert-file"
           <> metavar "CERT_FILE"
           <> help "Certificate file to use for TLS"
-          <> value "resources/certificate.pem"
+          <> value ".coop-pab-cli/certificate.pem"
           <> showDefault
       )
     <*> strOption
       ( long "key-file"
           <> metavar "KEY_FILE"
           <> help "Private key file to use for TLS"
-          <> value "resources/key.pem"
+          <> value ".coop-pab-cli/key.pem"
           <> showDefault
       )
 
