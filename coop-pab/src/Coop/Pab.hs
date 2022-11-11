@@ -541,7 +541,7 @@ runMintFsTx coopDeployment authenticators feeSpec req = do
 data PublishingSpec = PublishingSpec
   { ps'submitter :: PaymentPubKeyHash
   , ps'factStatementSpecs :: [FactStatementSpec]
-  , ps'validUntil :: Extended POSIXTime
+  , _ps'validUntil :: Extended POSIXTime
   }
 
 data FactStatementSpec = FactStatementSpec
