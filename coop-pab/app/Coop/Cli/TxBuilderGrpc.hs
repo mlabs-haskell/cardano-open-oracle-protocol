@@ -98,8 +98,9 @@ txBuilderService opts = do
                       ( \rawTx ->
                           return $
                             defMessage
-                              & success . mintFsTx . cborBase16 .~ rawTx
                               & info .~ info'
+                              & Proto.TxBuilderService.error . otherErr . msg .~ "wuasapp"
+                              & success . mintFsTx . cborBase16 .~ rawTx
                       )
                       mayRawTx
                 )

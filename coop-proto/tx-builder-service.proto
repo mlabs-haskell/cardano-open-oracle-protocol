@@ -23,9 +23,9 @@ message CreateMintFsTxResp {
     Error error = 1;
     // Successful Fact Statement Minting message
     MintFsSuccess success = 2;
-    // Information about the processing of the request
-    MintFsInfo info = 3;
   }
+  // Information about the processing of the request
+  MintFsInfo info = 3;
 }
 
 // Success message associated with CreateMintFsTxResp
@@ -68,9 +68,9 @@ message CreateGcFsTxResp {
     Error error = 1;
     // Successfull Fact Statement garbage collection message
     GcFsSuccess success = 2;
-    // Request processing information
-    GcFsInfo info = 3;
   }
+  // Request processing information
+  GcFsInfo info = 3;
 }
 
 // Success message associated with the CreateGcFsTxResp

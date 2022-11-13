@@ -9,9 +9,9 @@ function generate-keys {
 
 function start-cluster {
     # As specified in resources/pabConfig.yaml
-    rm -fr .wallets
-    rm -fr .local-cluster
-    mkdir .wallet
+    rm -fR .wallets
+    rm -fR .local-cluster
+    mkdir .wallets
     mkdir .local-cluster
     mkdir .local-cluster/txs
     mkdir .local-cluster/scripts
@@ -95,7 +95,7 @@ function coop-mint-fs {
     {
         "factStatements": [
             {
-                "fsId": "eW==",
+                "fsId": "YXNkCg==",
                 "gcAfter": {
                     "extended": "NEG_INF"
                 },
@@ -111,8 +111,26 @@ function coop-mint-fs {
 
 EOF
            )
-    rawTx=$(echo $resp | jq '.mintFsSuccess.mintFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "Tx BabbageEra"')
-    echo $resp | jq '.mintFsSuccess.alreadyPublished'
+    rawTx=$(echo $resp | jq '.success.mintFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "Tx BabbageEra"')
+    echo $resp | jq '.info'
+    echo $resp | jq '.error'
+    echo $rawTx > .coop-pab-cli/signed
+}
+
+function coop-gc-fs {
+    make-exports
+    resp=$(grpcurl -insecure -import-path ../coop-proto -proto ../coop-proto/tx-builder-service.proto -d @ localhost:5081 coop.TxBuilder/createGcFsTx <<EOF
+    {
+        "fsIds": ["eW==", "YXNkCg=="],
+        "submitter": {
+            "base16": "$SUBMITTER_WALLET"
+        }
+    }
+
+EOF
+        )
+    rawTx=$(echo $resp | jq '.success.gcFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "Tx BabbageEra"')
+    echo $resp | jq '.info'
     echo $resp | jq '.error'
     echo $rawTx > .coop-pab-cli/signed
 }

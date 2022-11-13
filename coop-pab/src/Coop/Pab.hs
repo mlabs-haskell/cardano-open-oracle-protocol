@@ -519,8 +519,14 @@ mkPublishingSpec coopDeployment authenticators req = do
       authOut <- Map.toList authOuts
       return (batch, authOut, authWallet, ivTo . cert'validity . auth'certDatum $ batch)
 
+-- TODO: Security Vulnerability: Sign for me!
+-- If the user supplies a Pkh that is either an Authenticator, God, Cert redeemer or Fee
+-- BPI will submit successfully as it has all these wallets in its key store.
+-- THis is due to how 'just signing' actually works in BPI.
 runMintFsTx :: CoopDeployment -> [PaymentPubKeyHash] -> (Value, PaymentPubKeyHash) -> (Bool, Integer) -> CreateMintFsTxReq -> Contract w s Text (Maybe TxId, MintFsInfo)
 runMintFsTx coopDeployment authenticators feeSpec (submit, minutes) req = do
+  self <- PaymentPubKeyHash <$> toCardanoC (req ^. submitter)
+  when (self `elem` authenticators) (throwError "Must have a Submitter that's not an Authenticator (TODO: Fix systematically)")
   (mayPublishingSpec, info) <- mkPublishingSpec coopDeployment authenticators req
   maybe
     (return (Nothing, info))
