@@ -9,7 +9,7 @@ message Transaction {
 
 // plutus-ledger-api Plutus.V1.Ledger.Tx.TxId
 message TxId {
-  // Transaction has is the transaction id
+  // Transaction hash is the transaction id
   bytes transaction_hash = 1;
 }
 

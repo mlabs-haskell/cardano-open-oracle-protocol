@@ -1,16 +1,16 @@
 -- Calling the cli locally or through an ssh connection
 cliLocation:   local
-chainIndexUrl: "http://localhost:9083"
+chainIndexUrl: "http://localhost:9084"
 networkId:     Mainnet
 
 -- Directory name of the script and data files
-scriptFileDir:      ".work-dir/scripts"
+scriptFileDir:      ".local-cluster/scripts"
 
 -- Directory for the signing key file(s)
 signingKeyFileDir:  ".wallets"
 
 -- Directory where the encoded transaction files will be saved
-txFileDir:          ".work-dir/txs"
+txFileDir:          ".local-cluster/txs"
 
 -- Dry run mode will build the tx, but skip the submit step
 dryRun:             false

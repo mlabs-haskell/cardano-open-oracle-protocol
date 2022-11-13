@@ -29,7 +29,9 @@ import Plutus.Script.Utils.V2.Address (mkValidatorAddress)
 import Plutus.V2.Ledger.Api (Extended (Finite, NegInf, PosInf), POSIXTime, fromData, toBuiltin, toData)
 import Plutus.V2.Ledger.Api qualified as AssocMap
 import Proto.TxBuilderService_Fields (factStatements, fs, fsId, gcAfter, submitter)
+import Test.Plutip.Config (PlutipConfig (extraConfig))
 import Test.Plutip.Contract (assertExecutionWith, initAda, withCollateral, withContract, withContractAs)
+import Test.Plutip.Internal.Cluster.Extra.Types (ExtraConfig (ExtraConfig))
 import Test.Plutip.Internal.Types (ClusterEnv)
 import Test.Plutip.LocalCluster (BpiWallet, withConfiguredCluster)
 import Test.Plutip.Options (TraceOption (ShowBudgets, ShowTrace, ShowTraceButOnlyContext))
@@ -50,7 +52,7 @@ testOpts = [ShowTraceButOnlyContext ContractLog (Debug [AnyLog, CollateralLog]),
 tests :: CoopPlutus -> TestTree
 tests coopPlutus =
   withConfiguredCluster
-    def
+    def {extraConfig = ExtraConfig 1 100}
     "coop-pab-tests"
     [ assertExecutionWith
         testOpts
@@ -317,7 +319,7 @@ tests coopPlutus =
                             & factStatements .~ fsInfos
                             & submitter .~ pSubmitter
                     logInfo @String (show fsInfos)
-                    _ <- runMintFsTx coopDeployment [authWallet] (adaValueOf 13, feeWallet) req
+                    _ <- runMintFsTx coopDeployment [authWallet] (adaValueOf 13, feeWallet) (True, 1) req
 
                     outs <- findOutsAtHoldingCurrency (deplFsVAddress coopDeployment) (deplFsCs coopDeployment)
                     feeOut <- findOutsAt' @Void feeWallet (\v _ -> v == adaValueOf 13)
@@ -399,7 +401,7 @@ tests coopPlutus =
                               & factStatements .~ fsInfos
                               & submitter .~ pSubmitter
                       logInfo @String (show fsInfos)
-                      _ <- runMintFsTx coopDeployment [authWallet] (adaValueOf 13, feeWallet) req
+                      _ <- runMintFsTx coopDeployment [authWallet] (adaValueOf 13, feeWallet) (True, 1) req
 
                       outs <- findOutsAtHoldingCurrency (deplFsVAddress coopDeployment) (deplFsCs coopDeployment)
                       feeOut <- findOutsAt' @Void feeWallet (\v _ -> v == adaValueOf 13)

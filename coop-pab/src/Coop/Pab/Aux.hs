@@ -32,6 +32,7 @@ module Coop.Pab.Aux (
   deplAuthCs,
   deplAuthMp,
   deplFsCs,
+  submitTrx',
 ) where
 
 import BotPlutusInterface.Constraints (submitBpiTxConstraintsWith)
@@ -56,10 +57,10 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.UUID.V4 qualified as UUID
 import Data.Void (Void)
-import Ledger (ChainIndexTxOut, PaymentPubKeyHash, applyArguments, ciTxOutPublicKeyDatum, ciTxOutScriptDatum, ciTxOutValue, datumInDatumFromQuery, getCardanoTxData, getCardanoTxId, getCardanoTxInputs, pubKeyHashAddress)
+import Ledger (ChainIndexTxOut, PaymentPubKeyHash, applyArguments, ciTxOutPublicKeyDatum, ciTxOutScriptDatum, ciTxOutValue, datumInDatumFromQuery, getCardanoTxId, pubKeyHashAddress)
 import Ledger.Ada (lovelaceValueOf)
 import Ledger.Typed.Scripts (RedeemerType, ValidatorTypes (DatumType))
-import Plutus.Contract (AsContractError, Contract, ContractInstanceId, awaitTxConfirmed, logInfo, logWarn, throwError, utxosAt)
+import Plutus.Contract (AsContractError, Contract, ContractInstanceId, awaitTxConfirmed, logInfo, throwError, utxosAt)
 import Plutus.Contract.Constraints (ScriptLookups, TxConstraints, mustMintValue, mustPayToPubKey, mustSpendPubKeyOutput, ownPaymentPubKeyHash, plutusV2MintingPolicy, unspentOutputs)
 import Plutus.PAB.Core.ContractInstance.STM (Activity (Active))
 import Plutus.Script.Utils.V2.Address (mkValidatorAddress)
@@ -248,10 +249,12 @@ instance Monoid (Trx i o a) where
 submitTrx :: forall a e w s. (FromData (DatumType a), ToData (RedeemerType a), ToData (DatumType a), AsContractError e) => Trx (RedeemerType a) (DatumType a) a -> Contract w s e TxId
 submitTrx (Trx lookups constraints bpiConstraints) = do
   tx <- submitBpiTxConstraintsWith lookups constraints bpiConstraints
-  logInfo @String $ show (getCardanoTxData tx)
-  logInfo @String $ show (getCardanoTxInputs tx)
-  logWarn @String $ show (getCardanoTxId tx)
   awaitTxConfirmed (getCardanoTxId tx)
+  return $ getCardanoTxId tx
+
+submitTrx' :: forall a e w s. (FromData (DatumType a), ToData (RedeemerType a), ToData (DatumType a), AsContractError e) => Trx (RedeemerType a) (DatumType a) a -> Contract w s e TxId
+submitTrx' (Trx lookups constraints bpiConstraints) = do
+  tx <- submitBpiTxConstraintsWith lookups constraints bpiConstraints
   return $ getCardanoTxId tx
 
 -- | Creates an interval with Extended bounds

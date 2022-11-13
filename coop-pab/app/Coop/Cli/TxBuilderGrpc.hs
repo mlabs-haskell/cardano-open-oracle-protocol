@@ -20,17 +20,15 @@ import Proto.TxBuilderService (CreateGcFsTxReq, CreateGcFsTxResp, CreateMintFsTx
 
 import BotPlutusInterface.Config (loadPABConfig)
 import BotPlutusInterface.Files (txFileName)
-import BotPlutusInterface.Types (PABConfig, pcOwnPubKeyHash, pcTxFileDir)
+import BotPlutusInterface.Types (PABConfig, RawTx (_cborHex), pcOwnPubKeyHash, pcTxFileDir)
 import Cardano.Proto.Aux (ProtoCardano (toCardano))
 import Coop.Pab (runMintFsTx)
 import Coop.Pab.Aux (runBpi)
 import Coop.Types (CoopDeployment)
 import Data.Aeson (decodeFileStrict)
-import Data.ByteString qualified as ByteString
 import Data.Maybe (fromMaybe)
 import Data.ProtoLens (Message (defMessage))
 import Data.Text (Text, unpack)
-import Data.Text.Encoding (decodeUtf8')
 import GHC.Exts (fromString)
 import Ledger (PaymentPubKeyHash (PaymentPubKeyHash), TxId)
 import Proto.Plutus_Fields (cborBase16)
@@ -133,6 +131,14 @@ readSignedTx pabConf txId = do
   fileExists <- doesFileExist path
   if fileExists
     then do
-      tx <- ByteString.readFile path
-      either (\_ -> return Nothing) (return . Just) $ decodeUtf8' tx
-    else return Nothing
+      mayRawTx <- decodeFileStrict @RawTx path
+      maybe
+        ( do
+            print $ "Must have a properly formatter RawTx in Json at " <> path
+            return Nothing
+        )
+        (return . Just . _cborHex)
+        mayRawTx
+    else do
+      print $ "Must find signed transaction file at " <> path
+      return Nothing
