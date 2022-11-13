@@ -268,6 +268,14 @@ txBuilderGrpcOpts =
           <> value ".coop-pab-cli/key.pem"
           <> showDefault
       )
+    <*> option
+      auto
+      ( long "mint-fs-tx-validity-minutes"
+          <> metavar "MINT_VALIDITY_MINUTES"
+          <> help "mint-fact-statement-tx validity range setting validityRange = <now, now + minutes>"
+          <> value 10
+          <> showDefault
+      )
 
 optionsP :: Parser Command
 optionsP =

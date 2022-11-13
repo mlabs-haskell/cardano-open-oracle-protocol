@@ -1,6 +1,6 @@
 module Coop.Cli.TxBuilderGrpc (txBuilderService, TxBuilderGrpcOpts (..)) where
 
-import Control.Lens ((&), (.~), (^.))
+import Control.Lens (makeLenses, (&), (.~), (^.))
 import Network.GRPC.HTTP2.Encoding as Encoding (
   gzip,
   uncompressed,
@@ -22,42 +22,51 @@ import BotPlutusInterface.Config (loadPABConfig)
 import BotPlutusInterface.Files (txFileName)
 import BotPlutusInterface.Types (PABConfig, RawTx (_cborHex), pcOwnPubKeyHash, pcTxFileDir)
 import Cardano.Proto.Aux (ProtoCardano (toCardano))
-import Coop.Pab (runMintFsTx)
+import Coop.Pab (runGcFsTx, runMintFsTx)
 import Coop.Pab.Aux (runBpi)
 import Coop.Types (CoopDeployment)
 import Data.Aeson (decodeFileStrict)
 import Data.Maybe (fromMaybe)
 import Data.ProtoLens (Message (defMessage))
 import Data.Text (Text, unpack)
+import Data.Text qualified as Text
 import GHC.Exts (fromString)
 import Ledger (PaymentPubKeyHash (PaymentPubKeyHash), TxId)
 import Proto.Plutus_Fields (cborBase16)
-import Proto.TxBuilderService_Fields (alreadyPublished, mintFsSuccess, mintFsTx, msg, otherErr, submitter)
+import Proto.TxBuilderService_Fields (alreadyPublished, gcFsTx, info, mintFsSuccess, mintFsTx, msg, otherErr, submitter, success)
 import Proto.TxBuilderService_Fields qualified as Proto.TxBuilderService
 import System.Directory (doesFileExist, makeAbsolute)
 import System.FilePath ((</>))
 
 data TxBuilderGrpcOpts = TxBuilderGrpcOpts
-  { tbgo'pabConfig :: FilePath
-  , tbgo'coopDeploymentFile :: FilePath
-  , tbgo'authWallets :: [PubKeyHash]
-  , tbgo'fee :: (PubKeyHash, AssetClass, Integer)
-  , tbgo'grpcAddress :: String
-  , tbgo'grpcPort :: Int
-  , tbgo'tlsCertFile :: FilePath
-  , tbgo'tlsKeyFile :: FilePath
+  { _pabConfig :: FilePath
+  , _coopDeploymentFile :: FilePath
+  , _authWallets :: [PubKeyHash]
+  , _fee :: (PubKeyHash, AssetClass, Integer)
+  , _grpcAddress :: String
+  , _grpcPort :: Int
+  , _tlsCertFile :: FilePath
+  , _tlsKeyFile :: FilePath
+  , _mintFsTxValidityMinutes :: Integer
   }
   deriving stock (Show, Eq)
 
+makeLenses ''TxBuilderGrpcOpts
+
 txBuilderService :: TxBuilderGrpcOpts -> IO ()
 txBuilderService opts = do
-  coopDeployment <- fromMaybe (error "txBuilderService: Must have a CoopDeployment file in JSON") <$> decodeFileStrict @CoopDeployment (tbgo'coopDeploymentFile opts)
-  pabConf <- either (\err -> error $ "txBuilderService: Must have a PABConfig file in Config format: " <> err) id <$> loadPABConfig (tbgo'pabConfig opts)
+  coopDeployment <- fromMaybe (error "txBuilderService: Must have a CoopDeployment file in JSON") <$> decodeFileStrict @CoopDeployment (opts ^. coopDeploymentFile)
+  pabConf <- either (\err -> error $ "txBuilderService: Must have a PABConfig file in Config format: " <> err) id <$> loadPABConfig (opts ^. pabConfig)
 
-  let (feeCollector, feeAc, feeQ) = tbgo'fee opts
+  let (feeCollector, feeAc, feeQ) = opts ^. fee
       feeValue = assetClassValue feeAc feeQ
-      authenticators = PaymentPubKeyHash <$> tbgo'authWallets opts
-      runMintFsTxOnReq = runMintFsTx coopDeployment authenticators (feeValue, PaymentPubKeyHash feeCollector)
+      authenticators = PaymentPubKeyHash <$> opts ^. authWallets
+      runMintFsTxOnReq =
+        runMintFsTx
+          coopDeployment
+          authenticators
+          (feeValue, PaymentPubKeyHash feeCollector)
+          (False, opts ^. mintFsTxValidityMinutes)
 
       handleCreateMintFsTx :: Server.UnaryHandler IO CreateMintFsTxReq CreateMintFsTxResp
       handleCreateMintFsTx _ req = do
@@ -78,13 +87,61 @@ txBuilderService opts = do
                 )
                 ( \txId -> do
                     mayRawTx <- readSignedTx pabConf txId
-                    maybe
-                      (return $ defMessage & Proto.TxBuilderService.error . otherErr . msg .~ "Unable to authenticate transaction")
+                    either
+                      ( \err ->
+                          return $
+                            defMessage
+                              & Proto.TxBuilderService.error . otherErr . msg .~ ("Failed creating mint-fact-statement-tx: " <> err)
+                      )
                       ( \rawTx ->
                           return $
                             defMessage
                               & mintFsSuccess . alreadyPublished .~ alreadyPublished'
                               & mintFsSuccess . mintFsTx . cborBase16 .~ rawTx
+                      )
+                      mayRawTx
+                )
+                mayTxId
+          )
+          errOrAcs
+
+      runGcFsTxOnReq =
+        runGcFsTx
+          coopDeployment
+          False
+
+      handleCreateGcFsTx :: Server.UnaryHandler IO CreateGcFsTxReq CreateGcFsTxResp
+      handleCreateGcFsTx _ req = do
+        sub <- toCardano (req ^. submitter)
+        (_, errOrAcs) <-
+          runBpi @Text
+            pabConf
+              { pcOwnPubKeyHash = sub
+              }
+            (runGcFsTxOnReq req)
+        either
+          (\err -> return $ defMessage & Proto.TxBuilderService.error . otherErr . msg .~ err)
+          ( \(mayTxId, info') -> do
+              maybe
+                ( return $
+                    defMessage
+                      & Proto.TxBuilderService.error . otherErr . msg .~ "Failed creating a gc-fact-statement-tx"
+                      & info .~ info'
+                )
+                ( \txId -> do
+                    mayRawTx <- readSignedTx pabConf txId
+                    either
+                      ( \err ->
+                          return $
+                            defMessage
+                              & Proto.TxBuilderService.error . otherErr . msg .~ ("Failed creating a gc-fact-statement-tx: " <> err)
+                              & info .~ info'
+                      )
+                      ( \rawTx ->
+                          return $
+                            defMessage
+                              & success . gcFsTx . cborBase16 .~ rawTx
+                              & info .~ info'
                       )
                       mayRawTx
                 )
@@ -100,8 +157,8 @@ txBuilderService opts = do
 
   runServer
     routes
-    (fromString $ tbgo'grpcAddress opts, tbgo'grpcPort opts)
-    (tbgo'tlsCertFile opts, tbgo'tlsKeyFile opts)
+    (fromString $ opts ^. grpcAddress, opts ^. grpcPort)
+    (opts ^. tlsCertFile, opts ^. tlsKeyFile)
 
 runServer :: [ServiceHandler] -> (Warp.HostPreference, Int) -> (FilePath, FilePath) -> IO ()
 runServer routes (h, p) (certFile, keyFile) = do
@@ -117,13 +174,7 @@ runServer routes (h, p) (certFile, keyFile) = do
     , Encoding.gzip
     ]
 
-handleCreateGcFsTx :: Server.UnaryHandler IO CreateGcFsTxReq CreateGcFsTxResp
-handleCreateGcFsTx _ _ =
-  return $
-    defMessage
-      & Proto.TxBuilderService.error . otherErr . msg .~ "Finally"
-
-readSignedTx :: PABConfig -> TxId -> IO (Maybe Text)
+readSignedTx :: PABConfig -> TxId -> IO (Either Text Text)
 readSignedTx pabConf txId = do
   txFolderPath <- makeAbsolute (unpack . pcTxFileDir $ pabConf)
   let path :: FilePath
@@ -134,11 +185,9 @@ readSignedTx pabConf txId = do
       mayRawTx <- decodeFileStrict @RawTx path
       maybe
         ( do
-            print $ "Must have a properly formatter RawTx in Json at " <> path
-            return Nothing
+            return . Left . Text.pack $ "Must have a properly formatter RawTx in Json at " <> path
         )
-        (return . Just . _cborHex)
+        (return . Right . _cborHex)
         mayRawTx
     else do
-      print $ "Must find signed transaction file at " <> path
-      return Nothing
+      return . Left . Text.pack $ "Must find signed transaction file at " <> path

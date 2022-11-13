@@ -28,7 +28,7 @@ import Plutus.Contract (currentNodeClientTimeRange, logInfo, ownFirstPaymentPubK
 import Plutus.Script.Utils.V2.Address (mkValidatorAddress)
 import Plutus.V2.Ledger.Api (Extended (Finite, NegInf, PosInf), POSIXTime, fromData, toBuiltin, toData)
 import Plutus.V2.Ledger.Api qualified as AssocMap
-import Proto.TxBuilderService_Fields (factStatements, fs, fsId, gcAfter, submitter)
+import Proto.TxBuilderService_Fields (factStatements, fs, fsId, fsIds, gcAfter, submitter)
 import Test.Plutip.Config (PlutipConfig (extraConfig))
 import Test.Plutip.Contract (assertExecutionWith, initAda, withCollateral, withContract, withContractAs)
 import Test.Plutip.Internal.Cluster.Extra.Types (ExtraConfig (ExtraConfig))
@@ -413,7 +413,12 @@ tests coopPlutus =
                 ( \[_god, _aa, _certR, _authWallet, _feeWallet] -> do
                     self <- ownFirstPaymentPubKeyHash
                     logInfo @String $ "Running as submitterWallet " <> show self
-                    runGcFsTx coopDeployment self
+                    self' <- fromCardano (unPaymentPubKeyHash self)
+                    let req =
+                          defMessage
+                            & fsIds .~ ["fsIdA", "fsIdB", "fsIdC", "fsIdD", "fsIdE"]
+                            & submitter .~ self'
+                    _ <- runGcFsTx coopDeployment True req
                     outs <- findOutsAtHoldingCurrency (deplFsVAddress coopDeployment) (deplFsCs coopDeployment)
                     return (length outs)
                 )

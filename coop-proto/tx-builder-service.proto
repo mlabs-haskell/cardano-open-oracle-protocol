@@ -22,10 +22,13 @@ message CreateMintFsTxResp {
     // Error encountered when servicing the request
     Error error = 1;
     // Successful Fact Statement Minting message
-    MintFsSuccess  mint_fs_success = 2;
+    MintFsSuccess success = 2;
+    // Information about the processing of the request
+    MintFsInfo info = 3;
   }
 }
 
+// Success message associated with CreateMintFsTxResp
 message MintFsSuccess {
   // Fact Statement Minting transaction (abbr. mint-fact-statement-tx) signed by Authenticators
   plutus.Transaction mint_fs_tx = 1;
@@ -37,53 +40,73 @@ message MintFsSuccess {
   repeated FsIdAndTxOutRef already_published = 2;
 }
 
+// Information message associated with CreateMintFsTxResp
+message MintFsSuccess {
+  // A list of already published Fact Statements (Map FactStatementId TxOutRef)
+  message FsIdAndTxOutRef {
+    bytes fact_statement_id = 1;
+    plutus.TxOutRef fact_statement_utxo = 2;
+  }
+  repeated FsIdAndTxOutRef already_published = 1;
+}
+
 message FactStatementInfo {
   // Fact Statement ID
-  bytes fsId = 1;
+  bytes fs_id = 1;
   // PlutusData encoding of a Fact Statement
   plutus.PlutusData fs = 2;
   // Extended ledger time after which the created Fact Statement UTxO can be garbage collected by the Submitter
   plutus.ExtendedLedgerTime gc_after = 3;
 }
 
-
 message CreateGcFsTxReq {
-  // Fact Statement UTxOs to garbage collect
-  repeated plutus.TxOutRef fs = 1;
-  // The PubKeyHash of the user that submitted the FSMintTx and will also submit the FSBurnTx
+  // Fact Statement IDs to garbage collect
+  repeated bytes fs_ids = 1;
+  // The PubKeyHash of the user that submitted the mint-fact-statement-x and will also submit the gc-fact-statement-tx
   plutus.PubKeyHash submitter  = 2;
-  // Submitter owned UTxO to use as a collateral UTxO in the returned FSBurnTx
-  plutus.TxOutRef collateral = 3;
 }
 
 message CreateGcFsTxResp {
   oneof transactionOrErr {
-    // Fact Statement Burning transaction (abbr. FSBurnTx) to sign and submit
-    plutus.Transaction fs_burn_tx = 1;
     // Error encountered when servicing the request
-    Error error = 2;
+    Error error = 1;
+    // Successfull Fact Statement garbage collection message
+    GcFsSuccess success = 2;
+    // Request processing information
+    GcFsInfo info = 3;
   }
 }
 
+// Success message associated with the CreateGcFsTxResp
+message GcFsSuccess {
+  // Fact Statement garbage collections transaction (abbr. gc-fact-statement-tx) to sign and submit
+  plutus.Transaction gc_fs_tx = 1;
+}
+
+// Info message associated with the CreateGcFsTxResp
+message GcFsInfo {
+  // Requested Fact Statement IDs that can be garbage collected with the above transaction
+  repeated bytes obsolete_fs_ids = 1;
+  // Requested Fact Statement IDs that couldn't be found belonging to the specified Submitter
+  repeated bytes not_found_fs_ids = 2;
+  // Requested Fact Statement IDs that can't be garbage collected (still valid)
+  repeated bytes valid_fs_ids = 3;
+
+}
+
+// Error associated with above response messages
+// TODO: Should catch and properly report classes of errors users would expect to trigger.
+// For example:
+//   - Collateral finding could fail
+//   - $FEE determination could fail
+//   - Transaction size due to too many Fact Statements
 message Error {
-  message SubmitterNotFoundError {
-    // Public key hash of the Submitter's wallet that wasn't found
-    plutus.PubKeyHash submitter  = 1;
-  }
-  message TimeoutError {
-    // Timeout error message
-    string msg = 1;
-  }
   message OtherError {
     // Some other error message
     string msg = 1;
   }
   oneof someError {
-    // Submitter wallet wasn't found
-    SubmitterNotFoundError submitter_not_found_err = 1;
-    // Timeout error
-    TimeoutError timeout_err = 2;
     // Some other error
-    OtherError other_err = 3;
+    OtherError other_err = 1;
   }
 }

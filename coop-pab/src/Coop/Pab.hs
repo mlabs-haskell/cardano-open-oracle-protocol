@@ -20,12 +20,12 @@ import Cardano.Proto.Aux (
   ProtoCardano (fromCardano, toCardano),
  )
 import Control.Lens ((&), (.~), (^.))
-import Control.Monad (guard, void, when)
+import Control.Monad (guard, when)
 import Coop.Pab.Aux (Trx (Trx), currencyValue, datumFromTxOut, datumFromTxOutOrFail, deplAuthCs, deplAuthMp, deplCertCs, deplCertVAddress, deplFsCs, deplFsVAddress, deplFsVHash, findOutsAt, findOutsAt', findOutsAtHolding', findOutsAtHoldingCurrency, findOutsAtHoldingCurrency', hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintOneShotTrx, submitTrx, submitTrx', toDatum, toRedeemer)
 import Coop.Types (AuthBatchId, AuthDeployment (AuthDeployment, ad'authMp, ad'authorityAc, ad'certMp, ad'certV), AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), AuthParams (AuthParams, ap'authTokenCs, ap'certTokenCs), CertDatum (CertDatum, cert'id, cert'validity), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint), CoopDeployment (CoopDeployment, cd'auth, cd'fsMp, cd'fsV), CoopPlutus (cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkOneShotMp), CoopState (CoopState), FactStatementId, FsDatum (FsDatum, fd'fsId, fs'gcAfter, fs'submitter), FsMpParams (FsMpParams), FsMpRedeemer (FsMpBurn, FsMpMint), cp'certV)
 import Data.Bool (bool)
 import Data.Foldable (toList)
-import Data.List (nub)
+import Data.List (nub, partition)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes)
@@ -60,9 +60,9 @@ import Plutus.V2.Ledger.Api (
   toData,
  )
 import PlutusTx (toBuiltinData)
-import PlutusTx.Prelude (Group (inv))
-import Proto.TxBuilderService (CreateMintFsTxReq, MintFsSuccess'FsIdAndTxOutRef)
-import Proto.TxBuilderService_Fields (factStatementId, factStatementUtxo, factStatements, fs, fsId, gcAfter, submitter)
+import PlutusTx.Prelude (Group (inv), fromBuiltin)
+import Proto.TxBuilderService (CreateGcFsTxReq, CreateMintFsTxReq, GcFsInfo, MintFsSuccess'FsIdAndTxOutRef)
+import Proto.TxBuilderService_Fields (factStatementId, factStatementUtxo, factStatements, fs, fsId, fsIds, gcAfter, notFoundFsIds, obsoleteFsIds, submitter, validFsIds)
 import Safe.Foldable (maximumMay)
 import Test.Plutip.Internal.BotPlutusInterface.Setup ()
 import Test.Plutip.Internal.LocalCluster ()
@@ -653,33 +653,47 @@ mkMintFsTrx coopDeployment now minutes publishingSpec (feeVal, feeCollectorPpkh)
       bpiConstraints = mustValidateInFixed (interval' (Finite now) (Finite txValidUntil))
    in Trx lookups constraints bpiConstraints
 
-runGcFsTx :: CoopDeployment -> PaymentPubKeyHash -> Contract w s Text ()
-runGcFsTx coopDeployment self = do
+runGcFsTx :: CoopDeployment -> Bool -> CreateGcFsTxReq -> Contract w s Text (Maybe TxId, GcFsInfo)
+runGcFsTx coopDeployment submit req = do
+  when (null $ req ^. fsIds) (throwError "Must have at least one Fact Statement ID to process")
+
+  self <- PaymentPubKeyHash <$> toCardanoC (req ^. submitter)
   fsOuts <- findOutsAtHoldingCurrency (deplFsVAddress coopDeployment) (deplFsCs coopDeployment)
-  (start, _) <- currentNodeClientTimeRange
   fsOutsWithDatum <-
     traverse
       ( \out@(_, ciOut) -> do
           mayDat <- datumFromTxOut @FsDatum ciOut
           maybe
-            (throwError "Must parse FsDatum")
+            (throwError "Must parse legitimate FsDatum from @FsV UTxO")
             (\d -> return (out, d))
             mayDat
       )
       (Map.toList fsOuts)
-  let submitterFsOutsWithDatum =
+
+  (start, _) <- currentNodeClientTimeRange
+  let mine =
         [ (out, fsDat)
         | (out, fsDat) <- fsOutsWithDatum
         , fs'submitter fsDat == unPaymentPubKeyHash self
-        , Finite start > fs'gcAfter fsDat
         ]
-  let mintGcTrx =
-        mkGcFsTrx
-          coopDeployment
-          self
-          submitterFsOutsWithDatum
-          start
-  void $ submitTrx @Void mintGcTrx
+      (mineFoundReqIds, missingReqIds) = partition (\(_, fsDat) -> (fromBuiltin . getLedgerBytes . fd'fsId $ fsDat) `elem` (req ^. fsIds)) mine
+      (mineFoundObsolete, mineFoundStillValid) = partition (\(_, fsDat) -> Finite start > fs'gcAfter fsDat) mineFoundReqIds
+  let info :: GcFsInfo
+      info =
+        defMessage
+          & obsoleteFsIds .~ (fromBuiltin . getLedgerBytes . fd'fsId . snd <$> mineFoundObsolete)
+          & notFoundFsIds .~ (fromBuiltin . getLedgerBytes . fd'fsId . snd <$> missingReqIds)
+          & validFsIds .~ (fromBuiltin . getLedgerBytes . fd'fsId . snd <$> mineFoundStillValid)
+
+  let mintGcTrx = mkGcFsTrx coopDeployment self mineFoundObsolete start
+  if null mineFoundObsolete
+    then return (Nothing, info)
+    else do
+      txId <-
+        if submit
+          then submitTrx @Void mintGcTrx
+          else submitTrx' @Void mintGcTrx
+      return (Just txId, info)
 
 mkGcFsTrx :: CoopDeployment -> PaymentPubKeyHash -> [((TxOutRef, ChainIndexTxOut), FsDatum)] -> POSIXTime -> Trx i o a
 mkGcFsTrx coopDeployment submitterPkh fsOutsWithDatum now = do
