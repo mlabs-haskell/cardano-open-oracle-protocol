@@ -9,7 +9,7 @@
   inputs = {
     # Plutip maintains a compatible Plutus/Cardano derivation set
     # TODO: Set to a stable release
-    bot-plutus-interface.url = "/home/bladyjoker/Desktop/bot-plutus-interface"; #"github:mlabs-haskell/bot-plutus-interface/sam/add-vasil-features";
+    bot-plutus-interface.url = "github:mlabs-haskell/bot-plutus-interface/sam/add-vasil-features";
 
     plutip.url = "github:mlabs-haskell/plutip/bladyjoker/upgrade-to-sam-vasil"; # https://github.com/mlabs-haskell/plutip/releases/tag/vasil-compliant-v1.0.0
     plutip.inputs.bot-plutus-interface.follows = "bot-plutus-interface";
