@@ -33,7 +33,7 @@ import Data.Text qualified as Text
 import GHC.Exts (fromString)
 import Ledger (PaymentPubKeyHash (PaymentPubKeyHash), TxId)
 import Proto.Plutus_Fields (cborBase16)
-import Proto.TxBuilderService_Fields (alreadyPublished, gcFsTx, info, mintFsSuccess, mintFsTx, msg, otherErr, submitter, success)
+import Proto.TxBuilderService_Fields (gcFsTx, info, mintFsTx, msg, otherErr, submitter, success)
 import Proto.TxBuilderService_Fields qualified as Proto.TxBuilderService
 import System.Directory (doesFileExist, makeAbsolute)
 import System.FilePath ((</>))
@@ -79,11 +79,12 @@ txBuilderService opts = do
             (runMintFsTxOnReq req)
         either
           (\err -> return $ defMessage & Proto.TxBuilderService.error . otherErr . msg .~ err)
-          ( \(mayTxId, alreadyPublished') -> do
+          ( \(mayTxId, info') -> do
               maybe
                 ( return $
                     defMessage
-                      & mintFsSuccess . alreadyPublished .~ alreadyPublished'
+                      & Proto.TxBuilderService.error . otherErr . msg .~ "Failed creating mint-fact-statement-tx"
+                      & info .~ info'
                 )
                 ( \txId -> do
                     mayRawTx <- readSignedTx pabConf txId
@@ -92,12 +93,13 @@ txBuilderService opts = do
                           return $
                             defMessage
                               & Proto.TxBuilderService.error . otherErr . msg .~ ("Failed creating mint-fact-statement-tx: " <> err)
+                              & info .~ info'
                       )
                       ( \rawTx ->
                           return $
                             defMessage
-                              & mintFsSuccess . alreadyPublished .~ alreadyPublished'
-                              & mintFsSuccess . mintFsTx . cborBase16 .~ rawTx
+                              & success . mintFsTx . cborBase16 .~ rawTx
+                              & info .~ info'
                       )
                       mayRawTx
                 )

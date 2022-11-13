@@ -31,6 +31,7 @@ import Data.Map qualified as Map
 import Data.Maybe (catMaybes)
 import Data.ProtoLens (Message (defMessage))
 import Data.Text (Text)
+import Data.Text qualified as Text
 import Data.Traversable (for)
 import Data.Void (Void)
 import Ledger (Language (PlutusV2), POSIXTime (POSIXTime), PaymentPubKeyHash (PaymentPubKeyHash, unPaymentPubKeyHash), TxId, TxOutRef, Versioned (Versioned), after, applyArguments, ciTxOutValue, interval)
@@ -53,7 +54,7 @@ import Plutus.V2.Ledger.Api (
   MintingPolicy (MintingPolicy),
   POSIXTimeRange,
   TokenName (TokenName),
-  UpperBound (UpperBound),
+  UpperBound,
   Validator (Validator),
   Value,
   toBuiltin,
@@ -61,9 +62,8 @@ import Plutus.V2.Ledger.Api (
  )
 import PlutusTx (toBuiltinData)
 import PlutusTx.Prelude (Group (inv), fromBuiltin)
-import Proto.TxBuilderService (CreateGcFsTxReq, CreateMintFsTxReq, GcFsInfo, MintFsSuccess'FsIdAndTxOutRef)
-import Proto.TxBuilderService_Fields (factStatementId, factStatementUtxo, factStatements, fs, fsId, fsIds, gcAfter, notFoundFsIds, obsoleteFsIds, submitter, validFsIds)
-import Safe.Foldable (maximumMay)
+import Proto.TxBuilderService (CreateGcFsTxReq, CreateMintFsTxReq, GcFsInfo, MintFsInfo)
+import Proto.TxBuilderService_Fields (alreadyPublished, factStatements, fs, fsId, fsIds, fsUtxo, gcAfter, notFoundFsIds, obsoleteFsIds, publishedFsIds, submitter, validFsIds)
 import Test.Plutip.Internal.BotPlutusInterface.Setup ()
 import Test.Plutip.Internal.LocalCluster ()
 import Text.Printf (printf)
@@ -451,7 +451,7 @@ findOnchainState coopDeployment authenticators =
 toCardanoC :: ProtoCardano (Either Text) proto cardano => proto -> Contract w s Text cardano
 toCardanoC proto = let x = toCardano @(Either Text) proto in either throwError return x
 
-mkPublishingSpec :: CoopDeployment -> [PaymentPubKeyHash] -> CreateMintFsTxReq -> Contract w s Text (Maybe PublishingSpec, [MintFsSuccess'FsIdAndTxOutRef])
+mkPublishingSpec :: CoopDeployment -> [PaymentPubKeyHash] -> CreateMintFsTxReq -> Contract w s Text (Maybe PublishingSpec, MintFsInfo)
 mkPublishingSpec coopDeployment authenticators req = do
   when (null $ req ^. factStatements) (throwError "Must have at least one Fact Statement to process")
 
@@ -459,8 +459,8 @@ mkPublishingSpec coopDeployment authenticators req = do
   submitterPPkh <- PaymentPubKeyHash <$> toCardanoC (req ^. submitter)
   let alreadyPublished' =
         [ defMessage
-          & factStatementId .~ fsInfo ^. fsId
-          & factStatementUtxo .~ fsOref'
+          & fsId .~ fsInfo ^. fsId
+          & fsUtxo .~ fsOref'
         | fsInfo <- req ^. factStatements
         , fsOref <- maybe [] return $ Map.lookup (LedgerBytes . toBuiltin $ fsInfo ^. fsId) published
         , fsOref' <- fromCardano fsOref
@@ -470,24 +470,26 @@ mkPublishingSpec coopDeployment authenticators req = do
         | fsInfo <- req ^. factStatements
         , not $ Map.member (LedgerBytes . toBuiltin $ fsInfo ^. fsId) published
         ]
+      fsIdsToPublish = (^. fsId) <$> fsInfosToPublish
+      info :: MintFsInfo =
+        defMessage
+          & alreadyPublished .~ alreadyPublished'
+          & publishedFsIds .~ fsIdsToPublish
 
   if null fsInfosToPublish
     then
       ( do
           logInfo @String "Nothing new to publish"
-          return (Nothing, alreadyPublished')
+          return (Nothing, info)
       )
     else do
       let stillValidAuthPairs' = stillValidAuthPairs authBatches
           authInfos = take (length fsInfosToPublish) stillValidAuthPairs'
+          howManyValidAuthOuts = length stillValidAuthPairs'
 
-      when (length fsInfosToPublish > length stillValidAuthPairs') $ throwError "Must have enough valid authentication pairs (cert+auth) to authenticate Fact Statements"
-
-      txValidUntil <-
-        maybe
-          (throwError "Must have sufficient $AUTH inputs")
-          return
-          (maximumMay $ (\(_, _, _, UpperBound ext _) -> ext) <$> authInfos)
+      when (length fsInfosToPublish > howManyValidAuthOuts) $
+        throwError $
+          "Must have enough valid Authenticator UTxOs holding valid $AUTH tokens, wanted" <> (Text.pack . show . length $ fsInfosToPublish) <> " , got " <> (Text.pack . show $ howManyValidAuthOuts)
 
       fsDatums <-
         for
@@ -507,9 +509,7 @@ mkPublishingSpec coopDeployment authenticators req = do
               )
               authInfos
               fsDatums
-      if length fsInfosWithAuth /= length fsInfosToPublish
-        then throwError "Must have enough $AUTH outputs to authenticate each Fact Statement"
-        else return (Just $ PublishingSpec submitterPPkh fsInfosWithAuth txValidUntil, alreadyPublished')
+      return (Just $ PublishingSpec submitterPPkh fsInfosWithAuth, info)
   where
     stillValidAuthPairs :: Map LedgerBytes CoopAuthBatch -> [(CoopAuthBatch, (TxOutRef, ChainIndexTxOut), PaymentPubKeyHash, UpperBound POSIXTime)]
     stillValidAuthPairs authBatches = do
@@ -519,11 +519,11 @@ mkPublishingSpec coopDeployment authenticators req = do
       authOut <- Map.toList authOuts
       return (batch, authOut, authWallet, ivTo . cert'validity . auth'certDatum $ batch)
 
-runMintFsTx :: CoopDeployment -> [PaymentPubKeyHash] -> (Value, PaymentPubKeyHash) -> (Bool, Integer) -> CreateMintFsTxReq -> Contract w s Text (Maybe TxId, [MintFsSuccess'FsIdAndTxOutRef])
+runMintFsTx :: CoopDeployment -> [PaymentPubKeyHash] -> (Value, PaymentPubKeyHash) -> (Bool, Integer) -> CreateMintFsTxReq -> Contract w s Text (Maybe TxId, MintFsInfo)
 runMintFsTx coopDeployment authenticators feeSpec (submit, minutes) req = do
-  (mayPublishingSpec, alreadyPublished') <- mkPublishingSpec coopDeployment authenticators req
+  (mayPublishingSpec, info) <- mkPublishingSpec coopDeployment authenticators req
   maybe
-    (return (Nothing, alreadyPublished'))
+    (return (Nothing, info))
     ( \publishingSpec -> do
         (now, _) <- currentNodeClientTimeRange
         let mintFsTrx =
@@ -537,14 +537,13 @@ runMintFsTx coopDeployment authenticators feeSpec (submit, minutes) req = do
           if submit
             then submitTrx @Void mintFsTrx
             else submitTrx' @Void mintFsTrx
-        return (Just txId, alreadyPublished')
+        return (Just txId, info)
     )
     mayPublishingSpec
 
 data PublishingSpec = PublishingSpec
   { ps'submitter :: PaymentPubKeyHash
   , ps'factStatementSpecs :: [FactStatementSpec]
-  , _ps'validUntil :: Extended POSIXTime
   }
 
 data FactStatementSpec = FactStatementSpec

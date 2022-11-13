@@ -32,22 +32,18 @@ message CreateMintFsTxResp {
 message MintFsSuccess {
   // Fact Statement Minting transaction (abbr. mint-fact-statement-tx) signed by Authenticators
   plutus.Transaction mint_fs_tx = 1;
-  // A list of already published Fact Statements (Map FactStatementId TxOutRef)
-  message FsIdAndTxOutRef {
-    bytes fact_statement_id = 1;
-    plutus.TxOutRef fact_statement_utxo = 2;
-  }
-  repeated FsIdAndTxOutRef already_published = 2;
 }
 
 // Information message associated with CreateMintFsTxResp
-message MintFsSuccess {
-  // A list of already published Fact Statements (Map FactStatementId TxOutRef)
+message MintFsInfo {
   message FsIdAndTxOutRef {
-    bytes fact_statement_id = 1;
-    plutus.TxOutRef fact_statement_utxo = 2;
+    bytes fs_id = 1;
+    plutus.TxOutRef fs_utxo = 2;
   }
+  // A list of already published Fact Statements (Map FactStatementId TxOutRef)
   repeated FsIdAndTxOutRef already_published = 1;
+  // Fact Statements ID that will be published with the mint-fact-statement-tx
+  repeated bytes published_fs_ids = 2;
 }
 
 message FactStatementInfo {
