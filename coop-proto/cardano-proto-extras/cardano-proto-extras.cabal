@@ -1,0 +1,98 @@
+cabal-version: 3.0
+name:          cardano-proto-extras
+version:       0.1.0.0
+license:       MIT
+maintainer:    info@mlabs.city
+author:        mlabs-haskell
+description:   Cardano Google Protobuf library with conversion utilities
+
+flag dev
+  description: Enable non-strict compilation for development
+  manual:      True
+
+common common-language
+  ghc-options:
+    -Wall -Wcompat -Wincomplete-uni-patterns -Wno-unused-do-bind
+    -Wno-partial-type-signatures -Wmissing-export-lists
+    -Wincomplete-record-updates -Wmissing-deriving-strategies
+    -Wno-name-shadowing -Wunused-foralls -fprint-explicit-foralls
+    -fprint-explicit-kinds -fwarn-missing-import-lists -Wname-shadowing
+    -Wunused-packages
+
+  if !flag(dev)
+    ghc-options: -Werror
+
+  default-extensions:
+    NoStarIsType
+    BangPatterns
+    BinaryLiterals
+    ConstrainedClassMethods
+    ConstraintKinds
+    DataKinds
+    DeriveAnyClass
+    DeriveDataTypeable
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    DoAndIfThenElse
+    EmptyCase
+    EmptyDataDecls
+    EmptyDataDeriving
+    ExistentialQuantification
+    ExplicitForAll
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    ForeignFunctionInterface
+    GADTSyntax
+    GeneralisedNewtypeDeriving
+    HexFloatLiterals
+    ImportQualifiedPost
+    InstanceSigs
+    KindSignatures
+    LambdaCase
+    MonomorphismRestriction
+    MultiParamTypeClasses
+    NamedFieldPuns
+    NamedWildCards
+    NumericUnderscores
+    OverloadedStrings
+    PartialTypeSignatures
+    PatternGuards
+    PolyKinds
+    PostfixOperators
+    RankNTypes
+    RelaxedPolyRec
+    ScopedTypeVariables
+    StandaloneDeriving
+    StandaloneKindSignatures
+    TemplateHaskell
+    TraditionalRecordSyntax
+    TupleSections
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    TypeSynonymInstances
+    ViewPatterns
+
+  default-language:   Haskell2010
+
+library
+  import:          common-language
+  exposed-modules: Cardano.Proto.Aux
+  hs-source-dirs:  src
+  build-depends:
+    , base
+    , bytestring
+    , coop-cardano-proto
+    , hex
+    , lens
+    , plutus-ledger
+    , plutus-ledger-api
+    , plutus-tx
+    , proto-lens
+    , text

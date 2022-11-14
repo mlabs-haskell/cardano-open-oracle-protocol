@@ -1,14 +1,17 @@
 {
   description = "cardano-open-oracle-protocol";
-  nixConfig.bash-prompt =
-    "\\[\\e[0m\\][\\[\\e[0;2m\\]nix-develop \\[\\e[0;1m\\]cardano-open-oracle-protocol \\[\\e[0;93m\\]\\w\\[\\e[0m\\]]\\[\\e[0m\\]$ \\[\\e[0m\\]";
+
+  nixConfig = {
+    bash-prompt =
+      "\\[\\e[0m\\][\\[\\e[0;2m\\]nix-develop \\[\\e[0;1m\\]cardano-open-oracle-protocol \\[\\e[0;93m\\]\\w\\[\\e[0m\\]]\\[\\e[0m\\]$ \\[\\e[0m\\]";
+  };
 
   inputs = {
     # Plutip maintains a compatible Plutus/Cardano derivation set
-    # TODO: Merge with upstream and use that.
-    bot-plutus-interface.url = "github:bladyjoker/bot-plutus-interface/bladyjoker/vasil-use-v2-scripts"; # "git+file:/home/bladyjoker/Desktop/bot-plutus-interface";
+    # TODO: Set to a stable release
+    bot-plutus-interface.url = "github:mlabs-haskell/bot-plutus-interface/sam/add-vasil-features";
 
-    plutip.url = "github:mlabs-haskell/plutip/f8f9e4650f09b448ffc5825434eb6f1714f9ddca"; # https://github.com/mlabs-haskell/plutip/releases/tag/vasil-compliant-v1.0.0
+    plutip.url = "github:mlabs-haskell/plutip/bladyjoker/upgrade-to-sam-vasil"; # https://github.com/mlabs-haskell/plutip/releases/tag/vasil-compliant-v1.0.0
     plutip.inputs.bot-plutus-interface.follows = "bot-plutus-interface";
     plutip.inputs.haskell-nix.follows = "bot-plutus-interface/haskell-nix";
     plutip.inputs.iohk-nix.follows = "bot-plutus-interface/iohk-nix";
@@ -31,7 +34,7 @@
       flake = false;
     };
 
-    plutarch.url = "github:plutonomicon/plutarch-plutus/staging";
+    plutarch.url = "github:plutonomicon/plutarch-plutus/c32001b2ae3007572cb6d5256072a2529c1a3407";
     plutarch.inputs.nixpkgs.follows = "nixpkgs";
 
     iohk-nix.follows = "plutip/iohk-nix";
@@ -71,12 +74,13 @@
         pkgsFourmolu = import nixpkgs-fourmolu {
           inherit system;
         };
-        fourmolu = pkgsFourmolu.haskell.packages.ghc924.fourmolu_0_6_0_0;
+        fourmolu = pkgsFourmolu.haskell.packages.ghc924.fourmolu;
         pre-commit-check = pre-commit-hooks.lib.${system}.run (import ./pre-commit-check.nix { inherit fourmolu; });
         pre-commit-devShell = pkgs.mkShell {
           inherit (pre-commit-check) shellHook;
         };
 
+        # Pure
         coopPureProj = import ./coop-pure/build.nix {
           inherit pkgs;
           inherit (pkgsWithOverlay) haskell-nix;
@@ -85,11 +89,7 @@
         };
         coopPureFlake = coopPureProj.flake { };
 
-        coopProtoDevShell = import ./coop-proto/build.nix {
-          inherit pkgs;
-          inherit (pre-commit-check) shellHook;
-        };
-
+        # Haskell shared types
         coopHsTypesProj = import ./coop-hs-types/build.nix {
           inherit pkgs plutip;
           inherit (pkgsWithOverlay) haskell-nix;
@@ -98,6 +98,7 @@
         };
         coopHsTypesFlake = coopHsTypesProj.flake { };
 
+        # Plutus
         pkgsForPlutarch = import plutarch.inputs.nixpkgs {
           inherit system;
           inherit (plutarch.inputs.haskell-nix) config;
@@ -116,35 +117,71 @@
           compiler-nix-name = "ghc923";
         };
         coopPlutusFlake = coopPlutusProj.flake { };
+        coopPlutusCli = coopPlutusProj.getComponent "coop-plutus:exe:coop-plutus-cli";
 
-        coopHsProto = import ./nix/protobuf-hs.nix {
-          inherit pkgs;
-          src = ./coop-proto;
-          proto = "coop.proto";
-          cabalPackageName = "coop-proto";
-        };
-
+        # Publisher
         coopPublisherProj = import ./coop-publisher/build.nix {
-          inherit pkgs http2-grpc-native coopHsProto;
+          inherit pkgs http2-grpc-native;
           inherit (pkgsWithOverlay) haskell-nix;
           inherit (pre-commit-check) shellHook;
+          inherit cardanoProtoHs txBuilderProtoHs factStatementStoreProtoHs publisherProtoHs;
           compiler-nix-name = "ghc8107";
         };
         coopPublisherFlake = coopPublisherProj.flake { };
 
+        # Docs
         coopDocsDevShell = import ./coop-docs/build.nix {
           inherit pkgs;
           inherit (pre-commit-hooks.outputs.packages.${system}) markdownlint-cli;
           inherit (pre-commit-check) shellHook;
         };
 
-        coopPlutusCli = coopPlutusProj.getComponent "coop-plutus:exe:coop-plutus-cli";
+        # Protos
+        coopProtoDevShell = import ./coop-proto/build.nix {
+          inherit pkgs;
+          inherit (pre-commit-check) shellHook;
+        };
 
+        cardanoProtoHs = import ./nix/protobuf-hs.nix {
+          inherit pkgs;
+          src = ./coop-proto;
+          proto = "cardano.proto";
+          cabalPackageName = "coop-cardano-proto";
+        };
+
+        txBuilderProtoHs = import ./nix/protobuf-hs.nix {
+          inherit pkgs;
+          src = ./coop-proto;
+          proto = "tx-builder-service.proto";
+          buildDepends = [ "coop-cardano-proto" ];
+          cabalPackageName = "coop-tx-builder-service-proto";
+        };
+
+        factStatementStoreProtoHs = import ./nix/protobuf-hs.nix {
+          inherit pkgs;
+          src = ./coop-proto;
+          proto = "fact-statement-store-service.proto";
+          buildDepends = [ "coop-cardano-proto" ];
+          cabalPackageName = "coop-fact-statement-store-service-proto";
+        };
+
+        publisherProtoHs = import ./nix/protobuf-hs.nix {
+          inherit pkgs;
+          src = ./coop-proto;
+          proto = "publisher-service.proto";
+          buildDepends = [ "coop-cardano-proto" "coop-fact-statement-store-service-proto" "coop-tx-builder-service-proto" ];
+          cabalPackageName = "coop-publisher-service-proto";
+        };
+
+        # PAB
         coopPabProj = import ./coop-pab/build.nix {
-          inherit pkgs plutip coopPlutusCli;
+          inherit pkgs plutip coopPlutusCli http2-grpc-native;
           inherit (pkgsWithOverlay) haskell-nix;
           inherit (pre-commit-check) shellHook;
           coop-hs-types = ./coop-hs-types;
+          cardanoProtoExtras = ./coop-proto/cardano-proto-extras;
+          inherit cardanoProtoHs txBuilderProtoHs;
+          plutipLocalCluster = plutip.packages.${system}."plutip:exe:local-cluster";
           compiler-nix-name = "ghc8107";
         };
         coopPabFlake = coopPabProj.flake { };
@@ -159,6 +196,47 @@
             chmod +x $out/bin/coop-pab-cli
             wrapProgram  $out/bin/coop-pab-cli --prefix PATH ":" ${coopPlutusCli}/bin/coop-plutus-cli
           '';
+        };
+
+        # Extras
+        coopExtrasPlutusJson = import ./coop-extras/plutus-json/build.nix {
+          inherit plutarch;
+          pkgs = pkgsForPlutarch;
+          inherit (pkgsForPlutarch) haskell-nix;
+          inherit (pre-commit-check) shellHook;
+          compiler-nix-name = "ghc923";
+        };
+        coopExtrasPlutusJsonFlake = coopExtrasPlutusJson.flake { };
+
+        coopExtrasJsonFactStatementStore = import ./coop-extras/json-fact-statement-store/build.nix {
+          inherit pkgs plutip http2-grpc-native;
+          inherit (pkgsWithOverlay) haskell-nix;
+          inherit (pre-commit-check) shellHook;
+          inherit factStatementStoreProtoHs cardanoProtoHs;
+          cardanoProtoExtras = ./coop-proto/cardano-proto-extras;
+          plutusJson = ./coop-extras/plutus-json;
+          compiler-nix-name = "ghc8107";
+        };
+        coopExtrasJsonFactStatementStoreFlake = coopExtrasJsonFactStatementStore.flake { };
+
+        cardanoProtoExtras = import ./coop-proto/cardano-proto-extras/build.nix {
+          inherit pkgs plutip;
+          inherit (pkgsWithOverlay) haskell-nix;
+          inherit (pre-commit-check) shellHook;
+          inherit cardanoProtoHs;
+          compiler-nix-name = "ghc8107";
+        };
+        cardanoProtoExtrasFlake = cardanoProtoExtras.flake { };
+
+        tutorialShell = import ./coop-extras/tutorial/build.nix {
+          inherit pkgs;
+          plutipLocalCluster = plutip.packages.${system}."plutip:exe:local-cluster";
+          jsFsStoreCli = coopExtrasJsonFactStatementStoreFlake.packages."json-fact-statement-store:exe:json-fs-store-cli";
+          coopPabCli = coopPabFlake.packages."coop-pab:exe:coop-pab-cli";
+          coopPublisherCli = coopPublisherFlake.packages."coop-publisher:exe:coop-publisher-cli";
+          cardanoNode = coopPabProj.hsPkgs.cardano-node.components.exes.cardano-node;
+          cardanoCli = coopPabProj.hsPkgs.cardano-cli.components.exes.cardano-cli;
+          inherit (pre-commit-check) shellHook;
         };
 
         renameAttrs = rnFn: pkgs.lib.attrsets.mapAttrs' (n: value: { name = rnFn n; inherit value; });
@@ -181,6 +259,10 @@
           dev-docs = coopDocsDevShell;
           dev-pab = coopPabFlake.devShell;
           dev-hs-types = coopHsTypesFlake.devShell;
+          dev-extras-plutus-json = coopExtrasPlutusJsonFlake.devShell;
+          dev-extras-json-store = coopExtrasJsonFactStatementStoreFlake.devShell;
+          dev-tutorial = tutorialShell;
+          dev-cardano-proto-extras = cardanoProtoExtrasFlake.devShell;
           default = dev-proto;
         };
 
@@ -189,7 +271,11 @@
             coopPlutusFlake.checks //
             coopPublisherFlake.checks //
             coopPabFlake.checks //
-            coopHsTypesFlake.checks) //
+            coopHsTypesFlake.checks //
+            coopExtrasPlutusJsonFlake.checks //
+            coopExtrasJsonFactStatementStoreFlake.checks //
+            cardanoProtoExtrasFlake.checks
+          ) //
         { inherit pre-commit-check; } // devShells // packages;
       });
 }

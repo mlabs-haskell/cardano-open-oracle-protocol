@@ -3,10 +3,9 @@ module Coop.Cli.MintCertRdmrs (MintCertRdmrsOpts (..), mintCertRdmrs) where
 import BotPlutusInterface.Config (loadPABConfig)
 import BotPlutusInterface.Types (PABConfig (pcOwnPubKeyHash))
 
-import Coop.Cli.Aux (serializeAssetClassOpt)
+import Codec.Serialise (writeFileSerialise)
 import Coop.Pab (mintCertRedeemers)
 import Coop.Pab.Aux (DeployMode, loadCoopPlutus, runBpi)
-import Data.ByteString.Char8 qualified as Char8
 import Data.Text (Text)
 import Plutus.V2.Ledger.Api (PubKeyHash)
 
@@ -15,6 +14,7 @@ data MintCertRdmrsOpts = MintCertRdmrsOpts
   , mcro'pabConfig :: FilePath
   , mcro'certRdmrWalletPkh :: PubKeyHash
   , mcro'nCertRdmrTokens :: Integer
+  , mcro'certRdmrAcFile :: FilePath
   }
   deriving stock (Show, Eq)
 
@@ -32,6 +32,10 @@ mintCertRdmrs opts = do
       $ mintCertRedeemers coopPlutus (mcro'nCertRdmrTokens opts)
   either
     (\err -> error $ "mintCertRdmrs: Must have $CERT-RDMR asset class" <> show err)
-    (\certRdmrAc -> Char8.putStrLn $ "mintCertRdmrs: Minted $CERT-RDMR tokens with AssetClass " <> serializeAssetClassOpt certRdmrAc)
+    ( \certRdmrAc -> do
+        putStrLn $ "mintCertRdmrs: Minted $CERT-RDMR tokens with AssetClass " <> show certRdmrAc
+        -- FIXME: Why is it complaining NOW about the OverlappingInstances when using Aeson?
+        writeFileSerialise (mcro'certRdmrAcFile opts) certRdmrAc
+    )
     errOrAcs
   return ()

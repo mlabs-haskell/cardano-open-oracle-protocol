@@ -383,7 +383,7 @@ genCorruptFsMpMintingCtx fsMpParams fsCs = do
           , doMintAndPayOtherTokenNameAddr fsCs fsVAddr
           , doRemoveOutputDatum
           , doPayToOtherAddress fsVAddr otherAddr
-          , doRemoveInputsWithCurrency certCs
+          , doRemoveRefInputsWithCurrency certCs
           , doRemoveInputsWithCurrency authCs
           , doValidityAlways
           , doValidityBefore
@@ -392,7 +392,6 @@ genCorruptFsMpMintingCtx fsMpParams fsCs = do
       (not . null)
 
   let corrupt = mkCorrupt corruptions
-
   return $ corrupt ctx
 
 genCorrectFsMpBurningCtx :: FsMpParams -> CurrencySymbol -> Gen ScriptContext
@@ -623,6 +622,17 @@ doRemoveInputsWithToken ac ctx =
               }
         }
 
+-- | Removes ref inputs that contain a specified CurrencySymbol
+doRemoveRefInputsWithCurrency :: CurrencySymbol -> ScriptContext -> ScriptContext
+doRemoveRefInputsWithCurrency cs ctx =
+  let ScriptContext txInfo _ = ctx
+   in ctx
+        { scriptContextTxInfo =
+            txInfo
+              { txInfoReferenceInputs = [inp | inp@(TxInInfo _ inOut) <- txInfoReferenceInputs txInfo, not . AssocMap.member cs $ getValue (txOutValue inOut)]
+              }
+        }
+
 -- | Removes inputs that contain a specified CurrencySymbol
 doRemoveInputsWithCurrency :: CurrencySymbol -> ScriptContext -> ScriptContext
 doRemoveInputsWithCurrency cs ctx =
@@ -630,7 +640,7 @@ doRemoveInputsWithCurrency cs ctx =
    in ctx
         { scriptContextTxInfo =
             txInfo
-              { txInfoInputs = [inp | inp@(TxInInfo _ inOut) <- txInfoInputs txInfo, AssocMap.member cs $ getValue (txOutValue inOut)]
+              { txInfoInputs = [inp | inp@(TxInInfo _ inOut) <- txInfoInputs txInfo, not . AssocMap.member cs $ getValue (txOutValue inOut)]
               }
         }
 
@@ -668,6 +678,10 @@ doValidityAlways ctx =
               { txInfoValidRange = interval' NegInf PosInf
               }
         }
+
+-- | For debugging
+_doNothing :: ScriptContext -> ScriptContext
+_doNothing = id
 
 -- TODO: Switch to mlabs-haskell/plutus-simple-model (that's why you need it)
 normalizeValue :: Value -> Value

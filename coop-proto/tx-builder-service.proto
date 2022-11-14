@@ -1,0 +1,108 @@
+syntax = "proto3";
+
+import "cardano.proto";
+
+package coop.tx_builder;
+
+service TxBuilder {
+  // Create a transaction that creates Fact Statement UTxOs (mint-fact-statement-tx)
+  rpc createMintFsTx(CreateMintFsTxReq) returns (CreateMintFsTxResp) {}
+  // Create a transaction that garbage collects obsolete Fact Statement UTxOs (gc-fact-statement-tx)
+  rpc createGcFsTx(CreateGcFsTxReq) returns (CreateGcFsTxResp) {}
+}
+
+message CreateMintFsTxReq {
+  repeated FactStatementInfo fact_statements = 1;
+  // The PubKeyHash of the user wallet that will sign and submit the transaction (ie. Submitter)
+  cardano.PubKeyHash submitter  = 2;
+}
+
+message CreateMintFsTxResp {
+  oneof succOrErr {
+    // Error encountered when servicing the request
+    Error error = 1;
+    // Successful Fact Statement Minting message
+    MintFsSuccess success = 2;
+  }
+  // Information about the processing of the request
+  MintFsInfo info = 3;
+}
+
+// Success message associated with CreateMintFsTxResp
+message MintFsSuccess {
+  // Fact Statement Minting transaction (abbr. mint-fact-statement-tx) signed by Authenticators
+  cardano.Transaction mint_fs_tx = 1;
+}
+
+// Information message associated with CreateMintFsTxResp
+message MintFsInfo {
+  message FsIdAndTxOutRef {
+    bytes fs_id = 1;
+    cardano.TxOutRef fs_utxo = 2;
+  }
+  // A list of already published Fact Statements (Map FactStatementId TxOutRef)
+  repeated FsIdAndTxOutRef already_published = 1;
+  // Fact Statements ID that will be published with the mint-fact-statement-tx
+  repeated bytes published_fs_ids = 2;
+}
+
+message FactStatementInfo {
+  // Fact Statement ID
+  bytes fs_id = 1;
+  // PlutusData encoding of a Fact Statement
+  cardano.PlutusData fs = 2;
+  // Extended ledger time after which the created Fact Statement UTxO can be garbage collected by the Submitter
+  cardano.ExtendedLedgerTime gc_after = 3;
+}
+
+message CreateGcFsTxReq {
+  // Fact Statement IDs to garbage collect
+  repeated bytes fs_ids = 1;
+  // The PubKeyHash of the user that submitted the mint-fact-statement-x and will also submit the gc-fact-statement-tx
+  cardano.PubKeyHash submitter  = 2;
+}
+
+message CreateGcFsTxResp {
+  oneof transactionOrErr {
+    // Error encountered when servicing the request
+    Error error = 1;
+    // Successfull Fact Statement garbage collection message
+    GcFsSuccess success = 2;
+  }
+  // Request processing information
+  GcFsInfo info = 3;
+}
+
+// Success message associated with the CreateGcFsTxResp
+message GcFsSuccess {
+  // Fact Statement garbage collections transaction (abbr. gc-fact-statement-tx) to sign and submit
+  cardano.Transaction gc_fs_tx = 1;
+}
+
+// Info message associated with the CreateGcFsTxResp
+message GcFsInfo {
+  // Requested Fact Statement IDs that can be garbage collected with the above transaction
+  repeated bytes obsolete_fs_ids = 1;
+  // Requested Fact Statement IDs that couldn't be found belonging to the specified Submitter
+  repeated bytes not_found_fs_ids = 2;
+  // Requested Fact Statement IDs that can't be garbage collected (still valid)
+  repeated bytes valid_fs_ids = 3;
+
+}
+
+// Error associated with above response messages
+// TODO: Should catch and properly report classes of errors users would expect to trigger.
+// For example:
+//   - Collateral finding could fail
+//   - $FEE determination could fail
+//   - Transaction size due to too many Fact Statements
+message Error {
+  message OtherError {
+    // Some other error message
+    string msg = 1;
+  }
+  oneof someError {
+    // Some other error
+    OtherError other_err = 1;
+  }
+}

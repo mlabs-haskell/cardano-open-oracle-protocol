@@ -1,4 +1,4 @@
-{ src, proto, cabalPackageName, pkgs }:
+{ src, proto, cabalPackageName, buildDepends ? [ ], pkgs }:
 let
   cabalTemplate = pkgs.writeTextFile {
     name = "protobuf-hs-cabal-template";
@@ -19,7 +19,8 @@ let
           build-depends:
               base,
               proto-lens-runtime,
-              proto-lens-protobuf-types
+              proto-lens-protobuf-types,
+              ${builtins.concatStringsSep "," buildDepends}
     '';
   };
 in
@@ -31,7 +32,6 @@ pkgs.stdenv.mkDerivation {
     pkgs.haskellPackages.proto-lens-protoc
     pkgs.cabal-install
   ];
-
   buildPhase = ''
     set -vox
     mkdir src

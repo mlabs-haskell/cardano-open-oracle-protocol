@@ -1,4 +1,9 @@
 {-# LANGUAGE CPP #-}
+{-# OPTIONS_GHC -Wno-all-missed-specialisations #-}
+{-# OPTIONS_GHC -Wno-implicit-prelude #-}
+{-# OPTIONS_GHC -Wno-missing-local-signatures #-}
+{-# OPTIONS_GHC -Wno-missing-safe-haskell-mode #-}
+{-# OPTIONS_GHC -Wno-unsafe #-}
 
 module Coop.Types (
   CoopPlutus (..),
@@ -6,6 +11,7 @@ module Coop.Types (
   FsMpParams (..),
   FsMpRedeemer (..),
   FactStatement (),
+  FactStatementId (),
   FsDatum (..),
   CertDatum (..),
   AuthParams (..),
@@ -13,6 +19,7 @@ module Coop.Types (
   AuthMpRedeemer (..),
   CertMpParams (..),
   CertMpRedeemer (..),
+  AuthBatchId,
   AuthDeployment (..),
   CoopState (..),
 ) where
@@ -20,7 +27,6 @@ module Coop.Types (
 import Control.Lens (makeFields)
 import Coop.PlutusOrphans ()
 import Data.Aeson (FromJSON, ToJSON)
-import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import PlutusTx qualified
 
@@ -72,6 +78,8 @@ data CoopState = CoopState
   -- ^ COOP certificate datums attached at @CertV with $CERT datums
   , cs'factStatements :: [FsDatum]
   -- ^ COOP fact statement datums attached at @FsV with $FS datums
+  , cs'currentTime :: (POSIXTime, POSIXTime)
+  -- ^ Current Cardano time (slot = interval posixtime)
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
@@ -81,11 +89,14 @@ data CoopState = CoopState
 -- | A fact statement is just Plutus Data
 type FactStatement = BuiltinData
 
+-- | A fact statement ID is just bytes
+type FactStatementId = LedgerBytes
+
 -- | A datum holding the FactStatement that's locked at @FsV
 data FsDatum = FsDatum
   { fd'fs :: FactStatement
   -- ^ Fact statement
-  , fd'fsId :: LedgerBytes
+  , fd'fsId :: FactStatementId
   -- ^ Fact statement ID as provided by the oracle
   , fs'gcAfter :: Extended POSIXTime
   -- ^ After this time the Submitter can 'garbage collect' the @FsV UTxO
@@ -104,7 +115,7 @@ data FsMpParams = FsMpParams
   , fmp'authParams :: AuthParams
   -- ^ Authentication parameters
   }
-  deriving stock (Show, Generic, Eq, Typeable)
+  deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
 
 -- | FsMp initial authentication parameters
@@ -119,7 +130,7 @@ data AuthParams = AuthParams
 
 -- | FsMp redeemer denoting $FS mint or burning actions
 data FsMpRedeemer = FsMpBurn | FsMpMint
-  deriving stock (Show, Generic, Eq, Typeable)
+  deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
 
 -- ** COOP Authentication
@@ -135,12 +146,15 @@ data AuthDeployment = AuthDeployment
   , ad'authMp :: MintingPolicy
   -- ^ Minting policy ofr $AUTH tokens
   }
-  deriving stock (Show, Generic, Eq, Typeable)
+  deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
+
+-- | Authentication batch identifier (certificates + authentication tokens)
+type AuthBatchId = LedgerBytes
 
 -- | Datum locked at @CertV containing information about $AUTH tokens used in authorizing $FS minting
 data CertDatum = CertDatum
-  { cert'id :: LedgerBytes
+  { cert'id :: AuthBatchId
   -- ^ Certificate unique identifier (matches $CERT and $AUTH token names)
   , cert'validity :: POSIXTimeRange
   -- ^ Certificate validity interval after which associated $AUTH tokens can't be used to authorize $FS minting
@@ -152,7 +166,7 @@ data CertDatum = CertDatum
 
 -- | CertMp redeemer denoting $CERT mint or burning actions
 data CertMpRedeemer = CertMpBurn | CertMpMint
-  deriving stock (Show, Generic, Eq, Typeable)
+  deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
 
 -- | CertMp initial parameters
@@ -169,7 +183,7 @@ data CertMpParams = CertMpParams
 
 -- | AuthMp redeemer denoting $AUTH mint or burning actions
 data AuthMpRedeemer = AuthMpBurn | AuthMpMint
-  deriving stock (Show, Generic, Eq, Typeable)
+  deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)
 
 -- | AuthMp initial parameters

@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+import "cardano.proto";
+import "tx-builder-service.proto";
+import "fact-statement-store-service.proto";
+
+package coop.publisher;
+
+service Publisher {
+  // Create a Fact Statement minting transaction (mint-fact-statement-tx)
+  rpc createMintFsTx(CreateMintFsTxRequest) returns (CreateMintFsTxResponse) {}
+  // Create a Fact Statement garbage collection transaction (gc-fact-statement-tx)
+  rpc createGcFsTx(CreateGcFsTxRequest) returns (CreateGcFsTxResponse) {}
+}
+
+message CreateMintFsTxRequest {
+  message FactStatementInfo {
+    // Fact Statement identifier known by the Oracle's Fact Store
+    bytes fs_id = 1;
+    // Extended ledger time after which the created Fact Statement UTxO at @FsV can be spent by the Submitter
+    cardano.ExtendedLedgerTime gcAfter = 2;
+  }
+
+  // A list of Fact Statement information containing the ID and time-to-live
+  repeated FactStatementInfo fs_infos = 1;
+  // The PubKeyHash of the user that will submit the transaction
+  cardano.PubKeyHash submitter  = 2;
+}
+
+message CreateMintFsTxResponse {
+  oneof transactionOrErr {
+    // Error encountered when servicing the request
+    Error error = 1;
+    // Fact Statement Minting transaction (mint-fact-statement-tx) that must be signed by the Submitter and submitted
+    cardano.Transaction mint_fs_tx = 2;
+  }
+  message Info {
+    coop.tx_builder.MintFsInfo tx_builder_info = 1;
+  }
+  Info info = 3;
+}
+
+message CreateGcFsTxRequest {
+  // Fact Statement IDs to garbage collect
+  repeated bytes fs_ids = 1;
+  // The PubKeyHash of the user that submitted the FSMintTx and will also submit the FSBurnTx
+  cardano.PubKeyHash submitter  = 2;
+}
+
+message CreateGcFsTxResponse {
+  oneof transactionOrErr {
+    // Fact Statement garbage collection transaction (gc-fact-statement-tx) to sign and submit
+    cardano.Transaction gc_fs_tx = 1;
+    // Error encountered when servicing the request
+    Error error = 2;
+  }
+  message Info {
+    coop.tx_builder.GcFsInfo tx_builder_info = 1;
+  }
+  Info info = 3;
+}
+
+message Error {
+  message OtherError {
+    // Some other error message
+    string msg = 1;
+  }
+  oneof someError {
+    coop.fact_statement_store.Error fs_store_err = 1;
+    coop.tx_builder.Error tx_builder_err = 2;
+    OtherError other_err = 3;
+  }
+}

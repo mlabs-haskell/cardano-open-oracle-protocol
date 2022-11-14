@@ -197,7 +197,8 @@ Notes:
 -}
 mkOneShotMp ::
   ClosedTerm
-    ( PAsData PInteger :--> PAsData PTokenName
+    ( PAsData PInteger
+        :--> PAsData PTokenName
         :--> PAsData PTxOutRef
         :--> PMintingPolicy
     )
@@ -279,8 +280,11 @@ pinterval' = phoistAcyclic $
   plam $ \lower upper ->
     pcon $
       PInterval $
-        pdcons @"from" # lower
-          #$ pdcons @"to" # upper # pdnil
+        pdcons @"from"
+          # lower
+          #$ pdcons @"to"
+          # upper
+          # pdnil
 
 plowerBound :: Term s (PExtended a :--> PLowerBound a)
 plowerBound = phoistAcyclic $ plam \start -> pcon $ PLowerBound $ pdcons @"_0" # pdata start #$ pdcons @"_1" # pconstantData False # pdnil
@@ -331,7 +335,8 @@ pmustPayCurrencyWithDatumTo = phoistAcyclic $
 
     paidVal <-
       plet $
-        pfoldTxOutputs # ctx
+        pfoldTxOutputs
+          # ctx
           # plam foldFn
           # mempty
 
@@ -370,7 +375,8 @@ pmustSpendPred = phoistAcyclic $
   plam $ \ctx cs tn predOnQ -> ptrace "pmustSpendPred" P.do
     spentQ <-
       plet $
-        pfoldTxInputs # ctx
+        pfoldTxInputs
+          # ctx
           # plam
             ( \spent txInInfo -> P.do
                 resolved <- pletFields @'["value"] $ pfield @"resolved" # txInInfo
@@ -386,12 +392,14 @@ pmustSpendPred = phoistAcyclic $
 -- | Checks total tokens spent
 pmustSpend :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PUnit)
 pmustSpend = phoistAcyclic $
-  plam $ \ctx cs tn mustSpendQ -> pmustSpendPred # ctx # cs # tn # plam (#== mustSpendQ)
+  plam $
+    \ctx cs tn mustSpendQ -> pmustSpendPred # ctx # cs # tn # plam (#== mustSpendQ)
 
 -- | Checks total tokens spent
 pmustSpendAtLeast :: ClosedTerm (PScriptContext :--> PCurrencySymbol :--> PTokenName :--> PInteger :--> PUnit)
 pmustSpendAtLeast = phoistAcyclic $
-  plam $ \ctx cs tn mustSpendAtLeastQ -> pmustSpendPred # ctx # cs # tn # plam (mustSpendAtLeastQ #<=)
+  plam $
+    \ctx cs tn mustSpendAtLeastQ -> pmustSpendPred # ctx # cs # tn # plam (mustSpendAtLeastQ #<=)
 
 {- | Must spend and burn 'own' singleton AssetClass
 

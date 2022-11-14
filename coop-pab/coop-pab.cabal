@@ -19,7 +19,7 @@ common common-language
     -Wincomplete-record-updates -Wmissing-deriving-strategies
     -Wno-name-shadowing -Wunused-foralls -fprint-explicit-foralls
     -fprint-explicit-kinds -fwarn-missing-import-lists -Wname-shadowing
-    -Wunused-packages
+    -Wunused-packages -fprint-potential-instances
 
   if !flag(dev)
     ghc-options: -Werror
@@ -95,8 +95,10 @@ library
     , base
     , bot-plutus-interface
     , bytestring
+    , cardano-proto-extras
     , containers
     , coop-hs-types
+    , coop-tx-builder-service-proto
     , cryptonite
     , directory
     , filepath
@@ -110,6 +112,7 @@ library
     , plutus-script-utils
     , plutus-tx
     , process
+    , proto-lens
     , stm
     , text
     , uuid
@@ -119,16 +122,21 @@ test-suite coop-pab-tests
   build-depends:
     , base
     , bot-plutus-interface
+    , bytestring
+    , cardano-proto-extras
     , containers
     , coop-hs-types
     , coop-pab
+    , coop-tx-builder-service-proto
     , data-default
+    , lens
     , mtl
     , plutip
     , plutus-contract
     , plutus-ledger
     , plutus-ledger-api
     , plutus-script-utils
+    , proto-lens
     , tasty
     , text
 
@@ -149,16 +157,31 @@ executable coop-pab-cli
     Coop.Cli.GetState
     Coop.Cli.MintAuth
     Coop.Cli.MintCertRdmrs
+    Coop.Cli.RedistributeAuth
+    Coop.Cli.TxBuilderGrpc
 
   build-depends:
     , aeson
     , base
     , bot-plutus-interface
     , bytestring
+    , cardano-proto-extras
+    , coop-cardano-proto
     , coop-hs-types
     , coop-pab
+    , coop-tx-builder-service-proto
+    , directory
+    , filepath
     , hex
+    , http2-grpc-proto-lens
+    , http2-grpc-types
+    , lens
     , optparse-applicative
     , plutus-ledger
     , plutus-ledger-api
+    , proto-lens
+    , serialise
     , text
+    , warp
+    , warp-grpc
+    , warp-tls

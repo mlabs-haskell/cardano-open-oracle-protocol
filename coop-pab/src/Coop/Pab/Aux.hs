@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Coop.Pab.Aux (
   Trx (..),
@@ -23,15 +24,26 @@ module Coop.Pab.Aux (
   interval',
   findOutsAtHoldingCurrency,
   findOutsAtHoldingCurrency',
+  datumFromTxOutOrFail,
+  deplCertVAddress,
+  deplFsVAddress,
+  deplFsVHash,
+  deplCertCs,
+  deplAuthCs,
+  deplAuthMp,
+  deplFsCs,
+  submitTrx',
 ) where
 
+import BotPlutusInterface.Constraints (submitBpiTxConstraintsWith)
+import BotPlutusInterface.Constraints qualified as BpiConstr
 import BotPlutusInterface.Contract (runContract)
 import BotPlutusInterface.Types (CollateralVar (CollateralVar), ContractEnvironment (ContractEnvironment), ContractState (ContractState), PABConfig, ceCollateral, ceContractInstanceId, ceContractLogs, ceContractState, ceContractStats, cePABConfig)
+import Control.Applicative ((<|>))
 import Control.Concurrent.STM (newTVarIO)
 import Control.Lens ((^.), (^?))
-import Control.Lens.Prism (_Just)
 import Control.Monad (filterM)
-import Coop.Types (CoopPlutus)
+import Coop.Types (AuthDeployment (ad'authMp, ad'certMp, ad'certV), CoopDeployment (cd'auth, cd'fsMp, cd'fsV), CoopPlutus)
 import Crypto.Hash (Blake2b_256 (Blake2b_256), hashWith)
 import Data.Aeson (ToJSON, decodeFileStrict)
 import Data.ByteArray (convert)
@@ -41,21 +53,21 @@ import Data.Kind (Type)
 import Data.List (sort)
 import Data.Map (Map, fromList)
 import Data.Map qualified as Map
-import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
-import Data.Typeable (typeRep)
+import Data.Text qualified as Text
 import Data.UUID.V4 qualified as UUID
 import Data.Void (Void)
-import Ledger (ChainIndexTxOut, PaymentPubKeyHash, applyArguments, ciTxOutPublicKeyDatum, ciTxOutScriptDatum, ciTxOutValue, getCardanoTxData, getCardanoTxId, getCardanoTxInputs, pubKeyHashAddress)
+import Ledger (ChainIndexTxOut, PaymentPubKeyHash, applyArguments, ciTxOutPublicKeyDatum, ciTxOutScriptDatum, ciTxOutValue, datumInDatumFromQuery, getCardanoTxId, pubKeyHashAddress)
 import Ledger.Ada (lovelaceValueOf)
 import Ledger.Typed.Scripts (RedeemerType, ValidatorTypes (DatumType))
-import Plutus.Contract (AsContractError, Contract, ContractInstanceId, awaitTxConfirmed, datumFromHash, logInfo, submitTxConstraintsWith, throwError, utxosAt)
+import Plutus.Contract (AsContractError, Contract, ContractInstanceId, awaitTxConfirmed, logInfo, throwError, utxosAt)
 import Plutus.Contract.Constraints (ScriptLookups, TxConstraints, mustMintValue, mustPayToPubKey, mustSpendPubKeyOutput, ownPaymentPubKeyHash, plutusV2MintingPolicy, unspentOutputs)
 import Plutus.PAB.Core.ContractInstance.STM (Activity (Active))
-import Plutus.Script.Utils.V2.Scripts (scriptCurrencySymbol)
+import Plutus.Script.Utils.V2.Address (mkValidatorAddress)
+import Plutus.Script.Utils.V2.Scripts (scriptCurrencySymbol, validatorHash)
 import Plutus.V1.Ledger.Value (AssetClass (unAssetClass), assetClass, valueOf)
 import Plutus.V1.Ledger.Value qualified as Value
-import Plutus.V2.Ledger.Api (Address, BuiltinByteString, CurrencySymbol, Datum (Datum, getDatum), Extended, FromData (fromBuiltinData), Interval (Interval), LowerBound (LowerBound), MintingPolicy (MintingPolicy), Redeemer (Redeemer), Script, ToData, TokenName (TokenName), TxId (getTxId), TxOutRef (txOutRefId, txOutRefIdx), UpperBound (UpperBound), Value (Value), fromBuiltin, toBuiltinData, toData)
+import Plutus.V2.Ledger.Api (Address, BuiltinByteString, CurrencySymbol, Datum (Datum, getDatum), Extended, FromData (fromBuiltinData), Interval (Interval), LowerBound (LowerBound), MintingPolicy (MintingPolicy), Redeemer (Redeemer), Script, ToData, TokenName (TokenName), TxId (getTxId), TxOutRef (txOutRefId, txOutRefIdx), UpperBound (UpperBound), ValidatorHash, Value (Value), fromBuiltin, toBuiltinData, toData)
 import PlutusTx.AssocMap qualified as AssocMap
 import System.Directory (getTemporaryDirectory)
 import System.FilePath ((</>))
@@ -120,7 +132,7 @@ mkMintOneShotTrx self toWallet out@(oref, _) mkOneShotMp q =
         mustMintValue val
           <> mustSpendPubKeyOutput oref
           <> mustPayToPubKey toWallet (val <> minUtxoAdaValue)
-   in (Trx lookups constraints, assetClass oneShotCs oneShotTn)
+   in (Trx lookups constraints [], assetClass oneShotCs oneShotTn)
 
 {- | Hashes transaction inputs blake2b_256 on the concatenation of id:ix (used for onchain uniqueness)
 
@@ -135,37 +147,49 @@ hashTxInputs inputs =
       hashedOref = convert @_ @BuiltinByteString . hashWith Blake2b_256 . mconcat $ zipWith cons ixs txIds
    in hashedOref
 
+type CoopContract w s = Contract w s Text
+
 -- | Tries to parse Data from ChainIndexTxOut which is surprisingly complicated
-datumFromTxOut :: forall (a :: Type) w s. Typeable a => FromData a => ChainIndexTxOut -> Contract w s Text (Maybe a)
-datumFromTxOut out =
-  maybe
-    ( do
-        logI "Datum not present in the Script output"
-        maybe
-          (logI "Datum not present in the PubKey output" >> pure Nothing)
-          datumFromTxOut'
-          (out ^? ciTxOutPublicKeyDatum . _Just)
-    )
-    datumFromTxOut'
-    (out ^? ciTxOutScriptDatum)
+datumFromTxOut :: forall (a :: Type) w s. Typeable a => FromData a => ChainIndexTxOut -> CoopContract w s (Maybe a)
+datumFromTxOut out = return $ tryPkDat out <|> tryScDat out
   where
-    logI m = logInfo @String ("datumFromTxOut: " <> m)
+    tryPkDat o = do
+      mayPkDat <- o ^? ciTxOutPublicKeyDatum
+      (_, pkDat) <- mayPkDat
+      d <- pkDat ^? datumInDatumFromQuery
+      fromDatum d
+    tryScDat o = do
+      (_, scDat) <- o ^? ciTxOutScriptDatum
+      d <- scDat ^? datumInDatumFromQuery
+      fromDatum d
 
-    datumFromTxOut' (hash, mayDatum) = do
-      dat <-
-        maybe
-          ( do
-              logI $ printf "No datum trying datumFromHash %s" (show hash)
-              mayDatum' <- datumFromHash hash
-              maybe (throwError "datumFromHash failed") pure mayDatum'
-          )
-          (\d -> logI "Got inlined datum" >> pure d)
-          mayDatum
+datumFromTxOutOrFail :: (FromData b, Typeable b) => ChainIndexTxOut -> Text -> Contract w s Text b
+datumFromTxOutOrFail out msg = do
+  mayDat <- datumFromTxOut out
+  maybe (throwError msg) return mayDat
 
-      maybe
-        (logI (printf "fromDatum failed: %s is not %s" (show (typeRep (Proxy @a))) (show dat)) >> pure Nothing)
-        (pure . Just)
-        (fromDatum dat)
+deplCertVAddress :: CoopDeployment -> Address
+deplCertVAddress = mkValidatorAddress . ad'certV . cd'auth
+
+deplFsVAddress :: CoopDeployment -> Address
+deplFsVAddress depl =
+  let fsV = cd'fsV depl in mkValidatorAddress fsV
+
+deplFsVHash :: CoopDeployment -> ValidatorHash
+deplFsVHash depl =
+  let fsV = cd'fsV depl in validatorHash fsV
+
+deplCertCs :: CoopDeployment -> CurrencySymbol
+deplCertCs = scriptCurrencySymbol . ad'certMp . cd'auth
+
+deplAuthCs :: CoopDeployment -> CurrencySymbol
+deplAuthCs = scriptCurrencySymbol . ad'authMp . cd'auth
+
+deplAuthMp :: CoopDeployment -> MintingPolicy
+deplAuthMp = ad'authMp . cd'auth
+
+deplFsCs :: CoopDeployment -> CurrencySymbol
+deplFsCs = scriptCurrencySymbol . cd'fsMp
 
 findOutsAt :: forall a w s. Typeable a => FromData a => Address -> (Value -> Maybe a -> Bool) -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
 findOutsAt addr p = do
@@ -214,21 +238,32 @@ ciValueOf :: AssetClass -> ChainIndexTxOut -> Integer
 ciValueOf ac out = let (cs, tn) = unAssetClass ac in valueOf (out ^. ciTxOutValue) cs tn
 
 -- | Trx utilities
-data Trx i o a = Trx (ScriptLookups a) (TxConstraints i o)
+data Trx i o a = Trx (ScriptLookups a) (TxConstraints i o) [BpiConstr.BpiConstraint]
 
 instance Semigroup (Trx i o a) where
-  Trx l c <> Trx l' c' = Trx (l <> l') (c <> c')
+  Trx l c b <> Trx l' c' b' = Trx (l <> l') (c <> c') (b <> b')
 
 instance Monoid (Trx i o a) where
-  mempty = Trx mempty mempty
+  mempty = Trx mempty mempty mempty
 
-submitTrx :: forall a e w s. (FromData (DatumType a), ToData (RedeemerType a), ToData (DatumType a), AsContractError e) => Trx (RedeemerType a) (DatumType a) a -> Contract w s e ()
-submitTrx (Trx lookups constraints) = do
-  tx <- submitTxConstraintsWith lookups constraints
-  logInfo @String $ show (getCardanoTxData tx)
-  logInfo @String $ show (getCardanoTxInputs tx)
+submitTrx :: forall a e w s. (FromData (DatumType a), ToData (RedeemerType a), ToData (DatumType a), AsContractError e) => Trx (RedeemerType a) (DatumType a) a -> Contract w s e TxId
+submitTrx (Trx lookups constraints bpiConstraints) = do
+  tx <- submitBpiTxConstraintsWith lookups constraints bpiConstraints
   awaitTxConfirmed (getCardanoTxId tx)
+  return $ getCardanoTxId tx
+
+submitTrx' :: forall a e w s. (FromData (DatumType a), ToData (RedeemerType a), ToData (DatumType a), AsContractError e) => Trx (RedeemerType a) (DatumType a) a -> Contract w s e TxId
+submitTrx' (Trx lookups constraints bpiConstraints) = do
+  tx <- submitBpiTxConstraintsWith lookups constraints bpiConstraints
+  return $ getCardanoTxId tx
 
 -- | Creates an interval with Extended bounds
 interval' :: forall a. Extended a -> Extended a -> Interval a
 interval' from to = Interval (LowerBound from False) (UpperBound to False)
+
+-- | ProtoCardano instances
+instance MonadFail (Contract w s Text) where
+  fail = throwError . Text.pack
+
+instance MonadFail (Contract w s String) where
+  fail = throwError

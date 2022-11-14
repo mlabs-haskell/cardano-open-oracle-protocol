@@ -1,10 +1,9 @@
-module Coop.Cli.Aux (pubKeyHashOpt, assetClassOpt, serializeAssetClassOpt, posixTimeOpt) where
+module Coop.Cli.Aux (pubKeyHashOpt, assetClassOpt, posixTimeOpt) where
 
 import Coop.PlutusOrphans ()
-import Data.Aeson (eitherDecodeStrict, encode)
+import Data.Aeson (eitherDecodeStrict)
 import Data.ByteString (ByteString)
-import Data.ByteString.Lazy (toStrict)
-import Data.Hex (Hex (hex), unhex)
+import Data.Hex (unhex)
 import Data.String (fromString)
 import Options.Applicative (Mod, OptionFields, Parser, auto, eitherReader, option)
 import Plutus.V1.Ledger.Value (AssetClass)
@@ -23,6 +22,3 @@ assetClassOpt =
 
 posixTimeOpt :: Mod OptionFields POSIXTime -> Parser POSIXTime
 posixTimeOpt = option $ POSIXTime <$> auto @Integer
-
-serializeAssetClassOpt :: AssetClass -> ByteString
-serializeAssetClassOpt = toStrict . hex . encode @AssetClass

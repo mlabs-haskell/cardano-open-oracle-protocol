@@ -29,17 +29,17 @@ Inline datums and reference scripts are tools that may be useful in pursuit of f
 
 The following interaction lies at the core of this design. It is between a user seeking to submit a dApp transaction referencing a timely fact statement from an oracle feed of interest, and the oracle that is the authoritative source for that oracle feed:
 
-1. [**User inquiry.**](#user-inquiry) The user checks the blockchain ledger for the existence of an unspent transaction output (utxo) that contains a timely (i.e. non-expired for the  purposes of the dApp the user wants to interact with) fact statement from the oracle feed. The oracle may choose to provide an off-chain service for such existence queries, so that users don't have to check the blockchain themselves directly.
+1. [User inquiry.](#user-inquiry) The user checks the blockchain ledger for the existence of an unspent transaction output (utxo) that contains a timely (i.e. non-expired for the  purposes of the dApp the user wants to interact with) fact statement from the oracle feed. The oracle may choose to provide an off-chain service for such existence queries, so that users don't have to check the blockchain themselves directly.
    - If such a utxo exists, the user may reference it in the dApp transaction without further interaction with the oracle.
    - If the utxo doesn't exist, then the user initiates an interaction with the oracle by requesting the fact statement from the oracle and indicating a utxo controlled by the user that may be used to pay for transaction fees, deposits, and the oracle's service fee.
-2. [**Oracle offer.**](#oracle-offer) Upon receiving the user's request, the oracle constructs, signs, and returns to the user a **publish** transaction with:
+2. [Oracle offer.](#oracle-offer) Upon receiving the user's request, the oracle constructs, signs, and returns to the user a **publish** transaction with:
    - **User payment input** – an input from the user's wallet, containing payment.
-   - **Fact statement output** – an output locked under the [recycling](#recycling-li) script, containing the requested fact statement and a token minted in the transaction to prove the fact statement's provenance from the oracle.
+   - **Fact statement output** – an output locked under the [recycling](#recycling) script, containing the requested fact statement and a token minted in the transaction to prove the fact statement's provenance from the oracle.
    - **Oracle payment output** – an optional output sent to the oracle's wallet, containing a payment towards the oracle.
    - **User change output** – an output sent to the user, containing the remainder of the user's payment utxo input.
-3. [**User acceptance.**](#user-acceptance) Upon receiving the oracle-signed publish transaction, the user inspects it. If satisfied with its contents, the user adds her signature to the transaction and submits it to the blockchain.
-4. [**Downstream use in dApps.**](#downstream-use-in-dapps) The user submits a dApp transaction referencing the fact statement. As explained below, the user may chain this transaction immediately after the publish transaction (if the user submitted it herself), without waiting for it to be confirmed on the blockchain. When a user references fact statements in a dApp, the dApp is responsible for verifying the provenance of the fact statements from oracles and their relevance to the dApp transaction.
-5. [**Recycling.**](#recycling) The [fact statement output](#oracle-offer-li) from the publish transaction is locked by a script that allows it, after an oracle-specified **time-to-live (TTL)** deadline, to  be spent in a **recycle** transaction that returns the tokens it contains back to the user that paid for the publish transaction.
+3. [User acceptance.](#user-acceptance) Upon receiving the oracle-signed publish transaction, the user inspects it. If satisfied with its contents, the user adds her signature to the transaction and submits it to the blockchain.
+4. [Downstream use in dApps.](#downstream-use-in-dapps) The user submits a dApp transaction referencing the fact statement. As explained below, the user may chain this transaction immediately after the publish transaction (if the user submitted it herself), without waiting for it to be confirmed on the blockchain. When a user references fact statements in a dApp, the dApp is responsible for verifying the provenance of the fact statements from oracles and their relevance to the dApp transaction.
+5. [Recycling.](#recycling) The [fact statement output](#oracle-offer) from the publish transaction is locked by a script that allows it, after an oracle-specified **time-to-live (TTL)** deadline, to  be spent in a **recycle** transaction that returns the tokens it contains back to the user that paid for the publish transaction.
 
 The above interaction supports financial sustainability by allowing oracles to share the on-chain publication costs with users, and optionally to generate a profit for a healthy business model. It also allows utxo deposits (Cardano requires minimum 2 ADA per utxo) to be recovered when the fact statement utxo's TTL expires—thus the funds locked in utxo deposits can be bounded and the ongoing variable cost for publication is only the transaction fee for the publish transaction.
 
@@ -55,7 +55,9 @@ Here is the component architecture of the Cardano Open Oracle Protocol:
 
 [TODO: Insert architecture diagram]
 
-### User inquiry (TODO: Revisit this)
+### User inquiry
+
+ (TODO: Revisit this)
 
 We provide the following components for the user inquiry procedure.
 
@@ -74,7 +76,9 @@ Off-chain queries:
 
 - [ ] Fact statement query on whether a fact statement for a given spacetime interval exists among the current utxos for a given oracle feed. If the fact statement is published on-chain, return a utxo reference that can be used to include it as a reference input in a transaction.
 
-### Oracle offer (TODO: Rename and revisit)
+### Oracle offer
+
+(TODO: Rename and revisit)
 
 We provide the following components for the oracle offer procedure.
 

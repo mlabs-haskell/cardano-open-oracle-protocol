@@ -82,7 +82,7 @@ that can be trusted is non-trivial in the general case*
 
 2. Commitment Scheme
 
-    1. This can be the scheme proposed [beneath](#using-a-commitment-scheme) or
+    1. This can be the scheme proposed beneath or
        basically any other commitment scheme, the designs are not mutually
        exclusive
 3. Naming scheme in the data registry; the datum-`URI`

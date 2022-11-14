@@ -1,4 +1,4 @@
-{ pkgs, haskell-nix, compiler-nix-name, http2-grpc-native, coopHsProto, shellHook }:
+{ pkgs, haskell-nix, compiler-nix-name, http2-grpc-native, cardanoProtoHs, publisherProtoHs, txBuilderProtoHs, factStatementStoreProtoHs, shellHook }:
 haskell-nix.cabalProject' {
   src = ./.;
   name = "coop-publisher";
@@ -10,15 +10,27 @@ haskell-nix.cabalProject' {
       subdirs = [
         "http2-client-grpc"
         "http2-grpc-proto-lens"
-        #"http2-grpc-proto3-wire"
         "http2-grpc-types"
         "warp-grpc"
       ];
     }
     {
-      src = coopHsProto;
+      src = cardanoProtoHs;
       subdirs = [ "." ];
     }
+    {
+      src = publisherProtoHs;
+      subdirs = [ "." ];
+    }
+    {
+      src = txBuilderProtoHs;
+      subdirs = [ "." ];
+    }
+    {
+      src = factStatementStoreProtoHs;
+      subdirs = [ "." ];
+    }
+
   ];
   modules = [
     (_: {
@@ -51,15 +63,19 @@ haskell-nix.cabalProject' {
       hlint
       ## Nix
       nixpkgs-fmt
+      grpcui
+      grpcurl
     ];
 
     additional = ps: [
       ps.http2-client-grpc
       ps.http2-grpc-proto-lens
-      #ps.http2-grpc-proto3-wire
       ps.http2-grpc-types
       ps.warp-grpc
-      ps.coop-proto
+      ps.coop-cardano-proto
+      ps.coop-publisher-service-proto
+      ps.coop-tx-builder-service-proto
+      ps.coop-fact-statement-store-service-proto
     ];
 
     tools = {
