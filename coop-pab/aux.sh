@@ -54,6 +54,11 @@ function coop-mint-authentication {
     NOW=$(get-onchain-time) && cabal run coop-pab-cli -- mint-auth --aa-wallet $AA_WALLET --certificate-valid-from $NOW --certificate-valid-to $(expr $NOW + 60 \* 60 \* 1000) --auth-wallet $AUTH_WALLET
 }
 
+function coop-redist-auth {
+    make-exports
+    cabal run coop-pab-cli -- redistribute-auth --auth-wallet $AUTH_WALLET
+}
+
 function coop-run-tx-builder-grpc {
     make-exports
     cabal run coop-pab-cli -- tx-builder-grpc --auth-wallet $AUTH_WALLET --fee-wallet $FEE_WALLET
@@ -91,24 +96,79 @@ function run-grpcui {
 
 function coop-mint-fs {
     make-exports
-    resp=$(grpcurl -insecure -import-path ../coop-proto -proto ../coop-proto/tx-builder-service.proto -d @ localhost:5081 coop.TxBuilder/createMintFsTx <<EOF
+    resp=$(grpcurl -insecure -import-path ../coop-proto -proto ../coop-proto/tx-builder-service.proto -d @ localhost:5081 coop.tx_builder.TxBuilder/createMintFsTx <<EOF
+{
+  "factStatements": [
     {
-        "factStatements": [
+      "fsId": "$(echo -ne 'the best id1' | base64)",
+      "gcAfter": {
+        "extended": "NEG_INF"
+      },
+      "fs": {
+        "pdint": "1337"
+      }
+    },
+    {
+      "fsId": "$(echo -ne 'the best id2' | base64)",
+      "gcAfter": {
+        "extended": "NEG_INF"
+      },
+      "fs": {
+        "pdbytes": "$(echo -ne 'some bytes' | base64)"
+      }
+    },
+    {
+      "fsId": "$(echo -ne 'the best id3' | base64)",
+      "gcAfter": {
+        "extended": "NEG_INF"
+      },
+      "fs": {
+        "pdlist": {
+          "elements": [
             {
-                "fsId": "YXNkCg==",
-                "gcAfter": {
-                    "extended": "NEG_INF"
-                },
-                "fs": {
-                    "pdint": "1337"
-                }
+              "pdint": "1337"
             }
-        ],
-        "submitter": {
-            "base16": "$SUBMITTER_WALLET"
+          ]
         }
+      }
+    },
+    {
+      "fsId": "$(echo -ne 'the best id4' | base64)",
+      "gcAfter": {
+        "extended": "FINITE",
+        "finiteLedgerTime": "$(expr $(get-onchain-time) + 60 \* 60 \* 1000)"
+      },
+      "fs": {
+        "pdlist": {
+          "elements": [
+            {
+              "pdint": "1337"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "fsId": "$(echo -ne 'the best id5' | base64)",
+      "gcAfter": {
+        "extended": "FINITE",
+        "finiteLedgerTime": "$(expr $(get-onchain-time) + 60 \* 60 \* 1000)"
+      },
+      "fs": {
+        "pdlist": {
+          "elements": [
+            {
+              "pdint": "1337"
+            }
+          ]
+        }
+      }
     }
-
+  ],
+  "submitter": {
+    "base16": "$SUBMITTER_WALLET"
+  }
+}
 EOF
            )
     rawTx=$(echo $resp | jq '.success.mintFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "Tx BabbageEra"')
@@ -119,7 +179,7 @@ EOF
 
 function coop-gc-fs {
     make-exports
-    resp=$(grpcurl -insecure -import-path ../coop-proto -proto ../coop-proto/tx-builder-service.proto -d @ localhost:5081 coop.TxBuilder/createGcFsTx <<EOF
+    resp=$(grpcurl -insecure -import-path ../coop-proto -proto ../coop-proto/tx-builder-service.proto -d @ localhost:5081 coop.tx_builder.TxBuilder/createGcFsTx <<EOF
     {
         "fsIds": ["eW==", "YXNkCg=="],
         "submitter": {
@@ -150,5 +210,6 @@ function coop-prelude {
     coop-genesis
     coop-mint-cert-redeemers
     coop-mint-authentication
+    coop-redist-auth
     coop-run-tx-builder-grpc
 }

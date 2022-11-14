@@ -157,6 +157,7 @@ executable coop-pab-cli
     Coop.Cli.GetState
     Coop.Cli.MintAuth
     Coop.Cli.MintCertRdmrs
+    Coop.Cli.RedistributeAuth
     Coop.Cli.TxBuilderGrpc
 
   build-depends:

@@ -9,6 +9,7 @@ import Coop.Cli.GarbageCollect (GarbageCollectOpts (GarbageCollectOpts), garbage
 import Coop.Cli.GetState (GetStateOpts (GetStateOpts), getState)
 import Coop.Cli.MintAuth (MintAuthOpts (MintAuthOpts), mintAuth)
 import Coop.Cli.MintCertRdmrs (MintCertRdmrsOpts (MintCertRdmrsOpts), mintCertRdmrs)
+import Coop.Cli.RedistributeAuth (RedistributeAuthOpts (RedistributeAuthOpts), redistributeAuth)
 import Coop.Cli.TxBuilderGrpc (TxBuilderGrpcOpts (TxBuilderGrpcOpts), txBuilderService)
 import Options.Applicative (
   Parser,
@@ -42,6 +43,7 @@ data Command
   | GarbageCollect GarbageCollectOpts
   | GetState GetStateOpts
   | TxBuilderGrpc TxBuilderGrpcOpts
+  | RedistributeAuth RedistributeAuthOpts
 
 pabConfigOptP :: Parser [Char]
 pabConfigOptP =
@@ -277,6 +279,21 @@ txBuilderGrpcOpts =
           <> showDefault
       )
 
+redistAuthOptsP :: Parser RedistributeAuthOpts
+redistAuthOptsP =
+  RedistributeAuthOpts
+    <$> pabConfigOptP
+    <*> deploymentFileOptP
+    <*> option
+      auto
+      ( long "how-many-outputs"
+          <> metavar "N_OUTPUTS"
+          <> help "Number of outputs to create on an Authenticator each with 1 $AUTH token"
+          <> value 10
+          <> showDefault
+      )
+    <*> authWalletsOpt
+
 optionsP :: Parser Command
 optionsP =
   subparser $
@@ -298,6 +315,9 @@ optionsP =
       <> command
         "tx-builder-grpc"
         (info (TxBuilderGrpc <$> txBuilderGrpcOpts <* helper) (progDesc "Run a TxBuilder gRpc service"))
+      <> command
+        "redistribute-auth"
+        (info (RedistributeAuth <$> redistAuthOptsP <* helper) (progDesc "Redistribute Authenticator UTxOs with many $AUTH tokens into separate outputs with 1 $AUTH tokens"))
 
 parserInfo :: ParserInfo Command
 parserInfo = info (optionsP <**> helper) (fullDesc <> progDesc "COOP PAB cli tools")
@@ -312,3 +332,4 @@ main = do
     GarbageCollect opts -> garbageCollect opts
     GetState opts -> getState opts
     TxBuilderGrpc opts -> txBuilderService opts
+    RedistributeAuth opts -> redistributeAuth opts

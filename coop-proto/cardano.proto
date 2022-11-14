@@ -23,7 +23,7 @@ message TxOutRef {
   // Transaction ID
   TxId tx_id = 1;
   // The output index of the transaction denoted by the id
-  int64 idx = 2;
+  uint64 idx = 2;
 }
 
 message ExtendedLedgerTime {
@@ -33,7 +33,7 @@ message ExtendedLedgerTime {
     POS_INF = 2;
   }
   Extended extended = 1;
-  int32 finite_ledger_time = 2;
+  uint64 finite_ledger_time = 2;
 }
 
 // https://github.com/input-output-hk/plutus/blob/6aa7ba8142a16ada1a7b73eaa7210c55b41ac382/plutus-core/plutus-core/src/PlutusCore/Data.hs#L40

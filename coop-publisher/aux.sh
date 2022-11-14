@@ -8,8 +8,6 @@ function generate-keys {
     openssl x509 -text -in $WORKDIR/certificate.pem
 }
 
-SUBMITTER_WALLET=2b0c9f64145896b8da237926a9ee664aed9923b455c7866fa241d218
-
 function coop-mint-fs {
     resp=$(grpcurl -insecure -import-path ../coop-proto -proto ../coop-proto/publisher-service.proto -d @ localhost:5080 coop.publisher.Publisher/createMintFsTx <<EOF
     {
