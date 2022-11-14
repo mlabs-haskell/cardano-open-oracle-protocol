@@ -228,6 +228,17 @@
         };
         cardanoProtoExtrasFlake = cardanoProtoExtras.flake { };
 
+        tutorialShell = import ./coop-extras/tutorial/build.nix {
+          inherit pkgs;
+          plutipLocalCluster = plutip.packages.${system}."plutip:exe:local-cluster";
+          jsFsStoreCli = coopExtrasJsonFactStatementStoreFlake.packages."json-fact-statement-store:exe:json-fs-store-cli";
+          coopPabCli = coopPabFlake.packages."coop-pab:exe:coop-pab-cli";
+          coopPublisherCli = coopPublisherFlake.packages."coop-publisher:exe:coop-publisher-cli";
+          cardanoNode = coopPabProj.hsPkgs.cardano-node.components.exes.cardano-node;
+          cardanoCli = coopPabProj.hsPkgs.cardano-cli.components.exes.cardano-cli;
+          inherit (pre-commit-check) shellHook;
+        };
+
         renameAttrs = rnFn: pkgs.lib.attrsets.mapAttrs' (n: value: { name = rnFn n; inherit value; });
       in
       rec {
@@ -250,6 +261,7 @@
           dev-hs-types = coopHsTypesFlake.devShell;
           dev-extras-plutus-json = coopExtrasPlutusJsonFlake.devShell;
           dev-extras-json-store = coopExtrasJsonFactStatementStoreFlake.devShell;
+          dev-tutorial = tutorialShell;
           dev-cardano-proto-extras = cardanoProtoExtrasFlake.devShell;
           default = dev-proto;
         };

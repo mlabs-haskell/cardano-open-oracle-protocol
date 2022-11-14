@@ -87,7 +87,7 @@ txBuilderService opts = do
                       & info .~ info'
                 )
                 ( \txId -> do
-                    mayRawTx <- readSignedTx pabConf txId
+                    mayRawTx <- readSignedTx pabConf Partial txId
                     either
                       ( \err ->
                           return $
@@ -132,7 +132,7 @@ txBuilderService opts = do
                       & info .~ info'
                 )
                 ( \txId -> do
-                    mayRawTx <- readSignedTx pabConf txId
+                    mayRawTx <- readSignedTx pabConf None txId
                     either
                       ( \err ->
                           return $
@@ -177,11 +177,22 @@ runServer routes (h, p) (certFile, keyFile) = do
     , Encoding.gzip
     ]
 
-readSignedTx :: PABConfig -> TxId -> IO (Either Text Text)
-readSignedTx pabConf txId = do
+data Signed = Partial | None
+
+readSignedTx :: PABConfig -> Signed -> TxId -> IO (Either Text Text)
+readSignedTx pabConf signed txId = do
   txFolderPath <- makeAbsolute (unpack . pcTxFileDir $ pabConf)
   let path :: FilePath
-      path = txFolderPath </> unpack (txFileName txId "signed")
+      path =
+        txFolderPath
+          </> unpack
+            ( txFileName
+                txId
+                ( case signed of
+                    None -> "raw"
+                    Partial -> "signed"
+                )
+            )
   fileExists <- doesFileExist path
   if fileExists
     then do

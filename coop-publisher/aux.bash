@@ -13,7 +13,19 @@ function coop-mint-fs {
     {
         "fsInfos": [
             {
+                "fsId": "$(echo -ne someidA | base64)",
+                "gcAfter": {
+                    "extended": "NEG_INF"
+                }
+            },
+            {
                 "fsId": "$(echo -ne someidB | base64)",
+                "gcAfter": {
+                    "extended": "NEG_INF"
+                }
+            },
+            {
+                "fsId": "$(echo -ne someidC | base64)",
                 "gcAfter": {
                     "extended": "NEG_INF"
                 }
@@ -26,11 +38,11 @@ function coop-mint-fs {
 
 EOF
         )
-    echo $resp
-    rawTx=$(echo $resp | jq '.mintFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "Tx BabbageEra"')
-    echo $resp | jq '.info'
-    echo $resp | jq '.error'
-    echo $rawTx > .coop-publisher-cli/signed
+    echo "$resp"
+    rawTx=$(echo "$resp" | jq '.mintFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "Tx BabbageEra"')
+    echo "$resp" | jq '.info'
+    echo "$resp" | jq '.error'
+    echo "$rawTx" > .coop-publisher-cli/signed
 }
 
 function coop-gc-fs {
@@ -44,11 +56,10 @@ function coop-gc-fs {
 
 EOF
         )
-    echo $resp
-    rawTx=$(echo $resp | jq '.gcFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "Tx BabbageEra"')
-    echo $resp | jq '.info'
-    echo $resp | jq '.error'
-    echo $rawTx > .coop-publisher-cli/signed
+    rawTx=$(echo "$resp" | jq '.gcFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "Tx BabbageEra"')
+    echo "$resp" | jq '.info'
+    echo "$resp" | jq '.error'
+    echo "$rawTx" > .coop-publisher-cli/signed
 }
 
 function run-grpcui {

@@ -1,3 +1,4 @@
+# shellcheck disable=SC2155,SC2002,SC2003
 function generate-keys {
     local WORKDIR=.coop-pab-cli
     local RESOURCES=resources
@@ -21,57 +22,57 @@ function start-cluster {
 function parse-cluster-config {
     cat > .coop-pab-cli/plutip-cluster-config
     make-exports
-    mv .wallets/signing-key-$SUBMITTER_WALLET.skey .wallets/no-plutip-signing-key-$SUBMITTER_WALLET.skey
+    mv .wallets/signing-key-"$SUBMITTER_PKH".skey .wallets/no-plutip-signing-key-"$SUBMITTER_PKH".skey
 }
 
 function make-exports {
-    export GOD_WALLET=$(cat .coop-pab-cli/plutip-cluster-config | egrep "Wallet 1 PKH" | cut -d ":" -f 2 | xargs)
-    export AA_WALLET=$(cat .coop-pab-cli/plutip-cluster-config | egrep "Wallet 2 PKH" | cut -d ":" -f 2 | xargs)
-    export AUTH_WALLET=$(cat .coop-pab-cli/plutip-cluster-config | egrep "Wallet 3 PKH" | cut -d ":" -f 2 | xargs)
-    export CERT_RDMR_WALLET=$(cat .coop-pab-cli/plutip-cluster-config | egrep "Wallet 4 PKH" | cut -d ":" -f 2 | xargs)
-    export FEE_WALLET=$(cat .coop-pab-cli/plutip-cluster-config | egrep "Wallet 5 PKH" | cut -d ":" -f 2 | xargs)
-    export SUBMITTER_WALLET=$(cat .coop-pab-cli/plutip-cluster-config | egrep "Wallet 6 PKH" | cut -d ":" -f 2 | xargs)
-    export CARDANO_NODE_SOCKET_PATH=$(cat .coop-pab-cli/plutip-cluster-config | grep CardanoNodeConn | egrep -o '"[^"]+"' | sed s/\"//g)
+    export GOD_PKH=$(cat .coop-pab-cli/plutip-cluster-config | grep -E "Wallet 1 PKH" | cut -d ":" -f 2 | xargs)
+    export AA_PKH=$(cat .coop-pab-cli/plutip-cluster-config | grep -E "Wallet 2 PKH" | cut -d ":" -f 2 | xargs)
+    export AUTH_PKH=$(cat .coop-pab-cli/plutip-cluster-config | grep -E "Wallet 3 PKH" | cut -d ":" -f 2 | xargs)
+    export CERT_RDMR_PKH=$(cat .coop-pab-cli/plutip-cluster-config | grep -E "Wallet 4 PKH" | cut -d ":" -f 2 | xargs)
+    export FEE_PKH=$(cat .coop-pab-cli/plutip-cluster-config | grep -E "Wallet 5 PKH" | cut -d ":" -f 2 | xargs)
+    export SUBMITTER_PKH=$(cat .coop-pab-cli/plutip-cluster-config | grep -E "Wallet 6 PKH" | cut -d ":" -f 2 | xargs)
+    export CARDANO_NODE_SOCKET_PATH=$(cat .coop-pab-cli/plutip-cluster-config | grep CardanoNodeConn | grep -E -o '"[^"]+"' | sed s/\"//g)
 }
 
 function dump-env {
-    export | egrep "WALLET|CARDANO_NODE_SOCKET_PATH"
+    export | grep -E "WALLET|CARDANO_NODE_SOCKET_PATH"
 }
 
 function coop-genesis {
     make-exports
     cabal clean
-    cabal run coop-pab-cli -- deploy --god-wallet $GOD_WALLET --aa-wallet $AA_WALLET
+    cabal run coop-pab-cli -- deploy --god-wallet "$GOD_PKH" --aa-wallet "$AA_PKH"
 }
 
 function coop-mint-cert-redeemers {
     make-exports
-    cabal run coop-pab-cli -- mint-cert-redeemers --cert-rdmr-wallet $CERT_RDMR_WALLET --cert-rdmrs-to-mint 100
+    cabal run coop-pab-cli -- mint-cert-redeemers --cert-rdmr-wallet "$CERT_RDMR_PKH" --cert-rdmrs-to-mint 100
 }
 
 function coop-mint-authentication {
     make-exports
-    NOW=$(get-onchain-time) && cabal run coop-pab-cli -- mint-auth --aa-wallet $AA_WALLET --certificate-valid-from $NOW --certificate-valid-to $(expr $NOW + 60 \* 60 \* 1000) --auth-wallet $AUTH_WALLET
+    NOW=$(get-onchain-time) && cabal run coop-pab-cli -- mint-auth --aa-wallet "$AA_PKH" --certificate-valid-from "$NOW" --certificate-valid-to "$(expr "$NOW" + 60 \* 60 \* 1000)" --auth-wallet "$AUTH_PKH"
 }
 
 function coop-redist-auth {
     make-exports
-    cabal run coop-pab-cli -- redistribute-auth --auth-wallet $AUTH_WALLET
+    cabal run coop-pab-cli -- redistribute-auth --auth-wallet "$AUTH_PKH"
 }
 
 function coop-run-tx-builder-grpc {
     make-exports
-    cabal run coop-pab-cli -- tx-builder-grpc --auth-wallet $AUTH_WALLET --fee-wallet $FEE_WALLET
+    cabal run coop-pab-cli -- tx-builder-grpc --auth-wallet "$AUTH_PKH" --fee-wallet "$FEE_PKH"
 }
 
 function coop-garbage-collect {
     make-exports
-    cabal run coop-pab-cli -- garbage-collect --cert-rdmr-wallet $CERT_RDMR_WALLET
+    cabal run coop-pab-cli -- garbage-collect --cert-rdmr-wallet "$CERT_RDMR_PKH"
 }
 
 function coop-get-state {
     make-exports
-    cabal run coop-pab-cli -- get-state --any-wallet ${GOD_WALLET}
+    cabal run coop-pab-cli -- get-state --any-wallet "$GOD_PKH"
     cat .coop-pab-cli/coop-state.json | json_pp
 }
 
@@ -86,7 +87,7 @@ function coop-poll-state {
 
 function get-onchain-time {
     make-exports
-    cabal run coop-pab-cli -- get-state --any-wallet ${GOD_WALLET} | grep "Current node client time range" | grep POSIXTime | egrep -o "[0-9]+"
+    cabal run coop-pab-cli -- get-state --any-wallet "$GOD_PKH" | grep "Current node client time range" | grep POSIXTime | grep -E -o "[0-9]+"
 }
 
 function run-grpcui {
@@ -136,7 +137,7 @@ function coop-mint-fs {
       "fsId": "$(echo -ne 'the best id4' | base64)",
       "gcAfter": {
         "extended": "FINITE",
-        "finiteLedgerTime": "$(expr $(get-onchain-time) + 60 \* 60 \* 1000)"
+        "finiteLedgerTime": "$(expr "$(get-onchain-time)" + 60 \* 60 \* 1000)"
       },
       "fs": {
         "pdlist": {
@@ -152,7 +153,7 @@ function coop-mint-fs {
       "fsId": "$(echo -ne 'the best id5' | base64)",
       "gcAfter": {
         "extended": "FINITE",
-        "finiteLedgerTime": "$(expr $(get-onchain-time) + 60 \* 60 \* 1000)"
+        "finiteLedgerTime": "$(expr "$(get-onchain-time)" + 60 \* 60 \* 1000)"
       },
       "fs": {
         "pdlist": {
@@ -166,42 +167,42 @@ function coop-mint-fs {
     }
   ],
   "submitter": {
-    "base16": "$SUBMITTER_WALLET"
+    "base16": "$SUBMITTER_PKH"
   }
 }
 EOF
            )
-    rawTx=$(echo $resp | jq '.success.mintFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "Tx BabbageEra"')
-    echo $resp | jq '.info'
-    echo $resp | jq '.error'
-    echo $rawTx > .coop-pab-cli/signed
+    rawTx=$(echo "$resp" | jq '.success.mintFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "Tx BabbageEra"')
+    echo "$resp" | jq '.info'
+    echo "$resp" | jq '.error'
+    echo "$rawTx" > .coop-pab-cli/signed
+    cardano-cli transaction sign --tx-file .coop-pab-cli/signed --signing-key-file .wallets/no-plutip-signing-key-"$SUBMITTER_PKH".skey --out-file .coop-pab-cli/ready
+    cardano-cli transaction submit --tx-file .coop-pab-cli/ready  --mainnet
 }
 
 function coop-gc-fs {
     make-exports
     resp=$(grpcurl -insecure -import-path ../coop-proto -proto ../coop-proto/tx-builder-service.proto -d @ localhost:5081 coop.tx_builder.TxBuilder/createGcFsTx <<EOF
     {
-        "fsIds": ["eW==", "YXNkCg=="],
+        "fsIds": [
+                 "$(echo -ne 'the best id1' | base64)",
+                 "$(echo -ne 'the best id2' | base64)",
+                 "$(echo -ne 'the best id3' | base64)",
+                 "$(echo -ne 'the best id4' | base64)",
+                 "$(echo -ne 'the best id5' | base64)"
+                 ],
         "submitter": {
-            "base16": "$SUBMITTER_WALLET"
+            "base16": "$SUBMITTER_PKH"
         }
     }
 
 EOF
         )
-    rawTx=$(echo $resp | jq '.success.gcFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "Tx BabbageEra"')
-    echo $resp | jq '.info'
-    echo $resp | jq '.error'
-    echo $rawTx > .coop-pab-cli/signed
-}
-
-function cardano-cli-sign {
-    make-exports
-    cardano-cli transaction sign --tx-file .coop-pab-cli/signed --signing-key-file .wallets/no-plutip-signing-key-$SUBMITTER_WALLET.skey --out-file .coop-pab-cli/ready
-}
-
-function cardano-cli-submit {
-    make-exports
+    rawTx=$(echo "$resp" | jq '.success.gcFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "TxBodyBabbage"')
+    echo "$resp" | jq '.info'
+    echo "$resp" | jq '.error'
+    echo "$rawTx" > .coop-pab-cli/signed
+    cardano-cli transaction sign --tx-body-file .coop-pab-cli/signed --signing-key-file .wallets/no-plutip-signing-key-"$SUBMITTER_PKH".skey --out-file .coop-pab-cli/ready
     cardano-cli transaction submit --tx-file .coop-pab-cli/ready  --mainnet
 }
 
