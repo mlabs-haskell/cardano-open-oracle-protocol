@@ -88,9 +88,7 @@ executable coop-publisher-cli
   other-modules:  Coop.Cli.PublisherGrpc
   build-depends:
     , base
-    , bytestring
     , containers
-    , coop-cardano-proto
     , coop-fact-statement-store-service-proto
     , coop-publisher-service-proto
     , coop-tx-builder-service-proto
@@ -101,8 +99,6 @@ executable coop-publisher-cli
     , lens
     , optparse-applicative
     , proto-lens
-    , proto-lens-protobuf-types
-    , proto-lens-runtime
     , text
     , warp
     , warp-grpc

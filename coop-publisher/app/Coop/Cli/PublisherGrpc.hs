@@ -37,7 +37,7 @@ import Proto.PublisherService (
   Publisher,
  )
 import Proto.PublisherService qualified as PublisherService
-import Proto.PublisherService_Fields (fsId, fsIds, fsInfos, fsStoreErr, gcAfter, info, maybe'error, mintFsTx, msg, otherErr, submitter, txBuilderErr, txBuilderInfo)
+import Proto.PublisherService_Fields (fsId, fsIds, fsInfos, fsStoreErr, gcAfter, gcFsTx, info, maybe'error, mintFsTx, msg, otherErr, submitter, txBuilderErr, txBuilderInfo)
 import Proto.PublisherService_Fields qualified as PublisherService
 import Proto.TxBuilderService (FactStatementInfo, TxBuilder)
 import Proto.TxBuilderService qualified as TxBuilder
@@ -61,7 +61,7 @@ publisherService :: PublisherGrpcOpts -> IO ()
 publisherService opts = do
   let handleCreateMintFsTx :: Server.UnaryHandler IO CreateMintFsTxRequest CreateMintFsTxResponse
       handleCreateMintFsTx _ req = do
-        print (show req)
+        print ("Got from user: " <> show req)
         getFsRespOrErr <-
           call'
             (opts ^. fsStoreAddress)
@@ -73,7 +73,7 @@ publisherService opts = do
               return $ defMessage & PublisherService.error .~ err
           )
           ( \(getFsResp :: GetFactStatementResponse) -> do
-              print (show getFsResp)
+              print ("Got from FactStatementStore: " <> show getFsResp)
               case getFsResp ^. maybe'error of
                 Nothing -> do
                   let fsIdToGcAfter = Map.fromList [(fsI ^. fsId, fsI ^. gcAfter) | fsI <- req ^. fsInfos]
@@ -100,7 +100,7 @@ publisherService opts = do
                   either
                     (\err -> return $ defMessage & PublisherService.error .~ err)
                     ( \(createMintFsResp :: TxBuilder.CreateMintFsTxResp) -> do
-                        print (show createMintFsResp)
+                        print ("Got from TxBuilder: " <> show getFsResp)
                         case createMintFsResp ^. maybe'error of
                           Nothing ->
                             return $
@@ -119,7 +119,36 @@ publisherService opts = do
           getFsRespOrErr
 
       handleCreateGcFsTx :: Server.UnaryHandler IO CreateGcFsTxRequest CreateGcFsTxResponse
-      handleCreateGcFsTx _ _req = return defMessage
+      handleCreateGcFsTx _ req = do
+        print ("Got from user: " <> show req)
+        let txBuilderReq :: TxBuilder.CreateGcFsTxReq
+            txBuilderReq =
+              defMessage
+                & fsIds .~ req ^. fsIds
+                & submitter .~ req ^. submitter
+        createGcFsRespOrErr <-
+          call'
+            (opts ^. txBuilderAddress)
+            (fromInteger . toInteger $ opts ^. txBuilderPort)
+            (RPC :: RPC TxBuilder "createGcFsTx")
+            txBuilderReq
+        either
+          (\err -> return $ defMessage & PublisherService.error .~ err)
+          ( \(createGcFsResp :: TxBuilder.CreateGcFsTxResp) -> do
+              print ("Got from TxBuilder: " <> show createGcFsResp)
+              case createGcFsResp ^. maybe'error of
+                Nothing ->
+                  return $
+                    (defMessage :: CreateGcFsTxResponse)
+                      & gcFsTx .~ createGcFsResp ^. success . gcFsTx
+                      & info . txBuilderInfo .~ createGcFsResp ^. info
+                Just er ->
+                  return $
+                    (defMessage :: CreateGcFsTxResponse)
+                      & PublisherService.error . txBuilderErr .~ er
+                      & info . txBuilderInfo .~ createGcFsResp ^. info
+          )
+          createGcFsRespOrErr
 
       routes :: [ServiceHandler]
       routes =

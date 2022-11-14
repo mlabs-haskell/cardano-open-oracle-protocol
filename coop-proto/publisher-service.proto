@@ -54,6 +54,10 @@ message CreateGcFsTxResponse {
     // Error encountered when servicing the request
     Error error = 2;
   }
+  message Info {
+    coop.tx_builder.GcFsInfo tx_builder_info = 1;
+  }
+  Info info = 3;
 }
 
 message Error {

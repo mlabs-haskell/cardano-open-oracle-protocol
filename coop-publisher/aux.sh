@@ -35,15 +35,25 @@ EOF
     echo $rawTx > .coop-publisher-cli/signed
 }
 
+function coop-gc-fs {
+    resp=$(grpcurl -insecure -import-path ../coop-proto -proto ../coop-proto/publisher-service.proto -d @ localhost:5080 coop.publisher.Publisher/createGcFsTx <<EOF
+    {
+        "fsIds": ["$(echo -ne someidB | base64)", "$(echo -ne someidA | base64)"],
+        "submitter": {
+            "base16": "$SUBMITTER_WALLET"
+        }
+    }
+
+EOF
+        )
+    echo $resp
+    rawTx=$(echo $resp | jq '.gcFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "Tx BabbageEra"')
+    echo $resp | jq '.info'
+    echo $resp | jq '.error'
+    echo $rawTx > .coop-publisher-cli/signed
+}
+
 function run-grpcui {
     make-exports
     grpcui -insecure -import-path ../coop-proto -proto ../coop-proto/publisher-service.proto localhost:5080
-}
-
-function cardano-cli-sign {
-    cardano-cli transaction sign --tx-file .coop-pab-cli/signed --signing-key-file .wallets/no-plutip-signing-key-$SUBMITTER_WALLET.skey --out-file .coop-pab-cli/ready
-}
-
-function cardano-cli-submit {
-    cardano-cli transaction submit --tx-file .coop-pab-cli/ready  --mainnet
 }
