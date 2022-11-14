@@ -1,9 +1,8 @@
 syntax = "proto3";
 
-import "plutus.proto";
-import "coop.proto";
+import "cardano.proto";
 
-package coop;
+package coop.fact_statement_store;
 
 service FactStatementStore {
   // Fetch a PlutusData encoded Fact Statement with a given ID
@@ -11,20 +10,33 @@ service FactStatementStore {
 }
 
 message GetFactStatementRequest {
-  repeated coop.FactStatementId fs_ids = 1;
+  repeated bytes fs_ids = 1;
+}
+
+message Success {
+  message FsIdAndPlutus {
+    bytes fs_id = 1;
+    cardano.PlutusData plutus_data = 2;
+  }
+  repeated FsIdAndPlutus fs_ids_with_plutus = 1;
+}
+
+// Error associated with above response messages
+// TODO: Should catch and properly report classes of errors users would expect to trigger.
+// For example:
+//   - Fact statement ID not found
+message Error {
+  message OtherError {
+    // Some other error message
+    string msg = 1;
+  }
+  oneof someError {
+    // Some other error
+    OtherError other_err = 1;
+  }
 }
 
 message GetFactStatementResponse {
-  message FsIdAndPlutus {
-    bytes fs_id = 1;
-    plutus.PlutusData plutus_data = 2;
-  }
-  message Success {
-    repeated FsIdAndPlutus fs_ids_with_plutus = 1;
-  }
-  message Error {
-    string msg = 1;
-  }
   oneof factStatementsOrErr {
     // Error encountered when servicing the request
     Error error = 1;

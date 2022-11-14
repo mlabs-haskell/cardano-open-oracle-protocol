@@ -61,7 +61,7 @@ function coop-run-tx-builder-grpc {
 
 function coop-garbage-collect {
     make-exports
-    cabal run coop-pab-cli -- garbage-collect --cert-rdmr-wallet $CERT-RDMR
+    cabal run coop-pab-cli -- garbage-collect --cert-rdmr-wallet $CERT_RDMR_WALLET
 }
 
 function coop-get-state {

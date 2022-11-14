@@ -1,7 +1,0 @@
-syntax = "proto3";
-
-package coop;
-
-message FactStatementId {
-  bytes value = 1;
-}

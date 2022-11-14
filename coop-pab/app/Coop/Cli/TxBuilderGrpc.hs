@@ -32,7 +32,7 @@ import Data.Text (Text, unpack)
 import Data.Text qualified as Text
 import GHC.Exts (fromString)
 import Ledger (PaymentPubKeyHash (PaymentPubKeyHash), TxId)
-import Proto.Plutus_Fields (cborBase16)
+import Proto.Cardano_Fields (cborBase16)
 import Proto.TxBuilderService_Fields (gcFsTx, info, mintFsTx, msg, otherErr, submitter, success)
 import Proto.TxBuilderService_Fields qualified as Proto.TxBuilderService
 import System.Directory (doesFileExist, makeAbsolute)

@@ -16,9 +16,9 @@ import Ledger qualified
 import Plutus.V1.Ledger.Api (BuiltinData (BuiltinData), ToData (toBuiltinData), fromBuiltin, toBuiltin)
 import PlutusTx (FromData (fromBuiltinData), builtinDataToData, dataToBuiltinData)
 import PlutusTx qualified
-import Proto.Plutus qualified as Proto
-import Proto.Plutus_Fields (base16, elements, extended, fields, finiteLedgerTime, idx, index, key, kvs, maybe'plutusData, pdbytes, pdconstr, pdint, pdlist, pdmap, transactionHash, value)
-import Proto.Plutus_Fields qualified as PPlutus
+import Proto.Cardano qualified as Proto
+import Proto.Cardano_Fields (base16, elements, extended, fields, finiteLedgerTime, idx, index, key, kvs, maybe'plutusData, pdbytes, pdconstr, pdint, pdlist, pdmap, transactionHash, value)
+import Proto.Cardano_Fields qualified as PCardano
 
 class (MonadFail m) => ProtoCardano m proto cardano where
   toCardano :: proto -> m cardano
@@ -51,14 +51,14 @@ instance MonadFail m => ProtoCardano m Proto.ExtendedLedgerTime (Ledger.Extended
 
 instance (MonadFail m) => ProtoCardano m Proto.TxOutRef Ledger.TxOutRef where
   toCardano ptxOutRef = do
-    txId <- toCardano (ptxOutRef ^. PPlutus.txId)
+    txId <- toCardano (ptxOutRef ^. PCardano.txId)
     return $ Ledger.TxOutRef txId (toInteger $ ptxOutRef ^. idx)
 
   fromCardano (Ledger.TxOutRef txId ix) = do
     txId' <- fromCardano txId
     return $
       defMessage
-        & PPlutus.txId .~ txId'
+        & PCardano.txId .~ txId'
         & idx .~ fromInteger ix
 
 instance (MonadFail m) => ProtoCardano m Proto.TxId Ledger.TxId where

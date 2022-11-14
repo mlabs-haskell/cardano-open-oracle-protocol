@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package plutus;
+package cardano;
 
 message Transaction {
   // CBOR+Base16 (hex) encoded transaction

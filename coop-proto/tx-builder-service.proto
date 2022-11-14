@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-import "plutus.proto";
+import "cardano.proto";
 
-package coop;
+package coop.tx_builder;
 
 service TxBuilder {
   // Create a transaction that creates Fact Statement UTxOs (mint-fact-statement-tx)
@@ -14,7 +14,7 @@ service TxBuilder {
 message CreateMintFsTxReq {
   repeated FactStatementInfo fact_statements = 1;
   // The PubKeyHash of the user wallet that will sign and submit the transaction (ie. Submitter)
-  plutus.PubKeyHash submitter  = 2;
+  cardano.PubKeyHash submitter  = 2;
 }
 
 message CreateMintFsTxResp {
@@ -31,14 +31,14 @@ message CreateMintFsTxResp {
 // Success message associated with CreateMintFsTxResp
 message MintFsSuccess {
   // Fact Statement Minting transaction (abbr. mint-fact-statement-tx) signed by Authenticators
-  plutus.Transaction mint_fs_tx = 1;
+  cardano.Transaction mint_fs_tx = 1;
 }
 
 // Information message associated with CreateMintFsTxResp
 message MintFsInfo {
   message FsIdAndTxOutRef {
     bytes fs_id = 1;
-    plutus.TxOutRef fs_utxo = 2;
+    cardano.TxOutRef fs_utxo = 2;
   }
   // A list of already published Fact Statements (Map FactStatementId TxOutRef)
   repeated FsIdAndTxOutRef already_published = 1;
@@ -50,16 +50,16 @@ message FactStatementInfo {
   // Fact Statement ID
   bytes fs_id = 1;
   // PlutusData encoding of a Fact Statement
-  plutus.PlutusData fs = 2;
+  cardano.PlutusData fs = 2;
   // Extended ledger time after which the created Fact Statement UTxO can be garbage collected by the Submitter
-  plutus.ExtendedLedgerTime gc_after = 3;
+  cardano.ExtendedLedgerTime gc_after = 3;
 }
 
 message CreateGcFsTxReq {
   // Fact Statement IDs to garbage collect
   repeated bytes fs_ids = 1;
   // The PubKeyHash of the user that submitted the mint-fact-statement-x and will also submit the gc-fact-statement-tx
-  plutus.PubKeyHash submitter  = 2;
+  cardano.PubKeyHash submitter  = 2;
 }
 
 message CreateGcFsTxResp {
@@ -76,7 +76,7 @@ message CreateGcFsTxResp {
 // Success message associated with the CreateGcFsTxResp
 message GcFsSuccess {
   // Fact Statement garbage collections transaction (abbr. gc-fact-statement-tx) to sign and submit
-  plutus.Transaction gc_fs_tx = 1;
+  cardano.Transaction gc_fs_tx = 1;
 }
 
 // Info message associated with the CreateGcFsTxResp

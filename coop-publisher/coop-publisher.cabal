@@ -3,22 +3,103 @@ name:          coop-publisher
 version:       0.1.0.0
 maintainer:    info@mlabs.city
 author:        mlabs-haskell
-synopsis:      gRPC CoopPublisher service implementation
+synopsis:      gRpc COOP Publisher service implementation
 build-type:    Simple
 
-executable coop-publisher-cli
-  main-is:            Main.hs
-  hs-source-dirs:     app
+flag dev
+  description: Enable non-strict compilation for development
+  manual:      True
+
+common common-language
+  ghc-options:
+    -Wall -Wcompat -Wincomplete-uni-patterns -Wno-unused-do-bind
+    -Wno-partial-type-signatures -Wmissing-export-lists
+    -Wincomplete-record-updates -Wmissing-deriving-strategies
+    -Wno-name-shadowing -Wunused-foralls -fprint-explicit-foralls
+    -fprint-explicit-kinds -fwarn-missing-import-lists -Wname-shadowing
+    -Wunused-packages -fprint-potential-instances
+
+  if !flag(dev)
+    ghc-options: -Werror
+
+  default-extensions:
+    NoStarIsType
+    BangPatterns
+    BinaryLiterals
+    ConstrainedClassMethods
+    ConstraintKinds
+    DataKinds
+    DeriveAnyClass
+    DeriveDataTypeable
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    DoAndIfThenElse
+    EmptyCase
+    EmptyDataDecls
+    EmptyDataDeriving
+    ExistentialQuantification
+    ExplicitForAll
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    ForeignFunctionInterface
+    GADTSyntax
+    GeneralisedNewtypeDeriving
+    HexFloatLiterals
+    ImportQualifiedPost
+    InstanceSigs
+    KindSignatures
+    LambdaCase
+    MonomorphismRestriction
+    MultiParamTypeClasses
+    NamedFieldPuns
+    NamedWildCards
+    NumericUnderscores
+    OverloadedStrings
+    PartialTypeSignatures
+    PatternGuards
+    PolyKinds
+    PostfixOperators
+    RankNTypes
+    RelaxedPolyRec
+    ScopedTypeVariables
+    StandaloneDeriving
+    StandaloneKindSignatures
+    TemplateHaskell
+    TraditionalRecordSyntax
+    TupleSections
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    TypeSynonymInstances
+    ViewPatterns
+
   default-language:   Haskell2010
-  default-extensions: ImportQualifiedPost
-  ghc-options:        -Wall -Werror -threaded
+
+executable coop-publisher-cli
+  import:         common-language
+  main-is:        Main.hs
+  hs-source-dirs: app
+  other-modules:  Coop.Cli.PublisherGrpc
   build-depends:
     , base
     , bytestring
-    , coop-proto
+    , containers
+    , coop-cardano-proto
+    , coop-fact-statement-store-service-proto
+    , coop-publisher-service-proto
+    , coop-tx-builder-service-proto
+    , http2-client
+    , http2-client-grpc
     , http2-grpc-proto-lens
     , http2-grpc-types
-    , microlens
+    , lens
+    , optparse-applicative
     , proto-lens
     , proto-lens-protobuf-types
     , proto-lens-runtime

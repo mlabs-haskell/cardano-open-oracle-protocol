@@ -4,4 +4,4 @@ grpcui:
 protogen:
 	protoc -I . --plugin=protoc-gen-haskell=`which proto-lens-protoc` \
 		--haskell_out proto_out \
-		fact-statement-store-service.proto coop.proto plutus.proto tx-builder-service.proto
+		fact-statement-store-service.proto cardano.proto tx-builder-service.proto publisher-service.proto

@@ -1,4 +1,4 @@
-{ src, protos, cabalPackageName, buildDepends ? [ ], pkgs }:
+{ src, proto, cabalPackageName, buildDepends ? [ ], pkgs }:
 let
   cabalTemplate = pkgs.writeTextFile {
     name = "protobuf-hs-cabal-template";
@@ -32,14 +32,12 @@ pkgs.stdenv.mkDerivation {
     pkgs.haskellPackages.proto-lens-protoc
     pkgs.cabal-install
   ];
-  inherit protos;
   buildPhase = ''
     set -vox
     mkdir src
-    PROTOS=$(for p in $protos; do echo ${src}/$p; done);
     protoc --plugin=protoc-gen-haskell=${pkgs.haskellPackages.proto-lens-protoc}/bin/proto-lens-protoc \
            --proto_path=${src} \
-           --haskell_out=src $PROTOS
+           --haskell_out=src ${src}/${proto}
 
     EXPOSED_MODULES=$(find src -name "*.hs" | while read f; do grep -Eo 'module\s+\S+\s+' $f | sed -r 's/module\s+//' | sed -r 's/\s+//'; done | tr '\n' ' ')
     echo "Found generated modules $EXPOSED_MODULES"

@@ -1,16 +1,19 @@
 {-# LANGUAGE BlockArguments #-}
+{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 module FactStatementStoreGrpc (factStatementStoreService, FactStatementStoreGrpcOpts (FactStatementStoreGrpcOpts)) where
 
 import BeamConfig (FactStatementT (_factStatementId, _json), FsStore (fsTbl), fsStoreSettings)
 import Cardano.Proto.Aux ()
-import Control.Lens (makeLenses, (&), (.~), (^.), (^..))
+import Control.Lens (makeLenses, (&), (.~), (^.))
 import Data.Aeson (json)
 import Data.Aeson.Parser (decodeStrictWith)
 import Data.Functor.Identity (Identity)
 import Data.List (nub)
 import Data.ProtoLens (Message (defMessage))
 import Data.String (IsString (fromString))
+import Data.Text (Text)
+import Data.Text qualified as Text
 import Data.Traversable (for)
 import Database.Beam (SqlValable (val_), runSelectReturningOne)
 import Database.Beam.Query (SqlEq ((==.)), all_, filter_, select)
@@ -31,10 +34,9 @@ import Network.Wai.Handler.Warp qualified as Warp
 import Network.Wai.Handler.WarpTLS (tlsSettings)
 import PlutusJson (jsonToPlutusData)
 import PlutusTx (fromData)
-import Proto.Coop_Fields (value)
-import Proto.FactStatementStoreService (FactStatementStore, GetFactStatementRequest, GetFactStatementResponse, GetFactStatementResponse'FsIdAndPlutus)
-import Proto.FactStatementStoreService_Fields (fsId, fsIds, fsIdsWithPlutus, msg, plutusData)
-import Proto.FactStatementStoreService_Fields qualified as Proto
+import Proto.FactStatementStoreService (FactStatementStore, GetFactStatementRequest, GetFactStatementResponse, Success'FsIdAndPlutus)
+import Proto.FactStatementStoreService_Fields (error, fsId, fsIds, fsIdsWithPlutus, msg, otherErr, plutusData, success)
+import Prelude hiding (error, succ)
 
 data FactStatementStoreGrpcOpts = FactStatementStoreGrpcOpts
   { _db :: FilePath
@@ -72,62 +74,41 @@ runServer routes (h, p) (certFile, keyFile) = do
     , Encoding.gzip
     ]
 
-type Fs = FactStatementT Identity
+type FsT = FactStatementT Identity
 
 handleReq :: FilePath -> Server.UnaryHandler IO GetFactStatementRequest GetFactStatementResponse
 handleReq dbPath _ req = do
   putStrLn $ "Establishing the database connection to: " <> dbPath
   fsDb <- open dbPath
   let fsTbl' = fsTbl fsStoreSettings
-      ids = nub $ req ^. fsIds ^.. traverse . value
+      ids = nub $ req ^. fsIds
 
-  mayIdsWithPs <-
-    sequence
-      <$> for
-        ids
-        ( \i -> do
-            (mayFsWithId :: Maybe Fs) <- runBeamSqliteDebug Prelude.putStrLn fsDb $ runSelectReturningOne (select $ filter_ (\fs -> _factStatementId fs ==. val_ i) (all_ fsTbl'))
-            maybe
-              (putStrLn ("Not found requested fact statement with id " <> show i) >> return Nothing)
-              (return . Just)
-              mayFsWithId
-        )
+  idsWithRes :: [Either Text Success'FsIdAndPlutus] <-
+    for
+      ids
+      ( \i -> do
+          (mayFsT :: Maybe FsT) <- runBeamSqliteDebug Prelude.putStrLn fsDb $ runSelectReturningOne (select $ filter_ (\fs -> _factStatementId fs ==. val_ i) (all_ fsTbl'))
+          maybe
+            (return (Left $ Text.pack "Not found requested Fact Statement with ID " <> (Text.pack . show $ i)))
+            ( \fs -> do
+                let maySucc :: Maybe Success'FsIdAndPlutus = do
+                      decoded <- decodeStrictWith json return (_json @Identity $ fs)
+                      let plData = jsonToPlutusData decoded
+                      prData <- fromData plData
+                      return $
+                        defMessage
+                          & fsId .~ _factStatementId @Identity fs
+                          & plutusData .~ prData
 
-  idsWithPs <-
-    maybe
-      (putStrLn "There were errors processing the requests" >> return [])
-      return
-      mayIdsWithPs
+                maybe (return (Left $ Text.pack "Failed formatting to PlutusData for Fact Statement with ID: " <> (Text.pack . show $ i))) (return . Right) maySucc
+            )
+            mayFsT
+      )
 
-  mayIdsWithPs' <-
-    sequence
-      <$> for
-        idsWithPs
-        ( \idWithP -> do
-            let fsIdAndP :: Maybe GetFactStatementResponse'FsIdAndPlutus = do
-                  decoded <- decodeStrictWith json return (_json @Identity $ idWithP)
-                  let plData = jsonToPlutusData decoded
-                  prData <- fromData plData
-                  return $
-                    defMessage
-                      & fsId .~ _factStatementId @Identity idWithP
-                      & plutusData .~ prData
-            maybe
-              ( do
-                  putStrLn $ "Failed formatting a fact statement with id" <> show (_factStatementId @Identity idWithP)
-                  return Nothing
-              )
-              (return . Just)
-              fsIdAndP
-        )
-  maybe
-    ( return $
-        defMessage
-          & Proto.error . msg .~ "Failed processing request"
-    )
-    ( \idsWithPs' ->
-        return $
-          defMessage
-            & Proto.success . fsIdsWithPlutus .~ idsWithPs'
-    )
-    mayIdsWithPs'
+  -- If any contains an error report that
+  let allSuccOrErr = sequence idsWithRes
+  return $
+    either
+      (\err -> defMessage & error . otherErr . msg .~ err)
+      (\succ -> defMessage & success . fsIdsWithPlutus .~ succ)
+      allSuccOrErr

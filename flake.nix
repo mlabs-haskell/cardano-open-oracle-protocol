@@ -121,9 +121,10 @@
 
         # Publisher
         coopPublisherProj = import ./coop-publisher/build.nix {
-          inherit pkgs http2-grpc-native coopHsProto;
+          inherit pkgs http2-grpc-native;
           inherit (pkgsWithOverlay) haskell-nix;
           inherit (pre-commit-check) shellHook;
+          inherit cardanoProtoHs txBuilderProtoHs factStatementStoreProtoHs publisherProtoHs;
           compiler-nix-name = "ghc8107";
         };
         coopPublisherFlake = coopPublisherProj.flake { };
@@ -141,24 +142,17 @@
           inherit (pre-commit-check) shellHook;
         };
 
-        coopHsProto = import ./nix/protobuf-hs.nix {
-          inherit pkgs;
-          src = ./coop-proto;
-          protos = [ "coop.proto" ];
-          cabalPackageName = "coop-proto";
-        };
-
         cardanoProtoHs = import ./nix/protobuf-hs.nix {
           inherit pkgs;
           src = ./coop-proto;
-          protos = [ "plutus.proto" ];
+          proto = "cardano.proto";
           cabalPackageName = "coop-cardano-proto";
         };
 
         txBuilderProtoHs = import ./nix/protobuf-hs.nix {
           inherit pkgs;
           src = ./coop-proto;
-          protos = [ "tx-builder-service.proto" ];
+          proto = "tx-builder-service.proto";
           buildDepends = [ "coop-cardano-proto" ];
           cabalPackageName = "coop-tx-builder-service-proto";
         };
@@ -166,19 +160,27 @@
         factStatementStoreProtoHs = import ./nix/protobuf-hs.nix {
           inherit pkgs;
           src = ./coop-proto;
-          protos = [ "fact-statement-store-service.proto" "coop.proto" ];
+          proto = "fact-statement-store-service.proto";
           buildDepends = [ "coop-cardano-proto" ];
           cabalPackageName = "coop-fact-statement-store-service-proto";
         };
 
+        publisherProtoHs = import ./nix/protobuf-hs.nix {
+          inherit pkgs;
+          src = ./coop-proto;
+          proto = "publisher-service.proto";
+          buildDepends = [ "coop-cardano-proto" "coop-fact-statement-store-service-proto" "coop-tx-builder-service-proto" ];
+          cabalPackageName = "coop-publisher-service-proto";
+        };
+
         # PAB
         coopPabProj = import ./coop-pab/build.nix {
-          inherit pkgs plutip coopPlutusCli txBuilderProtoHs http2-grpc-native;
+          inherit pkgs plutip coopPlutusCli http2-grpc-native;
           inherit (pkgsWithOverlay) haskell-nix;
           inherit (pre-commit-check) shellHook;
           coop-hs-types = ./coop-hs-types;
           cardanoProtoExtras = ./coop-proto/cardano-proto-extras;
-          inherit cardanoProtoHs;
+          inherit cardanoProtoHs txBuilderProtoHs;
           plutipLocalCluster = plutip.packages.${system}."plutip:exe:local-cluster";
           compiler-nix-name = "ghc8107";
         };
@@ -210,8 +212,7 @@
           inherit pkgs plutip http2-grpc-native;
           inherit (pkgsWithOverlay) haskell-nix;
           inherit (pre-commit-check) shellHook;
-          inherit factStatementStoreProtoHs;
-          inherit cardanoProtoHs;
+          inherit factStatementStoreProtoHs cardanoProtoHs;
           cardanoProtoExtras = ./coop-proto/cardano-proto-extras;
           plutusJson = ./coop-extras/plutus-json;
           compiler-nix-name = "ghc8107";
