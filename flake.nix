@@ -80,15 +80,6 @@
           inherit (pre-commit-check) shellHook;
         };
 
-        # Pure
-        coopPureProj = import ./coop-pure/build.nix {
-          inherit pkgs;
-          inherit (pkgsWithOverlay) haskell-nix;
-          inherit (pre-commit-check) shellHook;
-          compiler-nix-name = "ghc8107";
-        };
-        coopPureFlake = coopPureProj.flake { };
-
         # Haskell shared types
         coopHsTypesProj = import ./coop-hs-types/build.nix {
           inherit pkgs plutip;
@@ -232,7 +223,7 @@
           inherit pkgs;
           plutipLocalCluster = plutip.packages.${system}."plutip:exe:local-cluster";
           jsFsStoreCli = coopExtrasJsonFactStatementStoreFlake.packages."json-fact-statement-store:exe:json-fs-store-cli";
-          coopPabCli = coopPabFlake.packages."coop-pab:exe:coop-pab-cli";
+          inherit coopPabCli coopPlutusCli;
           coopPublisherCli = coopPublisherFlake.packages."coop-publisher:exe:coop-publisher-cli";
           cardanoNode = coopPabProj.hsPkgs.cardano-node.components.exes.cardano-node;
           cardanoCli = coopPabProj.hsPkgs.cardano-cli.components.exes.cardano-cli;
@@ -246,13 +237,12 @@
         inherit pkgs pkgsWithOverlay pkgsForPlutarch;
 
         # Standard flake attributes
-        packages = coopPureFlake.packages // coopPlutusFlake.packages // coopPublisherFlake.packages // coopPabFlake.packages // coopHsTypesFlake.packages // {
+        packages = coopPlutusFlake.packages // coopPublisherFlake.packages // coopPabFlake.packages // coopHsTypesFlake.packages // {
           "coop-pab-cli" = coopPabCli;
         };
 
         devShells = rec {
           dev-proto = coopProtoDevShell;
-          dev-pure = coopPureFlake.devShell;
           dev-pre-commit = pre-commit-devShell;
           dev-plutus = coopPlutusFlake.devShell;
           dev-service = coopPublisherFlake.devShell;
@@ -267,8 +257,7 @@
         };
 
         checks = renameAttrs (n: "check-${n}")
-          (coopPureFlake.checks //
-            coopPlutusFlake.checks //
+          (coopPlutusFlake.checks //
             coopPublisherFlake.checks //
             coopPabFlake.checks //
             coopHsTypesFlake.checks //

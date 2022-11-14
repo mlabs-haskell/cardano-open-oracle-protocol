@@ -2,6 +2,7 @@
 , cardanoCli
 , cardanoNode
 , coopPabCli
+, coopPlutusCli
 , coopPublisherCli
 , jsFsStoreCli
 , plutipLocalCluster
@@ -22,10 +23,16 @@ pkgs.mkShell {
     cardanoCli
     cardanoNode
     coopPabCli
+    coopPlutusCli
     coopPublisherCli
     jsFsStoreCli
     plutipLocalCluster
   ];
 
-  inherit shellHook;
+  shellHook = ''
+    ${shellHook}
+    ln -s ${../../coop-proto} coop-proto
+    ln -s ${../../coop-pab/resources} resources
+    source ${./aux.bash}
+  '';
 }
