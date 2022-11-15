@@ -227,7 +227,6 @@
           coopPublisherCli = coopPublisherFlake.packages."coop-publisher:exe:coop-publisher-cli";
           cardanoNode = coopPabProj.hsPkgs.cardano-node.components.exes.cardano-node;
           cardanoCli = coopPabProj.hsPkgs.cardano-cli.components.exes.cardano-cli;
-          inherit (pre-commit-check) shellHook;
         };
 
         renameAttrs = rnFn: pkgs.lib.attrsets.mapAttrs' (n: value: { name = rnFn n; inherit value; });

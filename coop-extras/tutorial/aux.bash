@@ -6,8 +6,8 @@ CLUSTER_DIR=.local-cluster # As specified in resources/pabConfig.yaml
 
 WALLETS=.wallets
 
-RESOURCES=resources
-COOP_PROTO=coop-proto
+RESOURCES=resources # Symlinked by Nix env
+COOP_PROTO=coop-proto # Symlinked by Nix env
 
 function clean {
     rm -fR $JS_STORE_DIR
@@ -36,7 +36,7 @@ function generate-keys {
 }
 
 # Prelude and run the FactStatementStore gRpc with a generic Json implementation
-function prelude-js-fs-store {
+function run-js-fs-store {
     mkdir $JS_STORE_DIR
     sqlite3 -batch $JS_STORE_DIR/json-store.db ""
     json-fs-store-cli genesis --db $JS_STORE_DIR/json-store.db
@@ -49,46 +49,31 @@ function prelude-js-fs-store {
 }
 
 # Prelude and run the Plutip Local Cluster (cardano-node and wallet creation)
-function prelude-cluster {
+function run-cluster {
     mkdir $CLUSTER_DIR
     mkdir $CLUSTER_DIR/scripts
     mkdir $CLUSTER_DIR/txs
     mkdir $WALLETS
-    local-cluster --wallet-dir $WALLETS -n 10 --utxos 5 --chain-index-port 9084 --slot-len 1s --epoch-size 100000
+    local-cluster --dump-info-json $CLUSTER_DIR/local-cluster-info.json \
+                  --wallet-dir $WALLETS \
+                  -n 10 --utxos 5 \
+                  --chain-index-port 9084 \
+                  --slot-len 1s --epoch-size 100000
 }
-
-# Run manually to parse the config outputted by local-cluster
-function parse-cluster-config {
-    cat > $CLUSTER_DIR/plutip-cluster-config
-    make-exports
-    # So BPI doesn't have access to it
-    echo $SUBMITTER_PKH
-    if [ -f $WALLETS/my-signing-key-$SUBMITTER_PKH.skey ];
-      then echo "My key already setup"
-      else
-        echo "Hiding my key from the PAB"
-        mv $WALLETS/signing-key-$SUBMITTER_PKH.skey $WALLETS/my-signing-key-$SUBMITTER_PKH.skey
-    fi;
-}
-
-if [ -f $CLUSTER_DIR/plutip-cluster-config ];
-  then make-exports;
-  else echo "Run prelude-cluster and parse with parse-cluster-config" ;
-fi;
 
 # Export the variables used across
 function make-exports {
-    export GOD_PKH=$(cat $CLUSTER_DIR/plutip-cluster-config | grep -E "Wallet 1 PKH" | cut -d ":" -f 2 | xargs)
-    export AA_PKH=$(cat $CLUSTER_DIR/plutip-cluster-config | grep -E "Wallet 2 PKH" | cut -d ":" -f 2 | xargs)
-    export AUTH_PKH=$(cat $CLUSTER_DIR/plutip-cluster-config | grep -E "Wallet 3 PKH" | cut -d ":" -f 2 | xargs)
-    export CERT_RDMR_PKH=$(cat $CLUSTER_DIR/plutip-cluster-config | grep -E "Wallet 4 PKH" | cut -d ":" -f 2 | xargs)
-    export FEE_PKH=$(cat $CLUSTER_DIR/plutip-cluster-config | grep -E "Wallet 5 PKH" | cut -d ":" -f 2 | xargs)
-    export SUBMITTER_PKH=$(cat $CLUSTER_DIR/plutip-cluster-config | grep -E "Wallet 6 PKH" | cut -d ":" -f 2 | xargs)
-    export CARDANO_NODE_SOCKET_PATH=$(cat $CLUSTER_DIR/plutip-cluster-config | grep CardanoNodeConn | grep -E -o '"[^"]+"' | sed s/\"//g)
+    export GOD_PKH=$(cat $CLUSTER_DIR/local-cluster-info.json | jq -r ".ciWallets[0][0]")
+    export AA_PKH=$(cat $CLUSTER_DIR/local-cluster-info.json | jq -r ".ciWallets[1][0]")
+    export AUTH_PKH=$(cat $CLUSTER_DIR/local-cluster-info.json | jq -r ".ciWallets[2][0]")
+    export CERT_RDMR_PKH=$(cat $CLUSTER_DIR/local-cluster-info.json | jq -r ".ciWallets[3][0]")
+    export FEE_PKH=$(cat $CLUSTER_DIR/local-cluster-info.json | jq -r ".ciWallets[4][0]")
+    export SUBMITTER_PKH=$(cat $CLUSTER_DIR/local-cluster-info.json | jq -r ".ciWallets[5][0]")
+    export CARDANO_NODE_SOCKET_PATH=$(cat $CLUSTER_DIR/local-cluster-info.json | jq -r ".ciNodeSocket")
 }
 
 # Prelude and run the TxBuilder gRpc
-function prelude-tx-builder {
+function run-tx-builder {
     mkdir $COOP_PAB_DIR
     generate-keys $COOP_PAB_DIR
     make-exports
@@ -96,7 +81,7 @@ function prelude-tx-builder {
     coop-mint-cert-redeemers
     coop-mint-authentication
     coop-redist-auth
-    coop-run-tx-builder-grpc
+    coop-run-tx-builder-grpc > /dev/null
 }
 
 function coop-genesis {
@@ -140,6 +125,10 @@ function coop-poll-state {
     done;
 }
 
+function fs-store-insert {
+    json-fs-store-cli insert-fact-statement --db $JS_STORE_DIR/json-store.db --fact_statement_id "$1" --json "$2"
+}
+
 function get-onchain-time {
     coop-pab-cli get-state --any-wallet $GOD_PKH | grep "Current node client time range" | grep POSIXTime | grep -E -o "[0-9]+"
 }
@@ -148,15 +137,26 @@ function run-grpcui {
     grpcui -insecure -import-path $COOP_PROTO -proto $COOP_PROTO/publisher-service.proto localhost:5080
 }
 
-function prelude-publisher {
+function run-publisher {
     mkdir $COOP_PUBLISHER_DIR
     generate-keys $COOP_PUBLISHER_DIR
     make-exports
     coop-publisher-cli publisher-grpc
 }
 
+function run-all {
+    run-cluster &
+    while [ ! -f $CLUSTER_DIR/local-cluster-info.json ]; do sleep 1; done;
+    make-exports
+    mv $WALLETS/signing-key-"$SUBMITTER_PKH".skey $WALLETS/my-signing-key-"$SUBMITTER_PKH".skey
+    run-js-fs-store &
+    run-tx-builder &
+    run-publisher &
+}
+
 function coop-mint-fs {
-    resp=$(grpcurl -insecure -import-path $COOP_PROTO -proto $COOP_PROTO/publisher-service.proto -d @ localhost:5080 coop.publisher.Publisher/createMintFsTx <<EOF
+    make-exports
+    req=$(cat <<EOF
     {
         "fsInfos": [
             {
@@ -182,36 +182,48 @@ function coop-mint-fs {
             "base16": "$SUBMITTER_PKH"
         }
     }
-
 EOF
-        )
+          )
+    resp=$(echo $req | grpcurl -insecure -import-path $COOP_PROTO -proto $COOP_PROTO/publisher-service.proto -d @ localhost:5080 coop.publisher.Publisher/createMintFsTx)
     rawTx=$(echo "$resp" | jq '.mintFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "Tx BabbageEra"')
     echo "$resp" | jq '.info'
     echo "$resp" | jq '.error'
     echo "$rawTx" > $COOP_PUBLISHER_DIR/signed
-    cardano-cli transaction sign --tx-file $COOP_PUBLISHER_DIR/signed --signing-key-file $WALLETS/my-signing-key-"$SUBMITTER_PKH".skey --out-file $COOP_PUBLISHER_DIR/ready
-    cardano-cli transaction submit --tx-file $COOP_PUBLISHER_DIR/ready  --mainnet
+    if [ "$(echo $resp | jq "has(\"mintFsTx\")")" == true ]; then
+        cardano-cli transaction sign --tx-file $COOP_PUBLISHER_DIR/signed --signing-key-file $WALLETS/my-signing-key-"$SUBMITTER_PKH".skey --out-file $COOP_PUBLISHER_DIR/ready
+        cardano-cli transaction submit --tx-file $COOP_PUBLISHER_DIR/ready  --mainnet
+    else
+        echo "No transaction to submit"
+    fi
 }
 
 function coop-gc-fs {
-    resp=$(grpcurl -insecure -import-path $COOP_PROTO -proto $COOP_PROTO/publisher-service.proto -d @ localhost:5080 coop.publisher.Publisher/createGcFsTx <<EOF
+    make-exports
+    req=$(cat <<EOF
     {
         "fsIds": [
-          "$(echo -ne someidA | base64)",
-          "$(echo -ne someidB | base64)",
-          "$(echo -ne someidC | base64)"
-          ],
+                 "$(echo -ne 'should not exist' | base64)",
+                 "$(echo -ne 'someidA' | base64)",
+                 "$(echo -ne 'someidB' | base64)",
+                 "$(echo -ne 'nop' | base64)",
+                 "$(echo -ne 'another nope' | base64)"
+                 ],
         "submitter": {
             "base16": "$SUBMITTER_PKH"
         }
     }
 
 EOF
-        )
+       )
+    resp=$(echo $req | grpcurl -insecure -import-path $COOP_PROTO -proto $COOP_PROTO/publisher-service.proto -d @ localhost:5080 coop.publisher.Publisher/createGcFsTx)
     rawTx=$(echo "$resp" | jq '.gcFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "TxBodyBabbage"')
     echo "$resp" | jq '.info'
     echo "$resp" | jq '.error'
     echo "$rawTx" > $COOP_PUBLISHER_DIR/signed
-    cardano-cli transaction sign --tx-body-file $COOP_PUBLISHER_DIR/signed --signing-key-file $WALLETS/my-signing-key-"$SUBMITTER_PKH".skey --out-file $COOP_PUBLISHER_DIR/ready
-    cardano-cli transaction submit --tx-file $COOP_PUBLISHER_DIR/ready  --mainnet
+    if [ "$(echo $resp | jq "has(\"gcFsTx\")")" == true ]; then
+        cardano-cli transaction sign --tx-body-file $COOP_PUBLISHER_DIR/signed --signing-key-file $WALLETS/my-signing-key-"$SUBMITTER_PKH".skey --out-file $COOP_PUBLISHER_DIR/ready
+        cardano-cli transaction submit --tx-file $COOP_PUBLISHER_DIR/ready  --mainnet
+    else
+        echo "No transaction to submit"
+    fi
 }

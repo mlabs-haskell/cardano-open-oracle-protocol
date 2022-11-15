@@ -1795,11 +1795,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1668454896,
-        "narHash": "sha256-JBxF7JJJxeidOipgbIt08ISCHzSI6Pw8bzE9ExIEhCg=",
+        "lastModified": 1668513772,
+        "narHash": "sha256-2IGzDqDQvwd5y+zOZKEyAAGayfm7EP+UqqqkSUVLM/s=",
         "owner": "mlabs-haskell",
         "repo": "plutip",
-        "rev": "a91cb03fae2e18b152ab3da641f3a6962b8776f1",
+        "rev": "37d7b43aa31f4ca3dfaff8370e35fe7e1f5e0912",
         "type": "github"
       },
       "original": {

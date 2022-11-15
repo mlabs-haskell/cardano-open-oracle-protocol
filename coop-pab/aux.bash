@@ -195,7 +195,6 @@ function coop-gc-fs {
             "base16": "$SUBMITTER_PKH"
         }
     }
-
 EOF
         )
     rawTx=$(echo "$resp" | jq '.success.gcFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "TxBodyBabbage"')
