@@ -272,8 +272,8 @@ graph TD
 - Quantity - Each [$CERT](#cert-token) token is unique and only 1 such token exists at any point in time. However, collectively there can be zero or more [$CERT](#cert-token) tokens in the protocol at any time,
 - Provenance - held at [@CertV](#cert-validator) validator
   - Minted with [mint-authentication-tx](#mint-authentication-tx) transaction,
-  - Burned with [gc-certificate-tx][#gc-certificate-tx] transaction,
-  - Used to authenticate [@CertV][#cert-validator] validator reference inputs in [mint-fact-statement-tx](#mint-fact-statement-tx) transaction.
+  - Burned with [gc-certificate-tx](#gc-certificate-tx) transaction,
+  - Used to authenticate [@CertV](#cert-validator) validator reference inputs in [mint-fact-statement-tx](#mint-fact-statement-tx) transaction.
 
 ### <a name="cert-rdmr-token">Certificate redeemer token - $CERT-RDMR</a>
 
@@ -299,7 +299,7 @@ These tokens are used in [gc-certificate-tx](#gc-certificate-tx) transactions to
 - Provenance - held at [#FsV](#fs-validator) validator
   - Minted with [mint-fact-statement-tx](#mint-fact-statement-tx) transaction,
   - Burned with [gc-fact-statement-tx](#gc-fact-statement-tx) transaction.
-  - Used to authenticate [@FsV][#fs-validator] validator reference inputs in [ref-fact-statement-tx](#ref-fact-statement-tx) transaction.
+  - Used to authenticate [@FsV](#fs-validator) validator reference inputs in [ref-fact-statement-tx](#ref-fact-statement-tx) transaction.
 
 > This token is used by COOP Consumers to authenticate the Fact Statement reference inputs.
 
@@ -437,7 +437,7 @@ The wallet needs to provide enough [$FEE](#fee-token) tokens as indicated in the
 [Certificate redeemer](#certificate-redeemer) wallets hold the [$CERT-RDMR](#cert-rdmr-token) tokens and are managed by the `Protocol Operator` similar to how [Authenticator](#authenticator) wallets are managed.
 In fact, both wallets can be consolidated in a single wallet for convenience.
 
-Certificate redeemer wallets are in charge of [garbage collecting obsolete certificates](#gc-certificates-tx) by providing the corresponding [$CERT-RDMR](#cert-rdmr-token) tokens as indicated in the `CertDatum`.
+Certificate redeemer wallets are in charge of [garbage collecting obsolete certificates](#gc-certificate-tx) by providing the corresponding [$CERT-RDMR](#cert-rdmr-token) tokens as indicated in the `CertDatum`.
 
 ### <a name="fee-collector">Fee collector</a>
 
