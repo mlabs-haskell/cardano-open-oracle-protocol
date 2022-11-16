@@ -70,6 +70,7 @@ txBuilderService opts = do
 
       handleCreateMintFsTx :: Server.UnaryHandler IO CreateMintFsTxReq CreateMintFsTxResp
       handleCreateMintFsTx _ req = do
+        print ("TxBuilder got CreateMintFsTxReq:" <> show req)
         sub <- toCardano (req ^. submitter)
         (_, errOrAcs) <-
           runBpi @Text
@@ -78,7 +79,7 @@ txBuilderService opts = do
               }
             (runMintFsTxOnReq req)
         either
-          (\err -> return $ defMessage & Proto.TxBuilderService.error . otherErr . msg .~ err)
+          (\err -> return $ defMessage & Proto.TxBuilderService.error . otherErr . msg .~ "Failed running a BPI contract with: " <> err)
           ( \(mayTxId, info') -> do
               maybe
                 ( return $
@@ -99,7 +100,6 @@ txBuilderService opts = do
                           return $
                             defMessage
                               & info .~ info'
-                              & Proto.TxBuilderService.error . otherErr . msg .~ "wuasapp"
                               & success . mintFsTx . cborBase16 .~ rawTx
                       )
                       mayRawTx
@@ -115,6 +115,7 @@ txBuilderService opts = do
 
       handleCreateGcFsTx :: Server.UnaryHandler IO CreateGcFsTxReq CreateGcFsTxResp
       handleCreateGcFsTx _ req = do
+        print ("TxBuilder got CreateGcFsTxReq:" <> show req)
         sub <- toCardano (req ^. submitter)
         (_, errOrAcs) <-
           runBpi @Text
@@ -123,7 +124,7 @@ txBuilderService opts = do
               }
             (runGcFsTxOnReq req)
         either
-          (\err -> return $ defMessage & Proto.TxBuilderService.error . otherErr . msg .~ err)
+          (\err -> return $ defMessage & Proto.TxBuilderService.error . otherErr . msg .~ "Failed running a BPI contract with: " <> err)
           ( \(mayTxId, info') -> do
               maybe
                 ( return $
@@ -132,6 +133,7 @@ txBuilderService opts = do
                       & info .~ info'
                 )
                 ( \txId -> do
+                    print $ "Reading tx with" <> show txId
                     mayRawTx <- readSignedTx pabConf None txId
                     either
                       ( \err ->

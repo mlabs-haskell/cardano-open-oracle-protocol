@@ -69,9 +69,7 @@ publisherService opts = do
             (RPC :: RPC FactStatementStore "getFactStatement")
             (defMessage & fsIds .~ ((^. fsId) <$> req ^. fsInfos))
         either
-          ( \err -> do
-              return $ defMessage & PublisherService.error .~ err
-          )
+          (\err -> return $ defMessage & PublisherService.error .~ err)
           ( \(getFsResp :: GetFactStatementResponse) -> do
               print ("Got from FactStatementStore: " <> show getFsResp)
               case getFsResp ^. maybe'error of
@@ -90,7 +88,7 @@ publisherService opts = do
                         defMessage
                           & factStatements .~ fsInfos'
                           & submitter .~ req ^. submitter
-                  print (show crMintFsTxReq)
+                  print ("Sending CreateMintFsTxReq to TxBuilder: " <> show crMintFsTxReq)
                   createMintFsRespOrErr <-
                     call'
                       (opts ^. txBuilderAddress)
@@ -126,6 +124,7 @@ publisherService opts = do
               defMessage
                 & fsIds .~ req ^. fsIds
                 & submitter .~ req ^. submitter
+        print ("Sending CreateGcFsTxRequest to TxBuilder: " <> show txBuilderReq)
         createGcFsRespOrErr <-
           call'
             (opts ^. txBuilderAddress)

@@ -1,17 +1,13 @@
 {
   description = "cardano-open-oracle-protocol";
 
-  nixConfig = {
-    bash-prompt =
-      "\\[\\e[0m\\][\\[\\e[0;2m\\]nix-develop \\[\\e[0;1m\\]cardano-open-oracle-protocol \\[\\e[0;93m\\]\\w\\[\\e[0m\\]]\\[\\e[0m\\]$ \\[\\e[0m\\]";
-  };
-
   inputs = {
     # Plutip maintains a compatible Plutus/Cardano derivation set
     # TODO: Set to a stable release
     bot-plutus-interface.url = "github:mlabs-haskell/bot-plutus-interface/sam/add-vasil-features";
 
-    plutip.url = "github:mlabs-haskell/plutip/bladyjoker/upgrade-to-sam-vasil"; # https://github.com/mlabs-haskell/plutip/releases/tag/vasil-compliant-v1.0.0
+    # TODO: Set to a stable release
+    plutip.url = "github:mlabs-haskell/plutip/bladyjoker/upgrade-to-sam-vasil";
     plutip.inputs.bot-plutus-interface.follows = "bot-plutus-interface";
     plutip.inputs.haskell-nix.follows = "bot-plutus-interface/haskell-nix";
     plutip.inputs.iohk-nix.follows = "bot-plutus-interface/iohk-nix";
@@ -79,15 +75,6 @@
         pre-commit-devShell = pkgs.mkShell {
           inherit (pre-commit-check) shellHook;
         };
-
-        # Pure
-        coopPureProj = import ./coop-pure/build.nix {
-          inherit pkgs;
-          inherit (pkgsWithOverlay) haskell-nix;
-          inherit (pre-commit-check) shellHook;
-          compiler-nix-name = "ghc8107";
-        };
-        coopPureFlake = coopPureProj.flake { };
 
         # Haskell shared types
         coopHsTypesProj = import ./coop-hs-types/build.nix {
@@ -228,15 +215,14 @@
         };
         cardanoProtoExtrasFlake = cardanoProtoExtras.flake { };
 
-        tutorialShell = import ./coop-extras/tutorial/build.nix {
+        coopEnvShell = import ./coop-extras/coop-env/build.nix {
           inherit pkgs;
           plutipLocalCluster = plutip.packages.${system}."plutip:exe:local-cluster";
           jsFsStoreCli = coopExtrasJsonFactStatementStoreFlake.packages."json-fact-statement-store:exe:json-fs-store-cli";
-          coopPabCli = coopPabFlake.packages."coop-pab:exe:coop-pab-cli";
+          inherit coopPabCli coopPlutusCli;
           coopPublisherCli = coopPublisherFlake.packages."coop-publisher:exe:coop-publisher-cli";
           cardanoNode = coopPabProj.hsPkgs.cardano-node.components.exes.cardano-node;
           cardanoCli = coopPabProj.hsPkgs.cardano-cli.components.exes.cardano-cli;
-          inherit (pre-commit-check) shellHook;
         };
 
         renameAttrs = rnFn: pkgs.lib.attrsets.mapAttrs' (n: value: { name = rnFn n; inherit value; });
@@ -246,13 +232,12 @@
         inherit pkgs pkgsWithOverlay pkgsForPlutarch;
 
         # Standard flake attributes
-        packages = coopPureFlake.packages // coopPlutusFlake.packages // coopPublisherFlake.packages // coopPabFlake.packages // coopHsTypesFlake.packages // {
+        packages = coopPlutusFlake.packages // coopPublisherFlake.packages // coopPabFlake.packages // coopHsTypesFlake.packages // {
           "coop-pab-cli" = coopPabCli;
         };
 
         devShells = rec {
           dev-proto = coopProtoDevShell;
-          dev-pure = coopPureFlake.devShell;
           dev-pre-commit = pre-commit-devShell;
           dev-plutus = coopPlutusFlake.devShell;
           dev-service = coopPublisherFlake.devShell;
@@ -261,14 +246,13 @@
           dev-hs-types = coopHsTypesFlake.devShell;
           dev-extras-plutus-json = coopExtrasPlutusJsonFlake.devShell;
           dev-extras-json-store = coopExtrasJsonFactStatementStoreFlake.devShell;
-          dev-tutorial = tutorialShell;
+          dev-tutorial = coopEnvShell;
           dev-cardano-proto-extras = cardanoProtoExtrasFlake.devShell;
           default = dev-proto;
         };
 
         checks = renameAttrs (n: "check-${n}")
-          (coopPureFlake.checks //
-            coopPlutusFlake.checks //
+          (coopPlutusFlake.checks //
             coopPublisherFlake.checks //
             coopPabFlake.checks //
             coopHsTypesFlake.checks //
