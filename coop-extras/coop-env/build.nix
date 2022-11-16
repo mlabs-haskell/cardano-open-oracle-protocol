@@ -10,7 +10,6 @@
 pkgs.mkShell {
   packages = with pkgs; [
     jq
-    #    json_pp
     sqlite
     protobuf
     protoc-gen-grpc-web
@@ -35,5 +34,6 @@ pkgs.mkShell {
     export LC_CTYPE=C.UTF-8
     export LC_ALL=C.UTF-8
     export LANG=C.UTF-8
+    export PS1='\[\e[0m\][\[\e[0;1;38;5;142m\]coop-env \[\e[0m\]~ \[\e[0m\]\W\[\e[0m\]] \[\e[0m\]\$ \[\e[0m\]'
   '';
 }

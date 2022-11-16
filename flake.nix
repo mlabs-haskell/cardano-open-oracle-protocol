@@ -1,11 +1,6 @@
 {
   description = "cardano-open-oracle-protocol";
 
-  nixConfig = {
-    bash-prompt =
-      "\\[\\e[0m\\][\\[\\e[0;2m\\]nix-develop \\[\\e[0;1m\\]cardano-open-oracle-protocol \\[\\e[0;93m\\]\\w\\[\\e[0m\\]]\\[\\e[0m\\]$ \\[\\e[0m\\]";
-  };
-
   inputs = {
     # Plutip maintains a compatible Plutus/Cardano derivation set
     # TODO: Set to a stable release
@@ -219,7 +214,7 @@
         };
         cardanoProtoExtrasFlake = cardanoProtoExtras.flake { };
 
-        tutorialShell = import ./coop-extras/tutorial/build.nix {
+        coopEnvShell = import ./coop-extras/coop-env/build.nix {
           inherit pkgs;
           plutipLocalCluster = plutip.packages.${system}."plutip:exe:local-cluster";
           jsFsStoreCli = coopExtrasJsonFactStatementStoreFlake.packages."json-fact-statement-store:exe:json-fs-store-cli";
@@ -250,7 +245,7 @@
           dev-hs-types = coopHsTypesFlake.devShell;
           dev-extras-plutus-json = coopExtrasPlutusJsonFlake.devShell;
           dev-extras-json-store = coopExtrasJsonFactStatementStoreFlake.devShell;
-          dev-tutorial = tutorialShell;
+          dev-tutorial = coopEnvShell;
           dev-cardano-proto-extras = cardanoProtoExtrasFlake.devShell;
           default = dev-proto;
         };

@@ -17,16 +17,6 @@ function clean {
     rm -fR $WALLETS
 }
 
-function make-dirs {
-    mkdir $JS_STORE_DIR
-    mkdir $COOP_PAB_DIR
-    mkdir $COOP_PUBLISHER_DIR
-    mkdir $CLUSTER_DIR
-    mkdir $CLUSTER_DIR/scripts
-    mkdir $CLUSTER_DIR/txs
-    mkdir $WALLETS
-}
-
 # Generate TLS keys for Publisher, FactStatementStore and TxBuilder services
 function generate-keys {
     openssl genrsa -out $1/key.pem 2048
@@ -61,6 +51,17 @@ function run-cluster {
                   --slot-len 1s --epoch-size 100000
 }
 
+function on-load {
+    if [ -f $CLUSTER_DIR/local-cluster-info.json ]; then
+        make-exports
+        if [ -f $WALLETS/signing-key-"$SUBMITTER_PKH".skey ]; then
+            mv $WALLETS/signing-key-"$SUBMITTER_PKH".skey $WALLETS/my-signing-key-"$SUBMITTER_PKH".skey
+        fi
+    fi;
+}
+
+on-load
+
 # Export the variables used across
 function make-exports {
     export GOD_PKH=$(cat $CLUSTER_DIR/local-cluster-info.json | jq -r ".ciWallets[0][0]")
@@ -74,17 +75,17 @@ function make-exports {
 
 # Prelude and run the TxBuilder gRpc
 function run-tx-builder {
-    mkdir $COOP_PAB_DIR
-    generate-keys $COOP_PAB_DIR
     make-exports
     coop-genesis
     coop-mint-cert-redeemers
     coop-mint-authentication
     coop-redist-auth
-    coop-run-tx-builder-grpc > /dev/null
+    generate-keys $COOP_PAB_DIR
+    coop-run-tx-builder-grpc
 }
 
 function coop-genesis {
+    mkdir $COOP_PAB_DIR
     coop-pab-cli deploy --god-wallet $GOD_PKH --aa-wallet $AA_PKH
 }
 
@@ -105,7 +106,7 @@ function coop-run-tx-builder-grpc {
 }
 
 function show-env {
-    export | grep -E "_PKH|CARDANO_NODE_SOCKET_PATH"
+    export | grep -E "([A-Z_]+)_PKH|CARDANO_NODE_SOCKET_PATH"
 }
 
 function coop-garbage-collect {
@@ -202,11 +203,11 @@ function coop-gc-fs {
     req=$(cat <<EOF
     {
         "fsIds": [
-                 "$(echo -ne 'should not exist' | base64)",
+                 "$(echo -ne 'id1' | base64)",
                  "$(echo -ne 'someidA' | base64)",
                  "$(echo -ne 'someidB' | base64)",
-                 "$(echo -ne 'nop' | base64)",
-                 "$(echo -ne 'another nope' | base64)"
+                 "$(echo -ne 'id2' | base64)",
+                 "$(echo -ne 'id3' | base64)"
                  ],
         "submitter": {
             "base16": "$SUBMITTER_PKH"
