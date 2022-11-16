@@ -1,10 +1,12 @@
 # COOP Plutus protocol
 
+This document contains information about all the wallets, tokens, minting policies, validators and transactions used in COOP and their relationship.
+
 ## Protocol parameters
 
 Parameters set at [Protocol genesis](#protocol-genesis).
 
-### <a name="total-aa-tokens">Total Authorization Authority tokens</a>
+### <a id="total-aa-tokens">Total Authentication Authority tokens</a>
 
 Total quantity of [$AA](#aa-token) tokens to mint.
 These tokens can be distributed to any number of [Authentication Authority](#authentication-authority) wallets to provide:
@@ -12,12 +14,12 @@ These tokens can be distributed to any number of [Authentication Authority](#aut
 1. Backup and redundancy in case of loss,
 2. Multi-signature scheme for [minting authentication tokens](#mint-authentication-tx).
 
-### <a name="required-aa-tokens">Required Authorization Authority tokens</a>
+### <a id="required-aa-tokens">Required Authentication Authority tokens</a>
 
 Required quantity of [$AA](#aa-token) tokens that must be consumed when [minting authentication tokens](#mint-authentication-tx).
 These tokens can be in one or many inputs, enabling multi-signature scheme to be adopted.
 
-## <a name="protocol-genesis">Protocol genesis</a>
+## <a id="protocol-genesis">Protocol genesis</a>
 
 To following is instantiated by [God](#god):
 
@@ -36,9 +38,9 @@ To understand the state of the Protocol it's sufficient to query the UTxOs at:
 
 TODO: Add a relational schema to convey the state structure and semantics.
 
-## <a name="transactions">Transactions</a>
+## <a id="transactions">Transactions</a>
 
-### <a name="mint-aa-tx">Mint $AA 'One Shot' tokens - mint-aa-tx</a>
+### <a id="mint-aa-tx">Mint $AA 'One Shot' tokens - mint-aa-tx</a>
 
 **Scripts invoked:**
 
@@ -67,7 +69,7 @@ graph TD
 
 The `TokenName` of the [$AA](#aa-token) token is set to a hash of the input pointed to by `oref` (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)).
 
-### <a name="mint-authentication-tx">Mint authentication tokens - mint-authentication-tx</a>
+### <a id="mint-authentication-tx">Mint authentication tokens - mint-authentication-tx</a>
 
 **Scripts invoked:**
 
@@ -108,9 +110,9 @@ graph TD
 
 `id` is computed by hashing [$AA](#aa-token) inputs consumed (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)).
 
-> The quantity of [$AA](#aa-token) tokens required is determined by the [Required Authorization Authority tokens](#required-aa-tokens) protocol parameter.
+> The quantity of [$AA](#aa-token) tokens required is determined by the [Required Authentication Authority tokens](#required-aa-tokens) protocol parameter.
 
-### <a name="mint-fact-statement-tx">Mint Fact Statement - mint-fact-statement-tx</a>
+### <a id="mint-fact-statement-tx">Mint Fact Statement - mint-fact-statement-tx</a>
 
 **Scripts invoked:**
 
@@ -134,15 +136,19 @@ graph TD
     AuthMp[("$AUTH-policy")]
     FsV["@FsV validator"]
     AuthWallet["Authenticator wallet"]
-    SubmitterWallet["Submitter wallet"]
+    CertV["@CertV validator"]
     FeeCollector["$FEE collector"]
 
     MintFactTx{"mint-fact-statement-tx [fsA, fsB]"}
 
-    AuthWallet -->|"$AUTH/authId x 1"|MintFactTx
-    AuthWallet -->|"$AUTH/authId x 1"|MintFactTx
-    MintFactTx -->|"$AUTH/authId x 2"|AuthMp
+    CertV -.->|"$CERT/authId x 1 + CertDatum(authId, validity, _)"|MintFactTx
 
+    AuthWallet -->|"$AUTH/authId x N"|MintFactTx
+    AuthWallet -->|"$AUTH/authId x M"|MintFactTx
+    MintFactTx -->|"$AUTH/authId x 2"|AuthMp
+    MintFactTx -->|"$AUTH/authId x (N-1)"|AuthWallet
+    MintFactTx -->|"$AUTH/authId x (M-1)"|AuthWallet
+    
     FsMp -->|"$FS/fsId1 x 1"|MintFactTx
     FsMp -->|"$FS/fsId2 x 1"|MintFactTx
     MintFactTx -->|"$FS/fsId1 x 1 + fsA"|FsV
@@ -155,7 +161,9 @@ graph TD
 `fsA` and `fsB` transaction parameters are isomorphic to `FsDatum` in that they contain a `Fact Statement`, along with its unique `Fact Statement ID` as provided by the Oracle's `Fact Statement Store`, the validity information and the [Submitter](#submitter) public key hash.
 The `fsId1` and `fsId2` are computed by hashing corresponding [$AUTH](#auth-token) inputs used to authenticate each produced `Fact Statement` (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)).
 
-### <a name="gc-certificate-tx">Garbage collect obsolete certificate - gc-certificate-tx</a>
+Each [$AUTH](#auth-token) used must be valid, and the validity is asserted by checking the referenced [@CertV](#cert-validator) UTxO.
+
+### <a id="gc-certificate-tx">Garbage collect obsolete certificate - gc-certificate-tx</a>
 
 **Scripts invoked:**
 
@@ -190,7 +198,7 @@ graph TD
 
 [$CERT-RDMR](#cert-rdmr-token) tokens are sent back to the [Certificate redeemer](#certificate-redeemer) and all obsolete [$CERT](#cert-token) tokens are burned.
 
-### <a name="gc-fact-statement-tx">Garbage collect obsolete fact statement - gc-fact-statement-tx</a>
+### <a id="gc-fact-statement-tx">Garbage collect obsolete fact statement - gc-fact-statement-tx</a>
 
 **Scripts invoked:**
 
@@ -222,7 +230,7 @@ graph TD
     GcFsTx -->|"$ADA x minUtxo x 2"|SubmitterWallet
 ```
 
-### <a name="ref-fact-statement-tx">Reference fact statement - ref-fact-statement-tx</a>
+### <a id="ref-fact-statement-tx">Reference fact statement - ref-fact-statement-tx</a>
 
 **Scripts invoked:**
 
@@ -253,19 +261,19 @@ graph TD
 
 > The [Consumer script](#consumer-script) must check that the referenced [@FsV](#fs-validator) validator inputs containing `Fact Statements` have the expected [$FS](#fs-token) `CurrencySymbol`.
 
-## <a name="tokens">Tokens</a>
+## <a id="tokens">Tokens</a>
 
-### <a name="aa-token">Authentication Authority token - $AA</a>
+### <a id="aa-token">Authentication Authority token - $AA</a>
 
 - Policy - [$AA-policy](#aa-policy)
 - Token Name - is set to a hash of the consumed output denoted by `oref` (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)),
-- Quantity - the total [$AA](#aa-token) tokens minted at [Protocol genesis](#protocol-genesis) (see [Total Authorization Authority tokens](#total-aa-tokens) protocol parameter),
+- Quantity - the total [$AA](#aa-token) tokens minted at [Protocol genesis](#protocol-genesis) (see [Total Authentication Authority tokens](#total-aa-tokens) protocol parameter),
 - Provenance - must be held by [Authentication Authority](#authentication-authority) wallets and kept safe in an isolated environment
   - Minted with [mint-aa-tx](#mint-aa-tx) transaction,
   - Burned never,
   - Used in [mint-authentication-tx](#mint-authentication-tx) transactions.
 
-### <a name="cert-token">Certificate token - $CERT</a>
+### <a id="cert-token">Certificate token - $CERT</a>
 
 - Policy - [$CERT-policy](#cert-policy)
 - Token Name - is set to a hash of the consumed [$AA](#aa-token) inputs (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)),
@@ -275,14 +283,14 @@ graph TD
   - Burned with [gc-certificate-tx](#gc-certificate-tx) transaction,
   - Used to authenticate [@CertV](#cert-validator) validator reference inputs in [mint-fact-statement-tx](#mint-fact-statement-tx) transaction.
 
-### <a name="cert-rdmr-token">Certificate redeemer token - $CERT-RDMR</a>
+### <a id="cert-rdmr-token">Certificate redeemer token - $CERT-RDMR</a>
 
 Self managed token, the Protocol Design doesn't enforce how these tokens are obtained.
 For convenience, the implementation enables Protocol Operators to mint 'One Shot' tokens to be used as `$CERT-RMDR` tokens.
 
 These tokens are used in [gc-certificate-tx](#gc-certificate-tx) transactions to authenticate garbage collection of obsolete certificates.
 
-### <a name="auth-token">Authentication token - $AUTH</a>
+### <a id="auth-token">Authentication token - $AUTH</a>
 
 - Policy - [$AUTH-policy](#auth-policy)
 - Token Name - is set to a hash of the consumed [$AA](#aa-token) inputs (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)),
@@ -291,7 +299,7 @@ These tokens are used in [gc-certificate-tx](#gc-certificate-tx) transactions to
   - Minted with [mint-authentication-tx](#mint-authentication-tx) transaction,
   - Burned with [mint-fact-statement-tx](#mint-fact-statement-tx) transaction.
 
-### <a name="fs-token">Fact statement token - $FS</a>
+### <a id="fs-token">Fact statement token - $FS</a>
 
 - Policy - [$FS-policy](#fs-policy)
 - Token Name - is set to a hash of the consumed [$AUTH](#auth-token) input used to authenticate a `Fact Statement` (see [Hashing inputs for uniqueness](#hashing-for-uniqueness)),
@@ -303,15 +311,15 @@ These tokens are used in [gc-certificate-tx](#gc-certificate-tx) transactions to
 
 > This token is used by COOP Consumers to authenticate the Fact Statement reference inputs.
 
-### <a name="fee-token">Fee token - $FEE</a>
+### <a id="fee-token">Fee token - $FEE</a>
 
 Any token the `Protocol Operator` wishes to use as a 'fee', which includes but is not exclusive to `$ADA`.
 
 These tokens are spent from [Submitter](#submitter) wallets and paid to the [Fee Collector](#fee-collector) in [mint-fact-statement-tx](#mint-fact-statement-tx) transactions.
 
-## <a name="scripts">Scripts</a>
+## <a id="scripts">Scripts</a>
 
-### <a name="aa-policy">$AA-policy</a>
+### <a id="aa-policy">$AA-policy</a>
 
 [$AA](#aa-token) minting policy script.
 
@@ -327,7 +335,7 @@ Participates in transactions:
 
 Script is invoked only once at [Protocol genesis](#protocol-genesis).
 
-### <a name="cert-policy">$CERT-policy</a>
+### <a id="cert-policy">$CERT-policy</a>
 
 [$CERT](#cert-token) minting policy script.
 
@@ -340,7 +348,7 @@ Participates in transactions:
 
 Script is invoked throughout the Protocol lifetime.
 
-### <a name="auth-policy">$AUTH-policy</a>
+### <a id="auth-policy">$AUTH-policy</a>
 
 [$AUTH](#auth-token) minting policy script.
 
@@ -353,7 +361,7 @@ Participates in transactions:
 
 Scripts is invoked throughout the Protocol lifetime.
 
-### <a name="fs-policy">$FS-policy</a>
+### <a id="fs-policy">$FS-policy</a>
 
 [$FS](#fs-token) minting policy script.
 
@@ -366,7 +374,7 @@ Participates in transactions:
 
 Script is invoked throughout the Protocol lifetime.
 
-### <a name="cert-validator">@CertV</a>
+### <a id="cert-validator">@CertV</a>
 
 Script is defined in `Coop.Plutus.certV` and is instantiated at [Protocol genesis](#protocol-genesis).
 
@@ -383,7 +391,7 @@ Participates in transactions:
 
 Script is invoked throughout the Protocol lifetime.
 
-### <a name="fs-validator">@FsV</a>
+### <a id="fs-validator">@FsV</a>
 
 Script is defined in `Coop.Plutus.fsV` and is instantiated at [Protocol genesis](#protocol-genesis).
 
@@ -400,24 +408,24 @@ Participates in transactions:
 
 Script is invoked throughout the Protocol lifetime.
 
-### <a name="consumer-script">Consumer script</a>
+### <a id="consumer-script">Consumer script</a>
 
 Any script that references COOP `Fact Statement UTxOs`.
 
-## <a name="wallets">Wallets</a>
+## <a id="wallets">Wallets</a>
 
-### <a name="god">God</a>
+### <a id="god">God</a>
 
 A wallet used to initialize the protocol (ie. [Protocol genesis](#protocol-genesis)). Can be discarded after use.
 
-### <a name="authentication-authority">Authentication Authority</a>
+### <a id="authentication-authority">Authentication Authority</a>
 
 [Authentication Authority](#authentication-authority) wallets holding [$AA](#aa-token) tokens used to authenticate [minting ephemeral authentication tokens](#mint-authentication-tx).
 Note that there can be any number of such wallets and it's left to the `Protocol Operator` to manage their distribution.
 
 > Must be held in a safe environment as compromising $AA wallets can undermine the entire protocol.
 
-### <a name="authenticator">Authenticator</a>
+### <a id="authenticator">Authenticator</a>
 
 [Authenticator](#authenticator) wallets hold the [$AUTH](#auth-token) ephemeral tokens that are attached to each [Fact Statement minting](#mint-fact-statement-tx)
 transaction to denote 'authentication' by the `Publisher`.
@@ -426,26 +434,26 @@ transaction to denote 'authentication' by the `Publisher`.
 
 > Protocol Operators manage how many [$AUTH](#auth-token) tokens are minted, how long they are valid and which Authenticator wallets will receive them.
 
-### <a name="submitter">Submitter</a>
+### <a id="submitter">Submitter</a>
 
 [Submitter](#submitter) is a wallet used by the user that submits the [Fact Statement minting transactions](#mint-fact-statement-tx) transaction obtained in the `Fact Statement Publishing` protocol.
 
 The wallet needs to provide enough [$FEE](#fee-token) tokens as indicated in the `Fact Statement Publishing` protocol.
 
-### <a name="certificate-redeemer">Certificate redeemer</a>
+### <a id="certificate-redeemer">Certificate redeemer</a>
 
 [Certificate redeemer](#certificate-redeemer) wallets hold the [$CERT-RDMR](#cert-rdmr-token) tokens and are managed by the `Protocol Operator` similar to how [Authenticator](#authenticator) wallets are managed.
 In fact, both wallets can be consolidated in a single wallet for convenience.
 
 Certificate redeemer wallets are in charge of [garbage collecting obsolete certificates](#gc-certificate-tx) by providing the corresponding [$CERT-RDMR](#cert-rdmr-token) tokens as indicated in the `CertDatum`.
 
-### <a name="fee-collector">Fee collector</a>
+### <a id="fee-collector">Fee collector</a>
 
 `Fee collector` is any wallet or validator the `Protocol Operator` decides to use to collect [$FEE](#fee-token) tokens in [Fact Statement minting transactions](#mint-fact-statement-tx).
 
 ## Appendix
 
-### <a name="transaction-diagram-notation">Transaction diagram notation</a>
+### <a id="transaction-diagram-notation">Transaction diagram notation</a>
 
 Transaction diagrams are specified using the [Mermaid Sequence Diagrams](https://mermaid-js.github.io/mermaid/#/sequenceDiagram).
 
@@ -508,7 +516,7 @@ Examples:
 - `mint-sometokens-tx quantity tokenName`
 - `always-validates-tx`
 
-### <a name="hashing-for-uniqueness">Hashing inputs for uniqueness</a>
+### <a id="hashing-for-uniqueness">Hashing inputs for uniqueness</a>
 
 Here we specify the procedure used by `COOP` to create unique identifiers on-chain.
 Once created these are used as `TokenName` and various identifiers.
