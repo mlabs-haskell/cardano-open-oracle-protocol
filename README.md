@@ -694,3 +694,8 @@ This is where [Certificate redeemer wallets](coop-docs/02-plutus-protocol.md#cer
 ```
 
 And we've made the full circle :)
+
+#### 10. Referencing published Fact Statement in Consumer dApps
+
+The COOP Publisher must announce the deployment file created after [COOP Plutus protocol genesis](coop-docs/02-plutus-protocol.md#protocol-genesis).
+This file contains the [Fact Statement minting policy](coop-docs/02-plutus-protocol.md#fs-policy) script which is the `Currency Symbol` the consuming dApps use to assert the authenticity and provenance of the referenced [Fact Statement UTxOs](coop-docs/02-plutus-protocol.md#fs-validator).

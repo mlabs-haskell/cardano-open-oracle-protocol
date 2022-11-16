@@ -57,15 +57,6 @@ In a later iteration of this design, we may explore a potential mechanism to **r
 - 2.2 Publishers can dynamically manage security parameters
   - By using a novel authentication scheme COOP Publishers are able to 'authorize' Fact Statement minting using ephemeral authentication tokens
   
-
-### Collecting min UTxO ADAs
-
-Unspent transaction outputs (ie. UTxOs) created by COOP transactions can be 'eventually' spent and collected by involved parties.
-This supports financial sustainability by allowing participants to recover [Min UTxO Ada](https://docs.cardano.org/native-tokens/minimum-ada-value-requirement) paid when creating UTxOs.
-
-Note that all fact Statements published remain available on the blockchain ledger, even after Fact Statement UTxOs are spent.
-However, once spent, a Fact Statement UTxOs can't be referenced on-chain by Consumer dApps.
-
 ### Cardano features enabling Oracles
 
 Cardano's [Vasil hardfork combinator (HFC) event](https://iohk.io/en/blog/posts/2022/07/04/cardano-s-approaching-vasil-upgrade-what-to-expect/), expected on mainnet in August 2022, will introduce:
@@ -79,6 +70,14 @@ Reference inputs are fundamentally important in the context of Oracles, which ar
 Reference inputs may limit our design flexibility with respect to sharing publication costs/deposits equitably across stakeholders—once information is published on-chain, and as long as it remains available on-chain, no restrictions or conditions may be placed on anyone's ability to reference it in their transactions. This means that information from reference-input-based Oracles is free to use after its first use. However, a sustainable business model for such Oracles may still possible, as shown in the design below. Furthermore, freedom of information on the blockchain may itself be valuable according to the values of the decentralization movement.
 
 Inline datums and reference scripts are tools that may be useful in pursuit of financial sustainability for the Oracle protocol by reducing transaction costs and infrastructure requirements. They are not essential to the Oracle design, but should prove valuable in practice.
+
+### Collecting min UTxO ADAs
+
+Unspent transaction outputs (ie. UTxOs) created by COOP transactions can be 'eventually' spent and collected by involved parties.
+This supports financial sustainability by allowing participants to recover [Min UTxO Ada](https://docs.cardano.org/native-tokens/minimum-ada-value-requirement) paid when creating UTxOs.
+
+Note that all fact Statements published remain available on the blockchain ledger, even after Fact Statement UTxOs are spent.
+However, once spent, a Fact Statement UTxOs can't be referenced on-chain by Consumer dApps.
 
 ### Fee Escrow
 
