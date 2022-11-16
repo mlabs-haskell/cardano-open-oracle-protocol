@@ -6,7 +6,8 @@
     # TODO: Set to a stable release
     bot-plutus-interface.url = "github:mlabs-haskell/bot-plutus-interface/sam/add-vasil-features";
 
-    plutip.url = "github:mlabs-haskell/plutip/bladyjoker/upgrade-to-sam-vasil"; # https://github.com/mlabs-haskell/plutip/releases/tag/vasil-compliant-v1.0.0
+    # TODO: Set to a stable release
+    plutip.url = "github:mlabs-haskell/plutip/bladyjoker/upgrade-to-sam-vasil";
     plutip.inputs.bot-plutus-interface.follows = "bot-plutus-interface";
     plutip.inputs.haskell-nix.follows = "bot-plutus-interface/haskell-nix";
     plutip.inputs.iohk-nix.follows = "bot-plutus-interface/iohk-nix";
