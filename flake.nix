@@ -246,7 +246,7 @@
           dev-hs-types = coopHsTypesFlake.devShell;
           dev-extras-plutus-json = coopExtrasPlutusJsonFlake.devShell;
           dev-extras-json-store = coopExtrasJsonFactStatementStoreFlake.devShell;
-          dev-tutorial = coopEnvShell;
+          coop-env = coopEnvShell;
           dev-cardano-proto-extras = cardanoProtoExtrasFlake.devShell;
           default = dev-proto;
         };
