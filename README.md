@@ -141,8 +141,8 @@ provides detailed explanation on the purpose of commands and their options:
 [coop-env ~ coop-tutorial] $ json-fs-store-cli --help
 ```
 
-Since we're going to be running some services, it's useful to know ports are
-used by which processes, for example:
+Since we're going to be running some services, it's useful to know which ports
+are used by which processes, for example:
 
 ```sh
 [coop-env ~ coop-tutorial] $ netstat -ntuap | grep LISTEN | grep -E "local-cluster|cardano-node|json-fs-store|coop-pab-cli|coop-publishe"
