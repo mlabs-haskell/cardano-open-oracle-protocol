@@ -3,10 +3,8 @@
 
   inputs = {
     # Plutip maintains a compatible Plutus/Cardano derivation set
-    # TODO: Set to a stable release
-    bot-plutus-interface.url = "github:mlabs-haskell/bot-plutus-interface/sam/add-vasil-features";
+    bot-plutus-interface.url = "github:mlabs-haskell/bot-plutus-interface";
 
-    # TODO: Set to a stable release
     plutip.url = "github:mlabs-haskell/plutip/bladyjoker/upgrade-to-sam-vasil";
     plutip.inputs.bot-plutus-interface.follows = "bot-plutus-interface";
     plutip.inputs.haskell-nix.follows = "bot-plutus-interface/haskell-nix";
@@ -115,6 +113,7 @@
           compiler-nix-name = "ghc8107";
         };
         coopPublisherFlake = coopPublisherProj.flake { };
+        coopPublisherCli = coopPublisherFlake.packages."coop-publisher:exe:coop-publisher-cli";
 
         # Docs
         coopDocsDevShell = import ./coop-docs/build.nix {
@@ -205,6 +204,7 @@
           compiler-nix-name = "ghc8107";
         };
         coopExtrasJsonFactStatementStoreFlake = coopExtrasJsonFactStatementStore.flake { };
+        jsFsStoreCli = coopExtrasJsonFactStatementStoreFlake.packages."json-fact-statement-store:exe:json-fs-store-cli";
 
         cardanoProtoExtras = import ./coop-proto/cardano-proto-extras/build.nix {
           inherit pkgs plutip;
@@ -218,9 +218,7 @@
         coopEnvShell = import ./coop-extras/coop-env/build.nix {
           inherit pkgs;
           plutipLocalCluster = plutip.packages.${system}."plutip:exe:local-cluster";
-          jsFsStoreCli = coopExtrasJsonFactStatementStoreFlake.packages."json-fact-statement-store:exe:json-fs-store-cli";
-          inherit coopPabCli coopPlutusCli;
-          coopPublisherCli = coopPublisherFlake.packages."coop-publisher:exe:coop-publisher-cli";
+          inherit coopPabCli coopPlutusCli jsFsStoreCli coopPublisherCli;
           cardanoNode = coopPabProj.hsPkgs.cardano-node.components.exes.cardano-node;
           cardanoCli = coopPabProj.hsPkgs.cardano-cli.components.exes.cardano-cli;
         };
@@ -231,9 +229,16 @@
         # Useful for nix repl
         inherit pkgs pkgsWithOverlay pkgsForPlutarch;
 
+        # Instruction for the Hercules CI to build on x86_64-linux only, to avoid errors about systems without agents.
+        herculesCI.ciSystems = [ "x86_64-linux" ];
+
         # Standard flake attributes
         packages = coopPlutusFlake.packages // coopPublisherFlake.packages // coopPabFlake.packages // coopHsTypesFlake.packages // {
+          "coop-plutus-cli" = coopPlutusCli;
           "coop-pab-cli" = coopPabCli;
+          "coop-publisher-cli" = coopPublisherCli;
+          "js-fs-store-cli" = jsFsStoreCli;
+          "default" = coopPabCli;
         };
 
         devShells = rec {
@@ -248,9 +253,10 @@
           dev-extras-json-store = coopExtrasJsonFactStatementStoreFlake.devShell;
           coop-env = coopEnvShell;
           dev-cardano-proto-extras = cardanoProtoExtrasFlake.devShell;
-          default = dev-proto;
+          default = pre-commit-devShell;
         };
 
+        # nix flake check --impure --keep-going --allow-import-from-derivation
         checks = renameAttrs (n: "check-${n}")
           (coopPlutusFlake.checks //
             coopPublisherFlake.checks //

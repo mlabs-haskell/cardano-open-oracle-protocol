@@ -1,23 +1,23 @@
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
-**Table of Contents**
+# Table of Contents
 
 - [Cardano open oracle protocol](#cardano-open-oracle-protocol)
-    - [Introduction](#introduction)
-    - [Documentation](#documentation)
-    - [Getting Started](#getting-started)
-        - [Installing Nix](#installing-nix)
-        - [Building and developing](#building-and-developing)
-        - [Tutorial](#tutorial)
-            - [1. Preparing the environment](#1-preparing-the-environment)
-            - [2. Running a local Cardano network](#2-running-a-local-cardano-network)
-            - [3. Initializing the Protocol](#3-initializing-the-protocol)
-            - [4. Running a TxBuilder gRPC service](#4-running-a-txbuilder-grpc-service)
-            - [5. Running a FactStatementStore gRPC service](#5-running-a-factstatementstore-grpc-service)
-            - [6. Running a Publisher gRPC service](#6-running-a-publisher-grpc-service)
-            - [7. Publishing a Fact Statement](#7-publishing-a-fact-statement)
-            - [8. Garbage collecting obsolete Fact Statement UTxOs](#8-garbage-collecting-obsolete-fact-statement-utxos)
-            - [9. Garbage collecting obsolete Certificate UTxOs](#9-garbage-collecting-obsolete-certificate-utxos)
-            - [10. Referencing published Fact Statement in Consumer dApps](#10-referencing-published-fact-statement-in-consumer-dapps)
+  - [Introduction](#introduction)
+  - [Documentation](#documentation)
+  - [Getting Started](#getting-started)
+    - [Installing Nix](#installing-nix)
+    - [Building and developing](#building-and-developing)
+    - [Tutorial](#tutorial)
+      - [1. Preparing the environment](#1-preparing-the-environment)
+      - [2. Running a local Cardano network](#2-running-a-local-cardano-network)
+      - [3. Initializing the Protocol](#3-initializing-the-protocol)
+      - [4. Running a TxBuilder gRPC service](#4-running-a-txbuilder-grpc-service)
+      - [5. Running a FactStatementStore gRPC service](#5-running-a-factstatementstore-grpc-service)
+      - [6. Running a Publisher gRPC service](#6-running-a-publisher-grpc-service)
+      - [7. Publishing a Fact Statement](#7-publishing-a-fact-statement)
+      - [8. Garbage collecting obsolete Fact Statement UTxOs](#8-garbage-collecting-obsolete-fact-statement-utxos)
+      - [9. Garbage collecting obsolete Certificate UTxOs](#9-garbage-collecting-obsolete-certificate-utxos)
+      - [10. Referencing published Fact Statement in Consumer dApps](#10-referencing-published-fact-statement-in-consumer-dapps)
 
 <!-- markdown-toc end -->
 
@@ -63,7 +63,7 @@ distribution.
 To install run the following command:
 
 ```sh
-$ sh <(curl -L https://nixos.org/nix/install) --daemon
+sh <(curl -L https://nixos.org/nix/install) --daemon
 ```
 
 and follow the instructions.
@@ -88,7 +88,7 @@ Optionally, to improve build speed, it is possible to set up a binary caches
 maintained by IOHK and Plutonomicon by setting additional configuration entries:
 
 ```yaml
-substituters = https://cache.nixos.org https://hydra.iohk.io https://iohk.cachix.org https://cache.iog.io https://public-plutonomicon.cachix.org
+substituters = https://cache.nixos.org https://iohk.cachix.org https://cache.iog.io https://public-plutonomicon.cachix.org
 trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= iohk.cachix.org-1:DpRUyj7h7V830dp/i6Nti+NEO2/nhblbov/8MW7Rqoo= public-plutonomicon.cachix.org-1:3AKJMhCLn32gri1drGuaZmFrmnue+KkKrhhubQk/CWc=
 ```
 
@@ -357,6 +357,7 @@ Before we proceed, let's check in on the state of our Protocol now that we actua
 [coop-env ~ coop-tutorial] $ coop-get-state
 getState: Success
 ```
+
 ```json
 {
    "cs'certificates" : [
