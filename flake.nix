@@ -229,9 +229,6 @@
         # Useful for nix repl
         inherit pkgs pkgsWithOverlay pkgsForPlutarch;
 
-        # Instruction for the Hercules CI to build on x86_64-linux only, to avoid errors about systems without agents.
-        herculesCI.ciSystems = [ "x86_64-linux" ];
-
         # Standard flake attributes
         packages = coopPlutusFlake.packages // coopPublisherFlake.packages // coopPabFlake.packages // coopHsTypesFlake.packages // {
           "coop-plutus-cli" = coopPlutusCli;
@@ -259,13 +256,17 @@
         # nix flake check --impure --keep-going --allow-import-from-derivation
         checks = renameAttrs (n: "check-${n}")
           (coopPlutusFlake.checks //
-            coopPublisherFlake.checks //
-            coopPabFlake.checks //
-            coopHsTypesFlake.checks //
-            coopExtrasPlutusJsonFlake.checks //
-            coopExtrasJsonFactStatementStoreFlake.checks //
-            cardanoProtoExtrasFlake.checks
+          coopPublisherFlake.checks //
+          coopPabFlake.checks //
+          coopHsTypesFlake.checks //
+          coopExtrasPlutusJsonFlake.checks //
+          coopExtrasJsonFactStatementStoreFlake.checks //
+          cardanoProtoExtrasFlake.checks
           ) //
         { inherit pre-commit-check; } // devShells // packages;
-      });
+      })
+    // {
+      # Instruction for the Hercules CI to build on x86_64-linux only, to avoid errors about systems without agents.
+      herculesCI.ciSystems = [ "x86_64-linux" ];
+    };
 }
