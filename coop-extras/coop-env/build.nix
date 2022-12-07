@@ -30,6 +30,7 @@ pkgs.mkShell {
     ln -s ${../../coop-proto} coop-proto
     ln -s ${../../coop-pab/resources} resources
     . ${./aux.bash}
+    on-load
     echo "WARNING: Running COOP services requires having $ export LC_CTYPE=C.UTF-8 LC_ALL=C.UTF-8 LANG=C.UTF-8"
     export LC_CTYPE=C.UTF-8
     export LC_ALL=C.UTF-8

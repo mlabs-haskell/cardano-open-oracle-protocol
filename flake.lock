@@ -86,16 +86,15 @@
         "typed-protocols": "typed-protocols"
       },
       "locked": {
-        "lastModified": 1668452468,
-        "narHash": "sha256-gm9PNc4pybphqzTEoDsJPnH1NCz8OozLsjlveHuSMU4=",
+        "lastModified": 1670401679,
+        "narHash": "sha256-flZn3w+goLro4rPHVQRIsp6Q9y7x2hpc6W9ecE1a/f8=",
         "owner": "mlabs-haskell",
         "repo": "bot-plutus-interface",
-        "rev": "8c88442de0cb92af1741b8fc426e721e843fe89b",
+        "rev": "46ebe855f8d88f5343597f22653fbcd5624c1f21",
         "type": "github"
       },
       "original": {
         "owner": "mlabs-haskell",
-        "ref": "sam/add-vasil-features",
         "repo": "bot-plutus-interface",
         "type": "github"
       }
@@ -1092,17 +1091,17 @@
     "hw-aeson": {
       "flake": false,
       "locked": {
-        "lastModified": 1660113261,
-        "narHash": "sha256-v0SyVxeVBTtW1tuej4P+Kf4roO/rr2tBI7RthTlInbc=",
+        "lastModified": 1660218478,
+        "narHash": "sha256-t4QLmGf5ytzjS0ynn6xON61J+fvBF8vf/+zsBzmw/rM=",
         "owner": "haskell-works",
         "repo": "hw-aeson",
-        "rev": "b5ef03a7d7443fcd6217ed88c335f0c411a05408",
+        "rev": "ba7c1e41c6e54d6bf9fd1cd013489ac713fc3153",
         "type": "github"
       },
       "original": {
         "owner": "haskell-works",
         "repo": "hw-aeson",
-        "rev": "b5ef03a7d7443fcd6217ed88c335f0c411a05408",
+        "rev": "ba7c1e41c6e54d6bf9fd1cd013489ac713fc3153",
         "type": "github"
       }
     },
@@ -1795,16 +1794,15 @@
         ]
       },
       "locked": {
-        "lastModified": 1668513772,
-        "narHash": "sha256-2IGzDqDQvwd5y+zOZKEyAAGayfm7EP+UqqqkSUVLM/s=",
+        "lastModified": 1670405773,
+        "narHash": "sha256-RS5WurbGRkFGET2Cd0tXpEHUgVwgChATfsRMxTdOqmM=",
         "owner": "mlabs-haskell",
         "repo": "plutip",
-        "rev": "37d7b43aa31f4ca3dfaff8370e35fe7e1f5e0912",
+        "rev": "7f2d59abd911dd11310404863cdedb2886902ebf",
         "type": "github"
       },
       "original": {
         "owner": "mlabs-haskell",
-        "ref": "bladyjoker/upgrade-to-sam-vasil",
         "repo": "plutip",
         "type": "github"
       }

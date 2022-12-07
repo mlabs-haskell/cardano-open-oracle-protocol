@@ -60,8 +60,6 @@ function on-load {
     fi;
 }
 
-on-load
-
 # Export the variables used across
 function make-exports {
     export GOD_PKH=$(cat $CLUSTER_DIR/local-cluster-info.json | jq -r ".ciWallets[0][0]")
@@ -115,7 +113,7 @@ function coop-garbage-collect {
 
 function coop-get-state {
     coop-pab-cli get-state --any-wallet $GOD_PKH
-    cat $COOP_PAB_DIR/coop-state.json | json_pp
+    cat $COOP_PAB_DIR/coop-state.json | jq
 }
 
 function coop-poll-state {
