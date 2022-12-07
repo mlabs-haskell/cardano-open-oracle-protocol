@@ -5,7 +5,7 @@
     # Plutip maintains a compatible Plutus/Cardano derivation set
     bot-plutus-interface.url = "github:mlabs-haskell/bot-plutus-interface";
 
-    plutip.url = "github:mlabs-haskell/plutip/bladyjoker/upgrade-to-sam-vasil";
+    plutip.url = "github:mlabs-haskell/plutip";
     plutip.inputs.bot-plutus-interface.follows = "bot-plutus-interface";
     plutip.inputs.haskell-nix.follows = "bot-plutus-interface/haskell-nix";
     plutip.inputs.iohk-nix.follows = "bot-plutus-interface/iohk-nix";
@@ -14,11 +14,7 @@
     nixpkgs.follows = "plutip/nixpkgs";
     haskell-nix.follows = "plutip/haskell-nix";
 
-
-    flake-utils = {
-      url = "github:numtide/flake-utils";
-      inputs.nixpkgs.follows = "haskell-nix/nixpkgs";
-    };
+    flake-utils.url = "github:numtide/flake-utils";
 
     pre-commit-hooks.url = "github:cachix/pre-commit-hooks.nix";
 

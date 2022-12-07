@@ -86,11 +86,11 @@
         "typed-protocols": "typed-protocols"
       },
       "locked": {
-        "lastModified": 1669375834,
-        "narHash": "sha256-E3Xcl9ZHuS5ZToxWbPuC1pYIdjvtHocAzq6DscAHiwI=",
+        "lastModified": 1670401679,
+        "narHash": "sha256-flZn3w+goLro4rPHVQRIsp6Q9y7x2hpc6W9ecE1a/f8=",
         "owner": "mlabs-haskell",
         "repo": "bot-plutus-interface",
-        "rev": "a1f1d0ec7112b5ecde5ac31471c1a75b67b9dd9d",
+        "rev": "46ebe855f8d88f5343597f22653fbcd5624c1f21",
         "type": "github"
       },
       "original": {
@@ -1091,17 +1091,17 @@
     "hw-aeson": {
       "flake": false,
       "locked": {
-        "lastModified": 1660113261,
-        "narHash": "sha256-v0SyVxeVBTtW1tuej4P+Kf4roO/rr2tBI7RthTlInbc=",
+        "lastModified": 1660218478,
+        "narHash": "sha256-t4QLmGf5ytzjS0ynn6xON61J+fvBF8vf/+zsBzmw/rM=",
         "owner": "haskell-works",
         "repo": "hw-aeson",
-        "rev": "b5ef03a7d7443fcd6217ed88c335f0c411a05408",
+        "rev": "ba7c1e41c6e54d6bf9fd1cd013489ac713fc3153",
         "type": "github"
       },
       "original": {
         "owner": "haskell-works",
         "repo": "hw-aeson",
-        "rev": "b5ef03a7d7443fcd6217ed88c335f0c411a05408",
+        "rev": "ba7c1e41c6e54d6bf9fd1cd013489ac713fc3153",
         "type": "github"
       }
     },
@@ -1794,16 +1794,15 @@
         ]
       },
       "locked": {
-        "lastModified": 1670244632,
-        "narHash": "sha256-XSmNCuSgffyxRWwpP1en1dt4lcA7pbGfwL/t6kDgyAQ=",
+        "lastModified": 1670405773,
+        "narHash": "sha256-RS5WurbGRkFGET2Cd0tXpEHUgVwgChATfsRMxTdOqmM=",
         "owner": "mlabs-haskell",
         "repo": "plutip",
-        "rev": "9faa8fd38757af4917769d7a7fbf61e8408ae603",
+        "rev": "7f2d59abd911dd11310404863cdedb2886902ebf",
         "type": "github"
       },
       "original": {
         "owner": "mlabs-haskell",
-        "ref": "bladyjoker/upgrade-to-sam-vasil",
         "repo": "plutip",
         "type": "github"
       }

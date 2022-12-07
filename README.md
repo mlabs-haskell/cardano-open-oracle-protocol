@@ -103,13 +103,39 @@ Download the Git repository:
 git clone https://github.com/mlabs-haskell/cardano-open-oracle-protocol.git
 ```
 
-If you use [direnv](https://direnv.net/) the Nix development shells will be
-automatically loaded depending on which project part you're working on.
-Otherwise, each `.envrc` file in COOP sub-directories contain a proper Nix
-target you can use with the `nix develop` command.
+To facilitate seamlessly moving between directories and associated Nix
+development shells we use [direnv](https://direnv.net) and
+[nix-direnv](https://github.com/nix-community/nix-direnv):
 
-For example `nix develop #dev-pab` will build a Nix development shell that has
-everything needed for developing and compiling the `coop-pab` component.
+To install both using `nixpkgs`:
+
+```sh
+nix profile install nixpkgs#direnv
+nix profile install nixpkgs#nix-direnv
+```
+
+Your shell and editors should pick up on the `.envrc` files in different
+directories and prepare the environment accordingly. Use `direnv allow` to
+enable the direnv environment and `direnv reload` to reload it when necessary.
+Otherwise, each `.envrc` file in COOP sub-directories contain a proper Nix
+target you can use with the `nix develop` command. For example `nix develop #dev-pab` will build a Nix development shell that has everything needed for
+developing and compiling the `coop-pab` component.
+
+Additionally, throughout the repository one can use the [pre-commit](https://pre-commit.com/) tool:
+
+```sh
+$ pre-commit run --all
+cabal-fmt................................................................Passed
+fourmolu.................................................................Passed
+hlint....................................................................Passed
+markdownlint.............................................................Passed
+nix-linter...............................................................Passed
+nixpkgs-fmt..............................................................Passed
+shellcheck...............................................................Passed
+```
+
+to run all the code quality tooling specified in the [pre-commit-check config file](pre-commit-check.nix).
+These `pre-commit` checks need to pass for a `git commit` to be successful.
 
 ### Tutorial
 
