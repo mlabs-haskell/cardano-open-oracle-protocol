@@ -12,6 +12,9 @@ signingKeyFileDir:  ".wallets"
 -- Directory where the encoded transaction files will be saved
 txFileDir:          ".local-cluster/txs"
 
+-- | Directory name of metadata files
+metadataDir:         ".local-cluster/metadata"
+
 -- Dry run mode will build the tx, but skip the submit step
 dryRun:             false
 logLevel:           debug
