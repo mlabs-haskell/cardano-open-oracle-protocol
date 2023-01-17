@@ -181,14 +181,15 @@
         };
 
         # Extras
-        coopExtrasPlutusJson = import ./coop-extras/plutus-json/build.nix {
+        plutusJson = import ./coop-extras/plutus-json/build.nix {
           inherit plutarch;
           pkgs = pkgsForPlutarch;
           inherit (pkgsForPlutarch) haskell-nix;
           inherit (pre-commit-check) shellHook;
           compiler-nix-name = "ghc923";
         };
-        coopExtrasPlutusJsonFlake = coopExtrasPlutusJson.flake { };
+        plutusJsonFlake = plutusJson.flake { };
+        plutusJsonCli = plutusJsonFlake.packages."plutus-json:exe:plutus-json-cli";
 
         coopExtrasJsonFactStatementStore = import ./coop-extras/json-fact-statement-store/build.nix {
           inherit pkgs plutip http2-grpc-native;
@@ -214,7 +215,7 @@
         coopEnvShell = import ./coop-extras/coop-env/build.nix {
           inherit pkgs;
           plutipLocalCluster = plutip.packages.${system}."plutip:exe:local-cluster";
-          inherit coopPabCli coopPlutusCli jsFsStoreCli coopPublisherCli;
+          inherit coopPabCli coopPlutusCli jsFsStoreCli coopPublisherCli plutusJsonCli;
           cardanoNode = coopPabProj.hsPkgs.cardano-node.components.exes.cardano-node;
           cardanoCli = coopPabProj.hsPkgs.cardano-cli.components.exes.cardano-cli;
         };
@@ -223,14 +224,15 @@
       in
       rec {
         # Useful for nix repl
-        inherit pkgs pkgsWithOverlay pkgsForPlutarch;
+        inherit pkgs pkgsWithOverlay pkgsForPlutarch plutusJsonCli;
 
         # Standard flake attributes
-        packages = coopPlutusFlake.packages // coopPublisherFlake.packages // coopPabFlake.packages // coopHsTypesFlake.packages // {
+        packages = coopPlutusFlake.packages // coopPublisherFlake.packages // coopPabFlake.packages // coopHsTypesFlake.packages // plutusJsonFlake.packages // {
           "coop-plutus-cli" = coopPlutusCli;
           "coop-pab-cli" = coopPabCli;
           "coop-publisher-cli" = coopPublisherCli;
           "js-fs-store-cli" = jsFsStoreCli;
+          "plutus-json-cli" = plutusJsonCli;
           "default" = coopPabCli;
         };
 
@@ -242,7 +244,7 @@
           dev-docs = coopDocsDevShell;
           dev-pab = coopPabFlake.devShell;
           dev-hs-types = coopHsTypesFlake.devShell;
-          dev-extras-plutus-json = coopExtrasPlutusJsonFlake.devShell;
+          dev-extras-plutus-json = plutusJsonFlake.devShell;
           dev-extras-json-store = coopExtrasJsonFactStatementStoreFlake.devShell;
           coop-env = coopEnvShell;
           dev-cardano-proto-extras = cardanoProtoExtrasFlake.devShell;
@@ -255,7 +257,7 @@
           coopPublisherFlake.checks //
           coopPabFlake.checks //
           coopHsTypesFlake.checks //
-          coopExtrasPlutusJsonFlake.checks //
+          plutusJsonFlake.checks //
           coopExtrasJsonFactStatementStoreFlake.checks //
           cardanoProtoExtrasFlake.checks
           ) //

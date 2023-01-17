@@ -5,6 +5,7 @@
 , coopPlutusCli
 , coopPublisherCli
 , jsFsStoreCli
+, plutusJsonCli
 , plutipLocalCluster
 }:
 pkgs.mkShell {
@@ -24,6 +25,7 @@ pkgs.mkShell {
     coopPlutusCli
     coopPublisherCli
     jsFsStoreCli
+    plutusJsonCli
     plutipLocalCluster
   ];
   shellHook = ''

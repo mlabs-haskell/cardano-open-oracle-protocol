@@ -197,6 +197,7 @@ The environment should now have the following tools available:
 - [coop-plutus-cli](coop-plutus) for providing serialized Plutus programs (ie. on-chain scripts) that implement the [COOP Plutus Protocol](coop-docs/02-plutus-protocol.md),
 - [coop-publisher-cli](coop-publisher) for running a [COOP Publisher gRPC](coop-proto/publisher-service.proto) service that implements the [COOP Frontend protocol](coop-docs/03-frontend-protocol.md),
 - [json-fs-store-cli](coop-extras/json-fact-statement-store) for running a generic JSON-based implementation of the [COOP FactStatementStore gRPC](coop-proto/fact-statement-store-service.proto) service
+- [plutus-json-cli](coop-extras/plutus-json) utility tool for converting between JSON and PlutusData formats
 
 and some other convenience utilities including some Bash functions that conveniently wrap the invocation of above mentioned services and command line tools.
 
