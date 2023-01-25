@@ -9,15 +9,16 @@
     - [Building and developing](#building-and-developing)
     - [Tutorial](#tutorial)
       - [1. Preparing the environment](#1-preparing-the-environment)
-      - [2. Running a local Cardano network](#2-running-a-local-cardano-network)
-      - [3. Initializing the Protocol](#3-initializing-the-protocol)
-      - [4. Running a TxBuilder gRPC service](#4-running-a-txbuilder-grpc-service)
-      - [5. Running a FactStatementStore gRPC service](#5-running-a-factstatementstore-grpc-service)
-      - [6. Running a Publisher gRPC service](#6-running-a-publisher-grpc-service)
-      - [7. Publishing a Fact Statement](#7-publishing-a-fact-statement)
-      - [8. Garbage collecting obsolete Fact Statement UTxOs](#8-garbage-collecting-obsolete-fact-statement-utxos)
-      - [9. Garbage collecting obsolete Certificate UTxOs](#9-garbage-collecting-obsolete-certificate-utxos)
-      - [10. Referencing published Fact Statement in Consumer dApps](#10-referencing-published-fact-statement-in-consumer-dapps)
+      - [2. Environment variables and directories](#2-environment-variables-and-directories)
+      - [3. Running a local Cardano network](#3-running-a-local-cardano-network)
+      - [4. Initializing the Protocol](#4-initializing-the-protocol)
+      - [5. Running a TxBuilder gRPC service](#5-running-a-txbuilder-grpc-service)
+      - [6. Running a FactStatementStore gRPC service](#6-running-a-factstatementstore-grpc-service)
+      - [7. Running a Publisher gRPC service](#7-running-a-publisher-grpc-service)
+      - [8. Publishing a Fact Statement](#8-publishing-a-fact-statement)
+      - [9. Garbage collecting obsolete Fact Statement UTxOs](#9-garbage-collecting-obsolete-fact-statement-utxos)
+      - [10. Garbage collecting obsolete Certificate UTxOs](#10-garbage-collecting-obsolete-certificate-utxos)
+      - [11. Referencing published Fact Statement in Consumer dApps](#11-referencing-published-fact-statement-in-consumer-dapps)
 
 <!-- markdown-toc end -->
 
@@ -171,19 +172,51 @@ Since we're going to be running some services, it's useful to know which ports
 are used by which processes, for example:
 
 ```sh
-[coop-env ~ coop-tutorial] $ netstat -ntuap | grep LISTEN | grep -E "local-cluster|cardano-node|json-fs-store|coop-pab-cli|coop-publishe"
+[coop-env ~ coop-tutorial] $ netstat -ntuap | grep LISTEN | grep -E "local-cluster|cardano-node|json-*|coop-*"
 ```
+
+As we run the different commands in the tutorial Nix will continue to show the
+working folder as:
+
+```sh
+[coop-env ~ coop-tutorial] $ 
+```
+
+We can orient ourselves by looking for that prompt. If you find yourself in
+another directory simply navigate back to `coop-tutorial` from the root of this
+repository.
 
 #### 1. Preparing the environment
 
-A Nix environment is provided with all the tools necessary to run, operate and use COOP.
+A Nix environment is provided with all the tools necessary to run, operate and
+use COOP.
 
 Prepare the directories and open a provided Nix environment:
 
 ```sh
-$ mkdir coop-tutorial
-$ cd coop-tutorial
-$ nix develop github:mlabs-haskell/cardano-open-oracle-protocol#coop-env
+mkdir coop-tutorial
+cd coop-tutorial
+nix develop github:mlabs-haskell/cardano-open-oracle-protocol#coop-env
+```
+
+> NOTE:
+> If you have downloaded this repository, and have created a tutorial directory
+> outside of it, you can use a relative path to initialize the nix environment.
+>
+> Take for example, a tutorial folder sitting at the same level:
+>
+> ```sh
+> mlabs/
+> ├── coop-open-oracle-protocol
+> └── coop-tutorial
+> ```
+>
+> From within `coop-tutorial/` you can initialize nix as follows:
+> `nix develop ../cardano-open-oracle-protocol#coop-env`.
+
+You should be given the following prompt:
+
+```sh
 [coop-env ~ coop-tutorial] $
 ```
 
@@ -199,20 +232,49 @@ The environment should now have the following tools available:
 - [json-fs-store-cli](coop-extras/json-fact-statement-store) for running a generic JSON-based implementation of the [COOP FactStatementStore gRPC](coop-proto/fact-statement-store-service.proto) service
 - [plutus-json-cli](coop-extras/plutus-json) utility tool for converting between JSON and PlutusData formats
 
-and some other convenience utilities including some Bash functions that conveniently wrap the invocation of above mentioned services and command line tools.
+and some other convenience utilities including some Bash functions that wrap the invocation of above mentioned services and command line tools.
 
-#### 2. Running a local Cardano network
+#### 2. Environment variables and directories
+
+Throughout the tutorial, various environment variables will need to be set, and
+various directories will be created. The creation of environment variables and
+directories are shown in their respective contexts in the steps below. They are
+listed for convenience below.
+
+```env
+CLUSTER_DIR=".local-cluster"
+WALLETS=".wallets"
+COOP_PAB_DIR=".coop-pab-cli"
+JS_STORE_DIR=".json-fs-store"
+COOP_PUBLISHER_DIR=".coop-publisher-cli"
+```
+
+```sh
+mkdir $WALLETS
+mkdir $COOP_PAB_DIR
+mkdir $JS_STORE_DIR
+mkdir $COOP_PUBLISHER_DIR
+mkdir $CLUSTER_DIR $CLUSTER_DIR/scripts $CLUSTER_DIR/txs
+
+```
+
+#### 3. Running a local Cardano network
 
 Let's first start by preparing and running a local Cardano network using the `local-cluster` utility tool:
 
 ```sh
-[coop-env ~ coop-tutorial] $ export CLUSTER_DIR=.local-cluster WALLETS=.wallets
-[coop-env ~ coop-tutorial] $ mkdir $CLUSTER_DIR $CLUSTER_DIR/scripts $CLUSTER_DIR/txs $WALLETS
-[coop-env ~ coop-tutorial] $ local-cluster --dump-info-json $CLUSTER_DIR/local-cluster-info.json \
-                --wallet-dir $WALLETS --num-wallets 10 --utxos 5 \
-                --chain-index-port 9084 \
-                --slot-len 1s --epoch-size 100000
-...
+export CLUSTER_DIR=.local-cluster WALLETS=.wallets
+mkdir $CLUSTER_DIR $CLUSTER_DIR/scripts $CLUSTER_DIR/txs $WALLETS
+local-cluster --dump-info-json $CLUSTER_DIR/local-cluster-info.json \
+ --wallet-dir $WALLETS --num-wallets 10 --utxos 5 \
+ --chain-index-port 9084 \
+ --slot-len 1s --epoch-size 100000
+```
+
+You should see the cluster running with instructions on how to stop it if
+necessary:
+
+```sh
 Cluster is running. Ctrl-C to stop.
 ```
 
@@ -223,9 +285,14 @@ Let's leave the `local-cluster` process running in the foreground of the current
 The `local-cluster` created some wallets, let's assign them to environment variables that will be referenced throughout this tutorial:
 
 ```sh
-[coop-env ~ coop-tutorial] $ make-exports
-[coop-env ~ coop-tutorial] $ show-env | grep PKH
+make-exports
 show-env | grep PKH
+```
+
+This will output confirmation of the variables and the stored public key hashes
+(PKH) of the wallets.
+
+```sh
 declare -x AA_PKH="319a165e8cb4c2c3eb898334ac3579eed75bcbb9a274f9ff259e74e3"
 declare -x AUTH_PKH="46103a3b0671460efa35aee0f97c27d0a6b97bf59271663db7cd3d04"
 declare -x CERT_RDMR_PKH="07c0bed25705dbaeb17ff53553035ddace3fa7a12ca75315ece8583b"
@@ -237,21 +304,25 @@ declare -x SUBMITTER_PKH="b7e59f40866e6ec88635343b9cc285043d344afbbe001ae645db05
 Output shows some named wallets with their base16 public keys hash identifier. The `SUBMITTER_PKH` is the only wallet not used by the `COOP Publisher` that belongs to the user. In fact, we need to hide this wallet from the `local-cluster` as to emulate a real scenario:
 
 ```sh
-[coop-env ~ coop-tutorial] $ mv $WALLETS/signing-key-"$SUBMITTER_PKH".skey $WALLETS/my-signing-key-"$SUBMITTER_PKH".skey
+mv $WALLETS/signing-key-"$SUBMITTER_PKH".skey $WALLETS/my-signing-key-"$SUBMITTER_PKH".skey
 ```
 
 All other essential wallets are owned by the COOP Publisher and are used throughout its lifecycle. We'll revisit their role as we progress through the tutorial.
 
 The `make-exports` and `show-env` are provided Bash functions that wrap the parsing of `local-cluster` information and set the appropriate environment variables.
 
-#### 3. Initializing the Protocol
+#### 4. Initializing the Protocol
 
 We're ready now to perform the [COOP Plutus protocol genesis](coop-docs/02-plutus-protocol.md#protocol-genesis) using the `coop-pab-cli` command line tool. We prepare the working directory and run the cli:
 
 ```sh
-[coop-env ~ coop-tutorial] $ export COOP_PAB_DIR=.coop-pab-cli && mkdir $COOP_PAB_DIR
-[coop-env ~ coop-tutorial] $ coop-pab-cli deploy --god-wallet $GOD_PKH --aa-wallet $AA_PKH
-...
+export COOP_PAB_DIR=.coop-pab-cli && mkdir $COOP_PAB_DIR
+coop-pab-cli deploy --god-wallet $GOD_PKH --aa-wallet $AA_PKH
+```
+
+We should see confirmation the command executed successfully.
+
+```sh
 [CONTRACT] [INFO [Any]] deployCoop: Finished
 ```
 
@@ -275,7 +346,12 @@ that later...
 Continuing, we should be able to already inspect he state of the Protocol by using a provided `coop-get-state` bash function:
 
 ```sh
-[coop-env ~ coop-tutorial] $ coop-get-state
+coop-get-state
+```
+
+We'll see the command runs successfully with JSON output following that.
+
+```sh
 getState: Success
 ```
 
@@ -306,19 +382,31 @@ tokens](coop-docs/02-plutus-protocol.md#auth-token) to [Authenticator
 wallets](coop-docs/02-plutus-protocol.md#authenticator):
 
 ```sh
-[coop-env ~ coop-tutorial] $ coop-pab-cli mint-cert-redeemers \
-                                --cert-rdmr-wallet $CERT_RDMR_PKH \
-                                --cert-rdmrs-to-mint 100
-...
+coop-pab-cli mint-cert-redeemers \
+ --cert-rdmr-wallet $CERT_RDMR_PKH \
+ --cert-rdmrs-to-mint 100
+```
+
+Which should so the certificate redeemer tokens successfully minted:
+
+```sh
 CONTRACT] [INFO [Any]] mintCertR: Finished
 mintCertRdmrs: Minted $CERT-RDMR tokens with AssetClass
+```
 
-[coop-env ~ coop-tutorial] $ NOW=$(get-onchain-time) && coop-pab-cli mint-auth \
-                                --aa-wallet $AA_PKH \
-                                --certificate-valid-from $NOW \
-                                --certificate-valid-to "$(expr $NOW + 60 \* 60 \* 1000)" \
-                                --auth-wallet $AUTH_PKH
-...
+We will now mint the certificate `$CERT` and authentication `$AUTH` tokens.
+
+```sh
+NOW=$(get-onchain-time) && coop-pab-cli mint-auth \
+ --aa-wallet $AA_PKH \
+ --certificate-valid-from $NOW \
+ --certificate-valid-to "$(expr $NOW + 60 \* 60 \* 1000)" \
+ --auth-wallet $AUTH_PKH
+```
+
+Which should also be successfully minted.
+
+```sh
 mintAuth: Minted $CERT
 mintAuth: Minted $AUTH
 ```
@@ -359,8 +447,12 @@ wallets](coop-docs/02-plutus-protocol.md#authenticator) we provide a convenience
 utility to redistribute these tokens in separate UTxOs:
 
 ```sh
-[coop-env ~ coop-tutorial] $ coop-pab-cli redistribute-auth --auth-wallet $AUTH_PKH
-...
+coop-pab-cli redistribute-auth --auth-wallet $AUTH_PKH
+```
+
+This will output the following:
+
+```sh
 redistributeAuth: Redistributed outputs for Authenticator
 ```
 
@@ -381,7 +473,12 @@ transactions](coop-docs/02-plutus-protocol.md#mint-fact-statement-tx).
 Before we proceed, let's check in on the state of our Protocol now that we actually introduced our first action:
 
 ```sh
-[coop-env ~ coop-tutorial] $ coop-get-state
+coop-get-state
+```
+
+State will now look as follows:
+
+```sh
 getState: Success
 ```
 
@@ -434,15 +531,15 @@ getState: Success
 
 As we can see a new [Certificate](coop-docs/02-plutus-protocol.md#cert-validator) has been successfully issued.
 
-#### 4. Running a TxBuilder gRPC service
+#### 5. Running a TxBuilder gRPC service
 
 We're finally ready to run the first COOP service, namely the [TxBuilder
 gRPC](coop-proto/tx-builder-service.proto) back-end service that has the
 responsibility of building the COOP Cardano transactions:
 
 ```sh
-[coop-env ~ coop-tutorial] $ generate-keys $COOP_PAB_DIR
-[coop-env ~ coop-tutorial] $ coop-pab-cli tx-builder-grpc --auth-wallet $AUTH_PKH --fee-wallet $FEE_PKH
+generate-keys $COOP_PAB_DIR
+coop-pab-cli tx-builder-grpc --auth-wallet $AUTH_PKH --fee-wallet $FEE_PKH
 ```
 
 The provided `generate-keys` Bash function will initialize the TLS keys and
@@ -463,7 +560,7 @@ Let's leave the `tx-builder-grpc` process running in the foreground of the
 current shell and open a new `[coop-env ~ coop-tutorial]` shell session to
 continue with the tutorial.
 
-#### 5. Running a FactStatementStore gRPC service
+#### 6. Running a FactStatementStore gRPC service
 
 COOP provides a low-scale implementation of the [FactStatementStore
 gRPC](coop-proto/fact-statement-store-service.proto) back-end service, namely
@@ -475,25 +572,36 @@ publish.
 First let's prepare and initialize the service:
 
 ```sh
-[coop-env ~ coop-tutorial] $ export JS_STORE_DIR=.json-fs-store && mkdir $JS_STORE_DIR
-[coop-env ~ coop-tutorial] $ sqlite3 -batch $JS_STORE_DIR/json-store.db ""
-[coop-env ~ coop-tutorial] $ json-fs-store-cli genesis --db $JS_STORE_DIR/json-store.db
-[coop-env ~ coop-tutorial] $ generate-keys $JS_STORE_DIR
+export JS_STORE_DIR=.json-fs-store && mkdir $JS_STORE_DIR
+sqlite3 -batch $JS_STORE_DIR/json-store.db ""
+json-fs-store-cli genesis --db $JS_STORE_DIR/json-store.db
+generate-keys $JS_STORE_DIR
 ```
 
 Let's also add some actual Fact Statements into the store, while we're here:
 
 ```sh
-[coop-env ~ coop-tutorial] $ json-fs-store-cli insert-fact-statement --db $JS_STORE_DIR/json-store.db \
-                                --fact_statement_id "id1" \
-                                --json '["apples", "oranges", "pears"]'
-[coop-env ~ coop-tutorial] $ json-fs-store-cli insert-fact-statement --db $JS_STORE_DIR/json-store.db \
-                                    --fact_statement_id "id2" \
-                                    --json '{"name": "Drazen Popovic", "age": 35}'
-[coop-env ~ coop-tutorial] $ json-fs-store-cli insert-fact-statement --db $JS_STORE_DIR/json-store.db \
-                                    --fact_statement_id "id3" \
-                                    --json '"Lorem ipsum"'
-[coop-env ~ coop-tutorial] $ echo "SELECT * FROM fact_statements" | sqlite3 $JS_STORE_DIR/json-store.db
+json-fs-store-cli insert-fact-statement --db $JS_STORE_DIR/json-store.db \
+ --fact_statement_id "id1" \
+ --json '["apples", "oranges", "pears"]'
+```
+
+```sh
+json-fs-store-cli insert-fact-statement --db $JS_STORE_DIR/json-store.db \
+ --fact_statement_id "id2" \
+ --json '{"name": "Drazen Popovic", "age": 35}'
+```
+
+```sh
+json-fs-store-cli insert-fact-statement --db $JS_STORE_DIR/json-store.db \
+ --fact_statement_id "id3" \
+ --json '"Lorem ipsum"'
+```
+
+Take a look at the values written by inspecting the fact statement store:
+
+```sh
+echo "SELECT * FROM fact_statements" | sqlite3 $JS_STORE_DIR/json-store.db
 id1|["apples", "oranges", "pears"]
 id2|{"name": "Drazen Popovic", "age": 35}
 id3|"Lorem ipsum"
@@ -502,7 +610,7 @@ id3|"Lorem ipsum"
 Now we simply start the service:
 
 ```sh
-[coop-env ~ coop-tutorial] $ json-fs-store-cli fact-statement-store-grpc --db $JS_STORE_DIR/json-store.db
+json-fs-store-cli fact-statement-store-grpc --db $JS_STORE_DIR/json-store.db
 ```
 
 You can inspect and interact with the service using the gRPC utilities provided
@@ -513,7 +621,7 @@ Let's leave the `fact-statement-store-grpc` process running in the foreground of
 the current shell and open a new `[coop-env ~ coop-tutorial]` shell session to
 continue with the tutorial. We're almost there!
 
-#### 6. Running a Publisher gRPC service
+#### 7. Running a Publisher gRPC service
 
 The [Publisher gRPC](coop-proto/publisher-service.proto) is the principal
 fronted service that COOP users interact with as described in the [COOP Frontend
@@ -525,9 +633,9 @@ gRPC](coop-proto/fact-statement-store-service.proto) service.
 It's straightforward to run:
 
 ```sh
-[coop-env ~ coop-tutorial] $ export COOP_PUBLISHER_DIR=.coop-publisher-cli && mkdir $COOP_PUBLISHER_DIR
-[coop-env ~ coop-tutorial] $ generate-keys $COOP_PUBLISHER_DIR
-[coop-env ~ coop-tutorial] $ coop-publisher-cli publisher-grpc
+export COOP_PUBLISHER_DIR=.coop-publisher-cli && mkdir $COOP_PUBLISHER_DIR
+generate-keys $COOP_PUBLISHER_DIR
+coop-publisher-cli publisher-grpc
 ```
 
 The default command line arguments are sufficient for our scenario.
@@ -541,7 +649,7 @@ current shell and open a new `[coop-env ~ coop-tutorial]` shell session to
 continue with the tutorial. That's the last shell I promise, now we get to
 finally publish some fact statements.
 
-#### 7. Publishing a Fact Statement
+#### 8. Publishing a Fact Statement
 
 With the COOP Publisher fully set-up, we're ready to have our users publish some
 Fact Statements (See[Publishing a Fact
@@ -592,7 +700,7 @@ these Fact Statements:
         }
     }
 EOF
-          )
+)
 ```
 
 This prepares a request to be issued with [grpcurl](https://github.com/fullstorydev/grpcurl).
@@ -609,11 +717,21 @@ collect it at any time after publishing.
 Let's issue a request against the [Publisher gRPC](coop-proto/publisher-service.proto) service:
 
 ```sh
-[coop-env ~ coop-tutorial] $ RESP=$(echo $REQ | grpcurl -insecure -import-path $COOP_PROTO \
-                            -proto $COOP_PROTO/publisher-service.proto -d @ \
-                            localhost:5080 coop.publisher.Publisher/createMintFsTx
-                            )
-[coop-env ~ coop-tutorial] $ echo "$RESP" | jq '.info'
+RESP=$(echo $REQ | grpcurl -insecure -import-path $COOP_PROTO \
+ -proto $COOP_PROTO/publisher-service.proto -d @ \
+ localhost:5080 coop.publisher.Publisher/createMintFsTx)
+```
+
+And inspect the response:
+
+```sh                            )
+echo "$RESP" | jq '.info'
+```
+
+The `jq` result snippet will show the base64 encoded hashes of the fact-store
+statement IDs:
+
+```json
 {
   "txBuilderInfo": {
     "publishedFsIds": [
@@ -623,7 +741,17 @@ Let's issue a request against the [Publisher gRPC](coop-proto/publisher-service.
     ]
   }
 }
-[coop-env ~ coop-tutorial] $ echo "$RESP" | jq '.error'
+```
+
+With no errors:
+
+```sh
+echo "$RESP" | jq '.error'
+```
+
+We should see the result as:
+
+```sh
 null
 ```
 
@@ -634,29 +762,39 @@ serviced the request and returned a CBOR encoded Cardano transaction in the
 can understand it:
 
 ```sh
-[coop-env ~ coop-tutorial] $ echo "$RESP" | jq '.mintFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "Tx BabbageEra"' \
-        > transaction-to-sign.json
+echo "$RESP" | jq '.mintFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "Tx BabbageEra"' \
+ > transaction-to-sign.json
 ```
 
 > NOTE:
 > Any Cardano wallet could be used as COOP provides a raw CBOR encoded transaction, we just used [cardano-cli](https://github.com/input-output-hk/cardano-node/tree/master/cardano-cli) for convenience to demonstrate the concept.
 
-Finally we can sign and submit the transaction:
+Finally we can sign the transaction:
 
 ```sh
-[coop-env ~ coop-tutorial] $ cardano-cli transaction sign \
-                                --tx-file transaction-to-sign.json \
-                                --signing-key-file $WALLETS/my-signing-key-"$SUBMITTER_PKH".skey \
-                                --out-file transaction-to-submit.json
-[coop-env ~ coop-tutorial] $ cardano-cli transaction submit \
-                                --tx-file transaction-to-submit.json  --mainnet
+cardano-cli transaction sign \
+ --tx-file transaction-to-sign.json \
+ --signing-key-file $WALLETS/my-signing-key-"$SUBMITTER_PKH".skey \
+ --out-file transaction-to-submit.json
+```
+
+And submit it:
+
+```sh
+cardano-cli transaction submit \
+ --tx-file transaction-to-submit.json  --mainnet
+```
+
+All being well, the command should be successful:
+
+```sh
 Transaction successfully submitted.
 ```
 
 The transaction was successfully submitted which means we should be able to see that reflected in the state of the Protocol:
 
 ```sh
-[coop-env ~ coop-tutorial] $ coop-get-state && jq ".[\"cs'factStatements\"]" $COOP_PAB_DIR/coop-state.json
+coop-get-state && jq ".[\"cs'factStatements\"]" $COOP_PAB_DIR/coop-state.json
 ```
 
 ```json
@@ -745,7 +883,7 @@ Submitter decides to garbage collect the obsolete [Fact Statement
 UTxOs](coop-docs/02-plutus-protocol.md#fs-validator). With that said, let's try
 and do exactly that...
 
-#### 8. Garbage collecting obsolete Fact Statement UTxOs
+#### 9. Garbage collecting obsolete Fact Statement UTxOs
 
 The `fs'gcAfter` field of the [Fact Statement
 UTxO](coop-docs/02-plutus-protocol.md#fs-validator) datums denotes when that
@@ -764,7 +902,7 @@ Ada](https://docs.cardano.org/native-tokens/minimum-ada-value-requirement)
 amount locked within.
 
 ```sh
-[coop-env ~ coop-tutorial] $ REQ=$(cat <<EOF
+REQ=$(cat <<EOF
     {
         "fsIds": [
                  "$(echo -ne 'id1' | base64)",
@@ -776,12 +914,26 @@ amount locked within.
         }
     }
 EOF
-       )
-[coop-env ~ coop-tutorial] $ RESP=$(echo $REQ \
-                            | grpcurl -insecure -import-path $COOP_PROTO \
-                                    -proto $COOP_PROTO/publisher-service.proto -d @ \
-                                    localhost:5080 coop.publisher.Publisher/createGcFsTx)
-[coop-env ~ coop-tutorial] $ echo "$RESP" | jq '.info'
+)
+```
+
+```sh
+RESP=$(echo $REQ \
+ | grpcurl -insecure -import-path $COOP_PROTO \
+ -proto $COOP_PROTO/publisher-service.proto -d @ \
+ localhost:5080 coop.publisher.Publisher/createGcFsTx)
+```
+
+Inspect the result with:
+
+```sh
+echo "$RESP" | jq '.info'
+```
+
+We should see the base64 encoded fact-store statement IDs as before are now
+obsolete:
+
+```json
 {
   "txBuilderInfo": {
     "obsoleteFsIds": [
@@ -800,26 +952,36 @@ serviced the request and returned a CBOR encoded Cardano transaction in the
 can understand it, then sign and submit it:
 
 ```sh
-[coop-env ~ coop-tutorial] $ echo "$RESP" | jq '.gcFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "TxBodyBabbage"' > transaction-to-sign.json
-[coop-env ~ coop-tutorial] $ cardano-cli transaction sign \
-                            --tx-body-file transaction-to-sign.json \
-                            --signing-key-file $WALLETS/my-signing-key-"$SUBMITTER_PKH".skey \
-                            --out-file transaction-to-submit.json
-[coop-env ~ coop-tutorial] $ cardano-cli transaction submit \
-                            --tx-file transaction-to-submit.json  --mainnet
+echo "$RESP" | jq '.gcFsTx | .cborHex = .cborBase16 | del(.cborBase16) | .description = "" | .type = "TxBodyBabbage"' > transaction-to-sign.json
+cardano-cli transaction sign \
+ --tx-body-file transaction-to-sign.json \
+ --signing-key-file $WALLETS/my-signing-key-"$SUBMITTER_PKH".skey \
+ --out-file transaction-to-submit.json
+cardano-cli transaction submit \
+ --tx-file transaction-to-submit.json  --mainnet
+```
+
+The transaction should be successful:
+
+```sh
 Transaction successfully submitted.
 ```
 
 Great! Let's check the state of the Protocol now...
 
 ```sh
-[coop-env ~ coop-tutorial] $ coop-get-state && jq ".[\"cs'factStatements\"]" $COOP_PAB_DIR/coop-state.json
+coop-get-state && jq ".[\"cs'factStatements\"]" $COOP_PAB_DIR/coop-state.json
+```
+
+We should see an empty list:
+
+```sh
 []
 ```
 
 As expected, there's no more Fact Statements available in the system.
 
-#### 9. Garbage collecting obsolete Certificate UTxOs
+#### 10. Garbage collecting obsolete Certificate UTxOs
 
 The COOP Publisher operators can also manage reclaiming the [Min UTxO
 Ada](https://docs.cardano.org/native-tokens/minimum-ada-value-requirement) they
@@ -833,7 +995,12 @@ Again, inspecting the state with `coop-get-state` we see there's an obsolete
 garbage collected.
 
 ```sh
-[coop-env ~ coop-tutorial] $ coop-get-state
+coop-get-state
+```
+
+We should see the state looks as follows:
+
+```sh
 getState: Success
 ```
 
@@ -887,8 +1054,12 @@ getState: Success
 Let's garbage collect it then...
 
 ```sh
-[coop-env ~ coop-tutorial] $ coop-pab-cli garbage-collect --cert-rdmr-wallet $CERT_RDMR_PKH
-...
+coop-pab-cli garbage-collect --cert-rdmr-wallet $CERT_RDMR_PKH
+```
+
+Garbage collection should complete successfully:
+
+```sh
 [CONTRACT] [INFO [Any]] burnCerts: Finished
 garbageCollect: Collected $CERT UTxOs from @CertV using $CERT-RDMR tokens
 ```
@@ -896,7 +1067,12 @@ garbageCollect: Collected $CERT UTxOs from @CertV using $CERT-RDMR tokens
 This is where [Certificate redeemer wallets](coop-docs/02-plutus-protocol.md#certificate-redeemer) come into play as they hold the tokens that the the verifying Plutus script checks when validating the consumption of its outputs.
 
 ```sh
-[coop-env ~ coop-tutorial] $ coop-get-state
+coop-get-state
+```
+
+Results in:
+
+```sh
 getState: Success
 ```
 
@@ -917,7 +1093,7 @@ getState: Success
 
 And we've made the full circle :)
 
-#### 10. Referencing published Fact Statement in Consumer dApps
+#### 11. Referencing published Fact Statement in Consumer dApps
 
 The COOP Publisher must announce the deployment file created after [COOP Plutus
 protocol genesis](coop-docs/02-plutus-protocol.md#protocol-genesis). This file
