@@ -255,7 +255,6 @@ mkdir $COOP_PAB_DIR
 mkdir $JS_STORE_DIR
 mkdir $COOP_PUBLISHER_DIR
 mkdir $CLUSTER_DIR $CLUSTER_DIR/scripts $CLUSTER_DIR/txs
-
 ```
 
 #### 3. Running a local Cardano network
@@ -264,7 +263,6 @@ Let's first start by preparing and running a local Cardano network using the `lo
 
 ```sh
 export CLUSTER_DIR=.local-cluster WALLETS=.wallets
-mkdir $CLUSTER_DIR $CLUSTER_DIR/scripts $CLUSTER_DIR/txs $WALLETS
 local-cluster --dump-info-json $CLUSTER_DIR/local-cluster-info.json \
  --wallet-dir $WALLETS --num-wallets 10 --utxos 5 \
  --chain-index-port 9084 \
@@ -572,7 +570,7 @@ publish.
 First let's prepare and initialize the service:
 
 ```sh
-export JS_STORE_DIR=.json-fs-store && mkdir $JS_STORE_DIR
+export JS_STORE_DIR=.json-fs-store
 sqlite3 -batch $JS_STORE_DIR/json-store.db ""
 json-fs-store-cli genesis --db $JS_STORE_DIR/json-store.db
 generate-keys $JS_STORE_DIR
@@ -633,7 +631,7 @@ gRPC](coop-proto/fact-statement-store-service.proto) service.
 It's straightforward to run:
 
 ```sh
-export COOP_PUBLISHER_DIR=.coop-publisher-cli && mkdir $COOP_PUBLISHER_DIR
+export COOP_PUBLISHER_DIR=.coop-publisher-cli
 generate-keys $COOP_PUBLISHER_DIR
 coop-publisher-cli publisher-grpc
 ```
