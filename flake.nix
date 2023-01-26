@@ -30,7 +30,6 @@
     iohk-nix.follows = "plutip/iohk-nix";
 
     nixpkgs-fourmolu.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-
   };
   outputs =
     { self
@@ -218,6 +217,7 @@
           inherit coopPabCli coopPlutusCli jsFsStoreCli coopPublisherCli plutusJsonCli;
           cardanoNode = coopPabProj.hsPkgs.cardano-node.components.exes.cardano-node;
           cardanoCli = coopPabProj.hsPkgs.cardano-cli.components.exes.cardano-cli;
+          chainIndex = coopPabProj.hsPkgs.plutus-chain-index.components.exes.plutus-chain-index;
         };
 
         renameAttrs = rnFn: pkgs.lib.attrsets.mapAttrs' (n: value: { name = rnFn n; inherit value; });
