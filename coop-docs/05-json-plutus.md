@@ -99,4 +99,3 @@ The conversion into JSON will fail for the following Plutus Data values:
   cannot be converted into a JSON String.
 - A Plutus Data **Bytestring** that cannot be decoded into a sequence of UTF-8
   code points.
-
