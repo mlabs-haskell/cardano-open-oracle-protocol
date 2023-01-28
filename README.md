@@ -51,7 +51,8 @@ The protocol is described in further detail in the following documents
 - [Design document](coop-docs/00-design.md) contains information about the overall goals of this project,
 - [Plutus protocol](coop-docs/02-plutus-protocol.md) contains information about the wallets, tokens, minting policies, validators and transactions used in COOP and their relationship,
 - [Frontend protocol](coop-docs/03-frontend-protocol.md) contains information about how users must interact with the COOP Publisher in order to publish new Fact Statements and garbage collect obsolete Fact Statements,
-- [Backend protocol](coop-docs/04-backend-protocol.md) contains information on the back-end operations needed to serve the Frontend protocol.
+- [Backend protocol](coop-docs/04-backend-protocol.md) contains information on the back-end operations needed to serve the Frontend protocol,
+- [Mapping between JSON and Plutus Data](coop-docs/05-json-plutus.md) contains information about how JSON encodings maps into PlutusData encoding that can be used 'onchain'.
 
 ## Getting Started
 
