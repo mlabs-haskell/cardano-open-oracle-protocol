@@ -8,6 +8,7 @@ module Coop.Plutus (
   certV,
   mkCertMp,
   pmustSpendAtLeastAa,
+  exampleConsumer,
 ) where
 
 import Coop.Plutus.Aux (pcurrencyTokenQuantity, pcurrencyValue, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfoldTxInputs, pfoldTxOutputs, pfoldTxRefs, phasCurrency, pmaybeData, pmustBeSignedBy, pmustBurnOwnSingletonValue, pmustMintCurrency, pmustPayCurrencyWithDatumTo, pmustSpendAtLeast, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
@@ -34,7 +35,7 @@ import Plutarch.Crypto (pblake2b_256)
 import Plutarch.Extra.Interval (pcontains)
 import Plutarch.Monadic qualified as P
 import Plutarch.Num (PNum (pnegate, (#+)))
-import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PByteString, PEq ((#==)), PInteger, PListLike (pcons, pnil), PPair (PPair), PPartialOrd ((#<), (#<=)), Term, pcon, pconsBS, pfield, pfoldl, pfromData, phoistAcyclic, plam, plet, pletFields, ptrace, ptraceError, (#), (#$), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PByteString, PEq ((#==)), PInteger, PListLike (pcons, phead, pnil), PPair (PPair), PPartialOrd ((#<), (#<=)), Term, pcon, pconsBS, pfield, pfoldl, pfromData, phoistAcyclic, plam, plet, pletFields, ptrace, ptraceError, (#), (#$), type (:-->))
 import PlutusTx.Prelude (Group (inv))
 import Prelude (Monoid (mempty), Semigroup ((<>)), ($))
 
@@ -598,3 +599,43 @@ pmustSpendAtLeastAa = phoistAcyclic $
       (atLeastAaQ #<= aaTokensSpent)
       (ptrace "pmustSpendAtLeastAa: Spent at least the specified amount of AA tokens" $ pblake2b_256 # tnBytes)
       (ptraceError "pmustSpendAtLeastAa: Must spend at least the specified amount of AA tokens")
+
+exampleConsumer :: ClosedTerm (PCurrencySymbol :--> PValidator)
+exampleConsumer = phoistAcyclic $
+  plam $ \trustedCs _ _ ctx -> ptrace "exampleConsumer" P.do
+    ctx' <- pletFields @'["txInfo"] ctx
+    txInfo <- pletFields @'["referenceInputs"] ctx'.txInfo
+
+    ptrace "exampleConsumer: Looking for a Fact Statement reference input from a trusted COOP Oracle"
+    refInput <- pletFields @'["resolved"] $ phead # pfromData txInfo.referenceInputs
+    refInVal <- plet $ pfield @"value" # refInput.resolved
+
+    ptrace "exampleConsumer: Looking for a Fact Statement reference input from a trusted COOP Oracle"
+    pif
+      (phasCurrency # trustedCs # refInVal)
+      ( ptrace
+          "exampleConsumer: Found an authentic Fact Statement reference input from a trusted COOP Oracle"
+          P.do
+            fsDatum <- pletFields @'["fd'fs", "fd'submitter", "fd'gcAfter", "fd'fsId"] $ pdatumFromTxOut @PFsDatum # ctx # refInput.resolved
+            fs <- plet $ pfromData $ fsDatum.fd'fs
+            ptrace "FsMpBurn: Valid FsDatum attached"
+
+            ptrace "exampleConsumer: Must have a Fact Statement reference input from a trusted COOP Oracle" $ popaque punit
+      )
+      (ptraceError "exampleConsumer: Must have a Fact Statement reference input from a trusted COOP Oracle")
+
+-- -- | Parses a datum from a TxOut or fails hard
+-- pdatumFromTxOut :: forall a (s :: S). (PIsData a, PTryFrom PData (PAsData a)) => Term s (PScriptContext :--> PTxOut :--> a)
+-- pdatumFromTxOut = phoistAcyclic $
+--   plam $ \ctx txOut -> ptrace "pdatumFromTxOut" P.do
+--     datum <- plet $ pmatch (pfield @"datum" # txOut) \case
+--       PNoOutputDatum _ -> ptraceError "pDatumFromTxOut: Must have a datum present in the output"
+--       POutputDatumHash r -> ptrace "pDatumFromTxOut: Got a datum hash" P.do
+--         ctx' <- pletFields @'["txInfo"] ctx
+--         txInfo <- pletFields @'["datums"] ctx'.txInfo
+--         pmatch (plookup # pfromData (pfield @"datumHash" # r) # txInfo.datums) \case
+--           PNothing -> ptraceError "pDatumFromTxOut: Datum with a given hash must be present in the transaction datums"
+--           PJust datum -> ptrace "pDatumFromTxOut: Found a datum" datum
+--       POutputDatum r -> ptrace "pDatumFromTxOut: Got an inline datum" $ pfield @"outputDatum" # r
+
+--     pfromData (ptryFromData @a (pto datum))

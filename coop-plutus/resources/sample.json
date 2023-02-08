@@ -1,0 +1,18 @@
+{
+  "array": [
+    1,
+    2,
+    3
+  ],
+  "boolean": true,
+  "null": null,
+  "integer": 123,
+  "big_integer": 12300000000000000000000000,
+  "real": 123.123, 
+  "big_real": 12300000000000000000000000.123,
+  "object": {
+    "a": "b",
+    "c": "d"
+  },
+  "string": "Hello World"
+}
