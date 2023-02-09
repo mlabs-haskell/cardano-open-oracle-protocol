@@ -591,6 +591,20 @@ pmustSpendAtLeastAa = phoistAcyclic $
       (ptrace "pmustSpendAtLeastAa: Spent at least the specified amount of AA tokens" $ pblake2b_256 # tnBytes)
       (ptraceError "pmustSpendAtLeastAa: Must spend at least the specified amount of AA tokens")
 
+{- | Example Consumer validator that authenticates and processes a referenced
+ FactStatement UTxO
+
+- check that the reference input holds the appropriate $FS token (with the
+  trusted COOP Oracle's CurrencySymbol),
+- parse the Fact Statement embedded in the UTxO datum and perform assertions.
+
+To demonstrate the COOP provided Plutus JSON encoding a file was created with the COOP
+provided `plutus-json-cli` tool:
+
+$ plutus-json-cli from-json -i resources/sample.json -o resources/sample.pd.cbor
+
+This served as an exemplary Fact Statement.
+-}
 exampleConsumer :: ClosedTerm (PCurrencySymbol :--> PValidator)
 exampleConsumer = phoistAcyclic $
   plam $ \trustedCs _ _ ctx -> ptrace "exampleConsumer" P.do
