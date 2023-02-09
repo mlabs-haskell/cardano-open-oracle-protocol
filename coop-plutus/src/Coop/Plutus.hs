@@ -601,7 +601,7 @@ pmustSpendAtLeastAa = phoistAcyclic $
 To demonstrate the COOP provided Plutus JSON encoding a file was created with the COOP
 provided `plutus-json-cli` tool:
 
-$ plutus-json-cli from-json -i resources/sample.json -o resources/sample.pd.cbor
+\$ plutus-json-cli from-json -i resources/sample.json -o resources/sample.pd.cbor
 
 This served as an exemplary Fact Statement.
 -}
