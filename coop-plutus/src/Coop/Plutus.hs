@@ -26,7 +26,7 @@ import Plutarch.Extra.Interval (pcontains)
 import Plutarch.List (pmap)
 import Plutarch.Monadic qualified as P
 import Plutarch.Num (PNum (pnegate, (#+)))
-import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PByteString, PData, PEq ((#==)), PInteger, PListLike (pcons, phead, pnil), PMaybe (PJust), PPair (PPair), PPartialOrd ((#<), (#<=)), Term, pcon, pconsBS, pconstant, pdata, pfield, pfoldl, pfromData, phoistAcyclic, plam, plet, pletFields, ptrace, ptraceError, (#), (#$), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PByteString, PData, PEq ((#==)), PInteger, PListLike (pcons, phead, pnil), PMaybe (PJust), PPair (PPair), PPartialOrd ((#<), (#<=)), Term, pcon, pconsBS, pconstant, pfield, pfoldl, pfromData, phoistAcyclic, plam, plet, pletFields, ptrace, ptraceError, (#), (#$), type (:-->))
 import PlutusTx.Prelude (Group (inv))
 import Prelude (Monoid (mempty), Semigroup ((<>)), ($), (.))
 
@@ -651,13 +651,18 @@ exampleConsumer = phoistAcyclic $
             _ <- plet $ pif ((pfstBuiltin # real'') #== 3) (popaque punit) (ptraceError "Expected a Plutus Constr 3 [123123, -3]")
             _ <- plet $ pif (real''' #== pconstant [123123, -3]) (popaque punit) (ptraceError "Expected a Plutus Constr 3 [123123, -3]")
 
-            -- Take the "big_real" field in the Fact Statement and assert that it is 123.123
+            -- Take the "big_real" field in the Fact Statement and assert that it is 12300000000000000000000000.123
             PJust big_real' <- pmatch $ plookup # pconstant "big_real" # factStatement
             big_real'' :: Term s (PBuiltinPair PInteger (PBuiltinList PData)) <- plet $ pasConstr # big_real'
             big_real''' :: Term s (PBuiltinList PInteger) <- plet $ pmap # plam (pfromData . ptryFromData) # (psndBuiltin # big_real'')
             _ <- plet $ pif ((pfstBuiltin # big_real'') #== 3) (popaque punit) (ptraceError "Expected a Plutus Constr 3 [12300000000000000000000000123, -3]")
             _ <- plet $ pif (big_real''' #== pconstant [12300000000000000000000000123, -3]) (popaque punit) (ptraceError "Expected a Plutus Constr 3 [12300000000000000000000000123, -3]")
 
-            ptrace "exampleConsumer: Must have a Fact Statement reference input from a trusted COOP Oracle" $ popaque punit
+            -- Take the "string" field in the Fact Statement and assert that it is "Hello World"
+            PJust string' <- pmatch $ plookup # pconstant "string" # factStatement
+            string'' :: Term s PByteString <- plet $ pfromData $ ptryFromData string'
+            _ <- plet $ pif (string'' #== pconstant "Hello World") (popaque punit) (ptraceError "Expected a Plutus Bytestring \"Hello World\"")
+
+            ptrace "exampleConsumer: Everything worked!" $ popaque punit
       )
       (ptraceError "exampleConsumer: Must have a Fact Statement reference input from a trusted COOP Oracle")
