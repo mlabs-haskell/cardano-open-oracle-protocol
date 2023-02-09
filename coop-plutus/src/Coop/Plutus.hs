@@ -19,7 +19,8 @@ import Plutarch.Api.V1.Value (passertPositive, pnormalize, pvalueOf)
 import Plutarch.Api.V1.Value qualified as PValue
 import Plutarch.Api.V2 (AmountGuarantees (NonZero, Positive), KeyGuarantees (Sorted, Unsorted), PCurrencySymbol, PMap, PMaybeData, PMintingPolicy, PTokenName (PTokenName), PTuple, PTxInInfo, PTxOut, PValidator, PValue)
 import Plutarch.Api.V2.Contexts (PScriptContext)
-import Plutarch.Bool (pif)
+import Plutarch.Bool (PBool, pif)
+import Plutarch.Builtin (PBuiltinPair, pasConstr, pfstBuiltin, psndBuiltin)
 import Plutarch.Crypto (pblake2b_256)
 import Plutarch.Extra.Interval (pcontains)
 import Plutarch.List (pmap)
@@ -613,12 +614,23 @@ exampleConsumer = phoistAcyclic $
             factStatement :: Term s (PMap 'Unsorted PByteString PData) <- plet $ pfromData $ ptryFromData fsDatum.fd'fs
 
             -- Take the "array" field in the Fact Statement and assert that it is [1,2,3]
-            PJust arrayNumbersPd <- pmatch $ plookup # pconstant "array" # factStatement
+            PJust arrayNumbers''' <- pmatch $ plookup # pconstant "array" # factStatement
             -- Parse it as Plutus List
-            arrayNumbers :: Term s (PBuiltinList (PAsData PInteger)) <- plet $ pfromData $ ptryFromData arrayNumbersPd
+            arrayNumbers' :: Term s (PBuiltinList (PAsData PInteger)) <- plet $ pfromData $ ptryFromData arrayNumbers'''
             -- Parse the elements within as Plutus Integer
-            arrayNumbers' <- plet $ pmap # plam pfromData # arrayNumbers
-            _ <- plet $ pif (arrayNumbers' #== pconstant [1, 2, 3]) (popaque punit) (ptraceError "Expected a Plutus List [1,2,3]")
+            arrayNumbers <- plet $ pmap # plam pfromData # arrayNumbers'
+            _ <- plet $ pif (arrayNumbers #== pconstant [1, 2, 3]) (popaque punit) (ptraceError "Expected a Plutus List [1,2,3]")
+
+            -- Take the "boolean" field in the Fact Statement and assert that it is true
+            PJust boolean' <- pmatch $ plookup # pconstant "boolean" # factStatement
+            boolean :: Term s PBool <- plet $ pfromData $ ptryFromData boolean'
+            _ <- plet $ pif boolean (popaque punit) (ptraceError "Expected a Plutus Boolean true")
+
+            -- Take the "null" field in the Fact Statement and assert that it is null
+            PJust null' <- pmatch $ plookup # pconstant "null" # factStatement
+            null'' :: Term s (PBuiltinPair PInteger (PBuiltinList PData)) <- plet $ pasConstr # null'
+            _ <- plet $ pif ((pfstBuiltin # null'') #== 2) (popaque punit) (ptraceError "Expected a Plutus Boolean type (Constr 2 [])")
+            _ <- plet $ pif ((psndBuiltin # null'') #== pconstant []) (popaque punit) (ptraceError "Expected a Plutus Boolean type (Constr 2 [])")
 
             ptrace "exampleConsumer: Must have a Fact Statement reference input from a trusted COOP Oracle" $ popaque punit
       )
