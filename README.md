@@ -1100,3 +1100,16 @@ contains the [Fact Statement minting
 policy](coop-docs/02-plutus-protocol.md#fs-policy) script which is the `Currency
 Symbol` the consuming dApps use to assert the authenticity and provenance of the
 referenced [Fact Statement UTxOs](coop-docs/02-plutus-protocol.md#fs-validator).
+
+An example Consumer [validator script](coop-plutus/src/Coop/Plutus:L594-L608)
+was provided to demonstrate how to authenticate [Fact Statement
+UTxOs](coop-docs/02-plutus-protocol.md#fs-validator) on-chain. The script
+performs a simple assertion on the
+[Value](https://github.com/input-output-hk/plutus/blob/c3918d6027a9a34b6f72a6e4c7bf2e5350e6467e/plutus-ledger-api/src/PlutusLedgerApi/V1/Value.hs#L185)
+a referenced UTxO to make sure it contains a
+[CurrencySymbol](https://github.com/input-output-hk/plutus/blob/c3918d6027a9a34b6f72a6e4c7bf2e5350e6467e/plutus-ledger-api/src/PlutusLedgerApi/V1/Value.hs#L79)
+of the [$FS](coop-docs/02-plutus-protocol.md#fs-token) tokens it trusts
+
+The second part of the script demonstrates how to parse a [Plutus
+JSON](coop-docs/05-json-plutus.md) [Fact
+Statement](coop-plutus/resources/sample.json).
