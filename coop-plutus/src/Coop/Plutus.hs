@@ -14,28 +14,18 @@ module Coop.Plutus (
 import Coop.Plutus.Aux (pcurrencyTokenQuantity, pcurrencyValue, pdatumFromTxOut, pdjust, pdnothing, pfindMap, pfoldTxInputs, pfoldTxOutputs, pfoldTxRefs, phasCurrency, pmaybeData, pmustBeSignedBy, pmustBurnOwnSingletonValue, pmustMintCurrency, pmustPayCurrencyWithDatumTo, pmustSpendAtLeast, pmustValidateAfter, pownCurrencySymbol, ptryFromData, punit)
 import Coop.Plutus.Types (PAuthMpParams, PAuthMpRedeemer (PAuthMpBurn, PAuthMpMint), PAuthParams, PCertDatum, PCertMpParams, PCertMpRedeemer (PCertMpBurn, PCertMpMint), PFsDatum, PFsMpParams, PFsMpRedeemer (PFsMpBurn, PFsMpMint))
 import Plutarch (POpaque, pmatch, popaque)
+import Plutarch.Api.V1.AssocMap (plookup)
 import Plutarch.Api.V1.Value (passertPositive, pnormalize, pvalueOf)
 import Plutarch.Api.V1.Value qualified as PValue
-import Plutarch.Api.V2 (
-  AmountGuarantees (NonZero, Positive),
-  KeyGuarantees (Sorted),
-  PCurrencySymbol,
-  PMaybeData,
-  PMintingPolicy,
-  PTokenName (PTokenName),
-  PTuple,
-  PTxInInfo,
-  PTxOut,
-  PValidator,
-  PValue,
- )
+import Plutarch.Api.V2 (AmountGuarantees (NonZero, Positive), KeyGuarantees (Sorted, Unsorted), PCurrencySymbol, PMap, PMaybeData, PMintingPolicy, PTokenName (PTokenName), PTuple, PTxInInfo, PTxOut, PValidator, PValue)
 import Plutarch.Api.V2.Contexts (PScriptContext)
 import Plutarch.Bool (pif)
 import Plutarch.Crypto (pblake2b_256)
 import Plutarch.Extra.Interval (pcontains)
+import Plutarch.List (pmap)
 import Plutarch.Monadic qualified as P
 import Plutarch.Num (PNum (pnegate, (#+)))
-import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PByteString, PEq ((#==)), PInteger, PListLike (pcons, phead, pnil), PPair (PPair), PPartialOrd ((#<), (#<=)), Term, pcon, pconsBS, pfield, pfoldl, pfromData, phoistAcyclic, plam, plet, pletFields, ptrace, ptraceError, (#), (#$), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PByteString, PData, PEq ((#==)), PInteger, PListLike (pcons, phead, pnil), PMaybe (PJust), PPair (PPair), PPartialOrd ((#<), (#<=)), Term, pcon, pconsBS, pconstant, pfield, pfoldl, pfromData, phoistAcyclic, plam, plet, pletFields, ptrace, ptraceError, (#), (#$), type (:-->))
 import PlutusTx.Prelude (Group (inv))
 import Prelude (Monoid (mempty), Semigroup ((<>)), ($))
 
@@ -616,26 +606,20 @@ exampleConsumer = phoistAcyclic $
       ( ptrace
           "exampleConsumer: Found an authentic Fact Statement reference input from a trusted COOP Oracle"
           P.do
+            -- Parse the FsDatum available in the referenced input
             fsDatum <- pletFields @'["fd'fs", "fd'submitter", "fd'gcAfter", "fd'fsId"] $ pdatumFromTxOut @PFsDatum # ctx # refInput.resolved
-            fs <- plet $ pfromData $ fsDatum.fd'fs
-            ptrace "FsMpBurn: Valid FsDatum attached"
+
+            -- Take the Fact Statement payload in `fd'fs` field and try to parse it as a PlutusData Map
+            factStatement :: Term s (PMap 'Unsorted PByteString PData) <- plet $ pfromData $ ptryFromData fsDatum.fd'fs
+
+            -- Take the "array" field in the Fact Statement and assert that it is [1,2,3]
+            PJust arrayNumbersPd <- pmatch $ plookup # pconstant "array" # factStatement
+            -- Parse it as Plutus List
+            arrayNumbers :: Term s (PBuiltinList (PAsData PInteger)) <- plet $ pfromData $ ptryFromData arrayNumbersPd
+            -- Parse the elements within as Plutus Integer
+            arrayNumbers' <- plet $ pmap # plam pfromData # arrayNumbers
+            _ <- plet $ pif (arrayNumbers' #== pconstant [1, 2, 3]) (popaque punit) (ptraceError "Expected a Plutus List [1,2,3]")
 
             ptrace "exampleConsumer: Must have a Fact Statement reference input from a trusted COOP Oracle" $ popaque punit
       )
       (ptraceError "exampleConsumer: Must have a Fact Statement reference input from a trusted COOP Oracle")
-
--- -- | Parses a datum from a TxOut or fails hard
--- pdatumFromTxOut :: forall a (s :: S). (PIsData a, PTryFrom PData (PAsData a)) => Term s (PScriptContext :--> PTxOut :--> a)
--- pdatumFromTxOut = phoistAcyclic $
---   plam $ \ctx txOut -> ptrace "pdatumFromTxOut" P.do
---     datum <- plet $ pmatch (pfield @"datum" # txOut) \case
---       PNoOutputDatum _ -> ptraceError "pDatumFromTxOut: Must have a datum present in the output"
---       POutputDatumHash r -> ptrace "pDatumFromTxOut: Got a datum hash" P.do
---         ctx' <- pletFields @'["txInfo"] ctx
---         txInfo <- pletFields @'["datums"] ctx'.txInfo
---         pmatch (plookup # pfromData (pfield @"datumHash" # r) # txInfo.datums) \case
---           PNothing -> ptraceError "pDatumFromTxOut: Datum with a given hash must be present in the transaction datums"
---           PJust datum -> ptrace "pDatumFromTxOut: Found a datum" datum
---       POutputDatum r -> ptrace "pDatumFromTxOut: Got an inline datum" $ pfield @"outputDatum" # r
-
---     pfromData (ptryFromData @a (pto datum))
