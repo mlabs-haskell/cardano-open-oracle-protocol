@@ -26,9 +26,9 @@ import Plutarch.Extra.Interval (pcontains)
 import Plutarch.List (pmap)
 import Plutarch.Monadic qualified as P
 import Plutarch.Num (PNum (pnegate, (#+)))
-import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PByteString, PData, PEq ((#==)), PInteger, PListLike (pcons, phead, pnil), PMaybe (PJust), PPair (PPair), PPartialOrd ((#<), (#<=)), Term, pcon, pconsBS, pconstant, pfield, pfoldl, pfromData, phoistAcyclic, plam, plet, pletFields, ptrace, ptraceError, (#), (#$), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBuiltinList, PByteString, PData, PEq ((#==)), PInteger, PListLike (pcons, phead, pnil), PMaybe (PJust), PPair (PPair), PPartialOrd ((#<), (#<=)), Term, pcon, pconsBS, pconstant, pdata, pfield, pfoldl, pfromData, phoistAcyclic, plam, plet, pletFields, ptrace, ptraceError, (#), (#$), type (:-->))
 import PlutusTx.Prelude (Group (inv))
-import Prelude (Monoid (mempty), Semigroup ((<>)), ($))
+import Prelude (Monoid (mempty), Semigroup ((<>)), ($), (.))
 
 {- | Validates spending from @FsV
 
@@ -619,7 +619,7 @@ exampleConsumer = phoistAcyclic $
             arrayNumbers' :: Term s (PBuiltinList (PAsData PInteger)) <- plet $ pfromData $ ptryFromData arrayNumbers'''
             -- Parse the elements within as Plutus Integer
             arrayNumbers <- plet $ pmap # plam pfromData # arrayNumbers'
-            _ <- plet $ pif (arrayNumbers #== pconstant [1, 2, 3]) (popaque punit) (ptraceError "Expected a Plutus List [1,2,3]")
+            _ <- plet $ pif (arrayNumbers #== pconstant [1, 2, 3]) (popaque punit) (ptraceError "Expected Plutus List [1,2,3]")
 
             -- Take the "boolean" field in the Fact Statement and assert that it is true
             PJust boolean' <- pmatch $ plookup # pconstant "boolean" # factStatement
@@ -628,9 +628,35 @@ exampleConsumer = phoistAcyclic $
 
             -- Take the "null" field in the Fact Statement and assert that it is null
             PJust null' <- pmatch $ plookup # pconstant "null" # factStatement
-            null'' :: Term s (PBuiltinPair PInteger (PBuiltinList PData)) <- plet $ pasConstr # null'
-            _ <- plet $ pif ((pfstBuiltin # null'') #== 2) (popaque punit) (ptraceError "Expected a Plutus Boolean type (Constr 2 [])")
-            _ <- plet $ pif ((psndBuiltin # null'') #== pconstant []) (popaque punit) (ptraceError "Expected a Plutus Boolean type (Constr 2 [])")
+            null :: Term s (PBuiltinPair PInteger (PBuiltinList PData)) <- plet $ pasConstr # null'
+            _ <- plet $ pif ((pfstBuiltin # null) #== 2) (popaque punit) (ptraceError "Expected a Plutus Constr 2 []")
+            _ <- plet $ pif ((psndBuiltin # null) #== pconstant []) (popaque punit) (ptraceError "Expected a Plutus Constr 2 []")
+
+            -- Take the "integer" field in the Fact Statement and assert that it is 123
+            PJust integer' <- pmatch $ plookup # pconstant "integer" # factStatement
+            integer :: Term s PInteger <- plet $ pfromData $ ptryFromData integer'
+            _ <- plet $ pif (integer #== pconstant 123) (popaque punit) (ptraceError "Expected a Plutus Integer 123")
+
+            -- Take the "big_integer" field in the Fact Statement and assert that it is 12300000000000000000000000
+            PJust bigInteger' <- pmatch $ plookup # pconstant "big_integer" # factStatement
+            bigInteger'' :: Term s (PBuiltinPair PInteger (PBuiltinList PData)) <- plet $ pasConstr # bigInteger'
+            bigInteger''' :: Term s (PBuiltinList PInteger) <- plet $ pmap # plam (pfromData . ptryFromData) # (psndBuiltin # bigInteger'')
+            _ <- plet $ pif ((pfstBuiltin # bigInteger'') #== 3) (popaque punit) (ptraceError "Expected a Plutus Constr 3 [12300000000000000000000000, 0]")
+            _ <- plet $ pif (bigInteger''' #== pconstant [12300000000000000000000000, 0]) (popaque punit) (ptraceError "Expected a Plutus Constr 3 [12300000000000000000000000, 0]")
+
+            -- Take the "real" field in the Fact Statement and assert that it is 123.123
+            PJust real' <- pmatch $ plookup # pconstant "real" # factStatement
+            real'' :: Term s (PBuiltinPair PInteger (PBuiltinList PData)) <- plet $ pasConstr # real'
+            real''' :: Term s (PBuiltinList PInteger) <- plet $ pmap # plam (pfromData . ptryFromData) # (psndBuiltin # real'')
+            _ <- plet $ pif ((pfstBuiltin # real'') #== 3) (popaque punit) (ptraceError "Expected a Plutus Constr 3 [123123, -3]")
+            _ <- plet $ pif (real''' #== pconstant [123123, -3]) (popaque punit) (ptraceError "Expected a Plutus Constr 3 [123123, -3]")
+
+            -- Take the "big_real" field in the Fact Statement and assert that it is 123.123
+            PJust big_real' <- pmatch $ plookup # pconstant "big_real" # factStatement
+            big_real'' :: Term s (PBuiltinPair PInteger (PBuiltinList PData)) <- plet $ pasConstr # big_real'
+            big_real''' :: Term s (PBuiltinList PInteger) <- plet $ pmap # plam (pfromData . ptryFromData) # (psndBuiltin # big_real'')
+            _ <- plet $ pif ((pfstBuiltin # big_real'') #== 3) (popaque punit) (ptraceError "Expected a Plutus Constr 3 [12300000000000000000000000123, -3]")
+            _ <- plet $ pif (big_real''' #== pconstant [12300000000000000000000000123, -3]) (popaque punit) (ptraceError "Expected a Plutus Constr 3 [12300000000000000000000000123, -3]")
 
             ptrace "exampleConsumer: Must have a Fact Statement reference input from a trusted COOP Oracle" $ popaque punit
       )
