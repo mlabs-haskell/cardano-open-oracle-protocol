@@ -1106,7 +1106,7 @@ was provided to demonstrate how to authenticate [Fact Statement
 UTxOs](coop-docs/02-plutus-protocol.md#fs-validator) on-chain. The script
 performs a simple assertion on the
 [Value](https://github.com/input-output-hk/plutus/blob/c3918d6027a9a34b6f72a6e4c7bf2e5350e6467e/plutus-ledger-api/src/PlutusLedgerApi/V1/Value.hs#L185)
-a referenced UTxO to make sure it contains a
+of a referenced UTxO to make sure it contains a
 [CurrencySymbol](https://github.com/input-output-hk/plutus/blob/c3918d6027a9a34b6f72a6e4c7bf2e5350e6467e/plutus-ledger-api/src/PlutusLedgerApi/V1/Value.hs#L79)
 of the [$FS](coop-docs/02-plutus-protocol.md#fs-token) tokens it trusts
 
