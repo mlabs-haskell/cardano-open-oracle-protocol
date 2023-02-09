@@ -1,4 +1,4 @@
-module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx, genCorruptCertVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptMustBurnOwnSingletonValueCtx, genCorrectFsMpMintingCtx, genCorruptFsMpMintingCtx, genCorrectFsMpBurningCtx, genCorruptFsMpBurningCtx, genCorrectFsVSpendingCtx, genCorruptFsVSpendingCtx) where
+module Coop.Plutus.Test.Generators (mkScriptContext, mkTxInfo, genCertRdmrAc, distribute, genCorruptCertMpMintingCtx, genAaInputs, genCorrectCertMpMintingCtx, genCorrectAuthMpMintingCtx, genCorruptAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorruptCertMpBurningCtx, normalizeValue, genCorrectAuthMpBurningCtx, genCorruptAuthMpBurningCtx, genCorrectCertVSpendingCtx, genCorruptCertVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptMustBurnOwnSingletonValueCtx, genCorrectFsMpMintingCtx, genCorruptFsMpMintingCtx, genCorrectFsMpBurningCtx, genCorruptFsMpBurningCtx, genCorrectFsVSpendingCtx, genCorruptFsVSpendingCtx, genCorrectConsumerCtx) where
 
 import Test.QuickCheck (Arbitrary (arbitrary), Gen, choose, chooseAny, chooseEnum, chooseInt, chooseInteger, sublistOf, suchThat, vectorOf)
 
@@ -17,7 +17,7 @@ import PlutusLedgerApi.V2 (Address, BuiltinByteString, Datum (Datum), Extended (
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
-import Coop.Types (AuthMpParams (amp'authAuthorityAc, amp'requiredAtLeastAaQ), AuthParams (ap'authTokenCs, ap'certTokenCs), CertDatum (CertDatum), CertMpParams (cmp'authAuthorityAc, cmp'certVAddress, cmp'requiredAtLeastAaQ), FsDatum (FsDatum, fs'gcAfter, fs'submitter), FsMpParams (fmp'authParams, fmp'fsVAddress))
+import Coop.Types (AuthMpParams (amp'authAuthorityAc, amp'requiredAtLeastAaQ), AuthParams (ap'authTokenCs, ap'certTokenCs), CertDatum (CertDatum), CertMpParams (cmp'authAuthorityAc, cmp'certVAddress, cmp'requiredAtLeastAaQ), FactStatement, FsDatum (FsDatum, fs'gcAfter, fs'submitter), FsMpParams (fmp'authParams, fmp'fsVAddress))
 import PlutusLedgerApi.V1.Interval (interval)
 import PlutusLedgerApi.V2 qualified as Value
 import PlutusTx.Prelude (Group (inv))
@@ -463,6 +463,29 @@ genCorruptFsVSpendingCtx = do
   let corrupt = mkCorrupt corruptions
 
   return $ corrupt ctx
+
+genFsRefInput :: CurrencySymbol -> FactStatement -> Gen TxInInfo
+genFsRefInput fsCs fs = do
+  addr <- genAddress
+  fsTn <- genTokenName
+  fsId <- genBuiltinByteString "fsid" 5
+  submitter <- genPubKeyHash
+  return $
+    TxInInfo
+      (TxOutRef (TxId fsId) 0)
+      ( TxOut
+          addr
+          (Value.singleton fsCs fsTn 1)
+          (toOutputDatum $ FsDatum fs (LedgerBytes fsId) PosInf submitter)
+          Nothing
+      )
+
+genCorrectConsumerCtx :: CurrencySymbol -> FactStatement -> Gen ScriptContext
+genCorrectConsumerCtx fsCs fs = do
+  spendingIn <- genInput
+  fsRefIn <- genFsRefInput fsCs fs
+
+  return $ mkScriptContext (Spending (txInInfoOutRef spendingIn)) [spendingIn] [fsRefIn] mempty [] []
 
 genInput :: Gen TxInInfo
 genInput = (\outRef val addr -> TxInInfo outRef (TxOut addr val NoOutputDatum Nothing)) <$> genTxOutRef <*> genSingletonValue <*> genAddress

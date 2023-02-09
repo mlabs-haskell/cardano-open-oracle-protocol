@@ -18,7 +18,7 @@ haskell-nix.cabalProject' (plutarch.applyPlutarchDep pkgs rec {
     packages = {
       # Enable strict builds
       coop-plutus.configureFlags = [ "-f-dev" ];
-
+      coop-plutus.package.extraSrcFiles = [ "resources/sample.json" "resources/sample.pd.cbor" ]; # TODO(bladyjoker): I would like to get rid of this as haskell-nix should pick it up from the Cabal file
       # Use the new-ledger-namespace
       coop-hs-types.configureFlags = [ "-fnew-ledger-namespace" ];
     };

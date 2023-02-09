@@ -1,26 +1,30 @@
 module Coop.Plutus.Test (spec) where
 
 import Plutarch.Prelude (ClosedTerm, PBool (PTrue), PEq ((#==)), pconstant, pconstantData, (#))
-import Test.Hspec (Expectation, Spec, describe, shouldBe)
+import Test.Hspec (Expectation, Spec, describe, runIO, shouldBe)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (NonEmptyList (getNonEmpty), Positive (getPositive), choose, forAll, generate)
 
-import Coop.Plutus (certV, fsV, mkAuthMp, mkCertMp, mkFsMp, pmustSpendAtLeastAa)
+import Codec.Serialise (deserialiseOrFail)
+import Coop.Plutus (certV, exampleConsumer, fsV, mkAuthMp, mkCertMp, mkFsMp, pmustSpendAtLeastAa)
 import Coop.Plutus.Aux (hashTxInputs, pmustBurnOwnSingletonValue)
-import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorrectCertVSpendingCtx, genCorrectFsMpBurningCtx, genCorrectFsMpMintingCtx, genCorrectFsVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, genCorruptCertVSpendingCtx, genCorruptFsMpBurningCtx, genCorruptFsMpMintingCtx, genCorruptFsVSpendingCtx, genCorruptMustBurnOwnSingletonValueCtx, mkScriptContext)
+import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorrectCertVSpendingCtx, genCorrectConsumerCtx, genCorrectFsMpBurningCtx, genCorrectFsMpMintingCtx, genCorrectFsVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, genCorruptCertVSpendingCtx, genCorruptFsMpBurningCtx, genCorruptFsMpMintingCtx, genCorruptFsVSpendingCtx, genCorruptMustBurnOwnSingletonValueCtx, mkScriptContext)
 import Coop.Plutus.Types (PAuthMpParams, PCertMpParams, PFsMpParams)
 import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), AuthParams (AuthParams), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint), FsMpParams (FsMpParams), FsMpRedeemer (FsMpBurn, FsMpMint))
+import Data.ByteString.Lazy qualified as LB
 import Data.Foldable (Foldable (fold))
 import Data.Map qualified as Map
 import Data.Set qualified as Set
 import Data.Text (Text, unpack)
 import Plutarch (Config (Config, tracingMode), TracingMode (DetTracing), compile, pcon, printScript)
+import Plutarch.Api.V1 (PCurrencySymbol)
 import Plutarch.Builtin (PIsData (pdataImpl))
 import Plutarch.Evaluate (evalScript)
 import Plutarch.Test (pfails, psucceeds)
 import PlutusLedgerApi.V1.Address (scriptHashAddress)
 import PlutusLedgerApi.V1.Value (AssetClass, TokenName (TokenName), assetClass, currencySymbol)
-import PlutusLedgerApi.V2 (Address, CurrencySymbol, Script, ScriptPurpose (Minting), ValidatorHash (ValidatorHash), toData)
+import PlutusLedgerApi.V2 (Address, CurrencySymbol, Script, ScriptPurpose (Minting), ValidatorHash (ValidatorHash), dataToBuiltinData, toData)
+import PlutusTx (Data)
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
 coopAc :: AssetClass
@@ -265,6 +269,19 @@ spec = do
                   # pconstant (toData ())
                   # pconstant ctx
               )
+  describe "@Consumer" $ do
+    samplePd <- runIO $ readPlutusDataCbor "resources/sample.pd.cbor"
+    describe "should-succeed" $ do
+      prop "reference a fact statement" $
+        forAll (genCorrectConsumerCtx fsCs (dataToBuiltinData samplePd)) $
+          \ctx ->
+            psucceeds
+              ( exampleConsumer
+                  # pconstant @PCurrencySymbol fsCs
+                  # pconstant (toData ())
+                  # pconstant (toData ())
+                  # pconstant ctx
+              )
 
 _plog :: ClosedTerm a -> Expectation
 _plog p = _ptraces' p id []
@@ -298,3 +315,9 @@ pshouldBe x y = do
 pscriptShouldBe :: Script -> Script -> Expectation
 pscriptShouldBe x y =
   printScript x `shouldBe` printScript y
+
+readPlutusDataCbor :: FilePath -> IO Data
+readPlutusDataCbor fname = do
+  cborBytes <- LB.readFile fname
+  let errOrDecoded = deserialiseOrFail @Data cborBytes
+  either (\err -> error $ "File " <> fname <> " can't be parsed into PlutusData CBOR: " <> show err) return errOrDecoded

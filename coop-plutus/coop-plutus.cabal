@@ -130,6 +130,7 @@ test-suite coop-plutus-tests
 
   build-depends:
     , base
+    , bytestring
     , containers
     , coop-hs-types
     , coop-plutus
@@ -139,4 +140,5 @@ test-suite coop-plutus-tests
     , plutus-ledger-api
     , plutus-tx
     , QuickCheck
+    , serialise
     , text
