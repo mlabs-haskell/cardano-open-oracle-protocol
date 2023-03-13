@@ -24,7 +24,9 @@
 
 # Cardano open oracle protocol
 
+<div style="text-align: center;">
 ![COOP logo](coop-docs/images/coop-logo.png)
+</div>
 
 ## Introduction
 
