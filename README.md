@@ -1103,7 +1103,7 @@ policy](coop-docs/02-plutus-protocol.md#fs-policy) script which is the `Currency
 Symbol` the consuming dApps use to assert the authenticity and provenance of the
 referenced [Fact Statement UTxOs](coop-docs/02-plutus-protocol.md#fs-validator).
 
-An example Consumer [validator script](coop-plutus/src/Coop/Plutus:L594-L608)
+An example Consumer [validator script](https://github.com/mlabs-haskell/cardano-open-oracle-protocol/blob/dbc2182ab2e8d2ce6053ef9ba7ac9afbaaa2c5cd/coop-plutus/src/Coop/Plutus.hs#L594-L607)
 was provided to demonstrate how to authenticate [Fact Statement
 UTxOs](coop-docs/02-plutus-protocol.md#fs-validator) on-chain. The script
 performs a simple assertion on the
