@@ -1,6 +1,6 @@
 # COOP Frontend protocol
 
-This document contains a information about how users must interact with the COOP Publisher in order to publish new Fact Statements and garbage collect obsolete Fact Statements.
+This document contains information about how users must interact with the COOP Publisher in order to publish new Fact Statements and garbage collect obsolete Fact Statements.
 
 ## Publishing a Fact Statement
 
@@ -8,7 +8,7 @@ The successful result of this operation is a [Fact Statement Publishing transact
 
 The user we call `Submitter` approaches the [COOP Publisher gRPC](../coop-proto/publisher-service.proto) service with a Fact Statement identifier that exists in the underlying Oracle's `Fact Statement Store`.
 
-The `Submitter` provides the desired Fact Statement IDs they want published, alongside the validity time after which the produced [Fact Statement UTxOs](02-plutus-protocol.md#fs-validator) cab be garbage collected. Of course, the public key hash of the `Submitter` wallets needs to be provided as well as the back-end transaction building process requires that information to construct the transaction.
+The `Submitter` provides the desired Fact Statement IDs they want published, alongside the validity time after which the produced [Fact Statement UTxOs](02-plutus-protocol.md#fs-validator) can be garbage collected. Of course, the public key hash of the `Submitter` wallets needs to be provided as well as the back-end transaction building process requires that information to construct the transaction.
 
 ```mermaid
 sequenceDiagram

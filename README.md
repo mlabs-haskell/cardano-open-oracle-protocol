@@ -154,8 +154,8 @@ Bash function one can discover the definition of some other Bash functions:
 ```sh
 [coop-env ~ coop-tutorial] $ type coop-get-state
 coop-get-state is a function
-coop-get-state () 
-{ 
+coop-get-state ()
+{
     coop-pab-cli get-state --any-wallet $GOD_PKH;
     cat $COOP_PAB_DIR/coop-state.json | json_pp
 }
@@ -182,7 +182,7 @@ As we run the different commands in the tutorial Nix will continue to show the
 working folder as:
 
 ```sh
-[coop-env ~ coop-tutorial] $ 
+[coop-env ~ coop-tutorial] $
 ```
 
 We can orient ourselves by looking for that prompt. If you find yourself in
@@ -344,7 +344,7 @@ that later...
 > NOTE:
 > The [Authentication Authority](coop-docs/02-plutus-protocol.md#authentication-authority) wallets MUST be kept safe as their compromise impacts the integrity of the entire system. Trust in a particular COOP Publisher eventually reduces to this wallet.
 
-Continuing, we should be able to already inspect he state of the Protocol by using a provided `coop-get-state` bash function:
+Continuing, we should be able to already inspect the state of the Protocol by using a provided `coop-get-state` bash function:
 
 ```sh
 coop-get-state
@@ -388,7 +388,7 @@ coop-pab-cli mint-cert-redeemers \
  --cert-rdmrs-to-mint 100
 ```
 
-Which should so the certificate redeemer tokens successfully minted:
+Which should show that the certificate redeemer tokens were successfully minted:
 
 ```sh
 CONTRACT] [INFO [Any]] mintCertR: Finished

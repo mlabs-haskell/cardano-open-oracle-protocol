@@ -33,7 +33,7 @@ A Plutus Data value can be any of the following:
 - **Constructor** -- an integer-tagged sequence of values. This is intended to
   be used to represent sum types, which are types that provide multiple possible
   options for their values and use a different tag for each option. For example,
-  the result of a fallible numeric  calculation can be represented as either a
+  the result of a fallible numeric calculation can be represented as either a
   textual description of an error or a numeric correct result of the
   calculation.
 - **Map** -- a collection of zero or more value-value pairs.
