@@ -25,10 +25,10 @@ It is between a user seeking to submit a dApp transaction referencing a timely F
    - **Oracle payment output** – an optional output sent to the Oracle's wallet, containing a payment towards the Oracle.
    - **User change output** – an output sent to the user, containing the remainder of the user's payment UTxO input.
 3. **User acceptance** - Upon receiving the Oracle-signed publish transaction, the user inspects it. If satisfied with its contents, the user adds her signature to the transaction and submits it to the blockchain.
-4. **Downstream use in dApps** - The user submits a dApp transaction referencing the Fact Statement. As explained below, the user may chain this transaction immediately after the publish transaction (if the user submitted it herself), without waiting for it to be confirmed on the blockchain. When a user references Fact Statements in a dApp, the dApp is responsible for verifying the provenance of the Fact Statements from Oracles and their relevance to the dApp transaction.
-5. **Garbage collection** - The Fact Statement UTxOs from the publish transaction is locked by a script that allows it, after an Submitter-specified **time-to-live (TTL)** deadline, to  be spent in a **garbage collection** transaction that returns the tokens it contains back to the user that paid for the publish transaction.
+4. **Downstream use in dApps** - The user submits a dApp transaction referencing the Fact Statement. As explained below, the user may chain this transaction immediately after the publishing transaction (if the user submitted it herself), without waiting for it to be confirmed on the blockchain. When a user references Fact Statements in a dApp, the dApp is responsible for verifying the provenance of the Fact Statements from Oracles and their relevance to the dApp transaction.
+5. **Garbage collection** - The Fact Statement UTxOs from the publishing transaction is locked by a script that allows it, after a Submitter-specified **time-to-live (TTL)** deadline, to be spent in a **garbage collection** transaction that returns the tokens it contains back to the user that paid for the publishing transaction.
 
-The above interaction supports financial sustainability by allowing Oracles to share the on-chain publication costs with users, and optionally to generate a profit for a healthy business model. It also allows UTxO deposits (Cardano requires minimum 2 ADA per UTxO) to be recovered when the Fact Statement UTxO's TTL expires—thus the funds locked in UTxO deposits can be bounded and the ongoing variable cost for publication is only the transaction fee for the publish transaction.
+The above interaction supports financial sustainability by allowing Oracles to share the on-chain publication costs with users, and optionally to generate a profit for a healthy business model. It also allows UTxO deposits (Cardano requires minimum 2 ADA per UTxO) to be recovered when the Fact Statement UTxO's TTL expires—thus the funds locked in UTxO deposits can be bounded and the ongoing variable cost for publication is only the transaction fee for the publishing transaction.
 
 Data accessibility can be supported by setting the Fact Statement's TTL appropriately to its user demand, so that most users can have a reasonable expectation that it will be available when they attempt to reference it. For example, the user demand for a Fact Statement from the "Current ADA price" feed should decay rapidly—e.g. an hour after publication, no user is expected to reference it as the current price to a dApp except for a user that is extremely out-of-sync with the blockchain. Thus, a TTL of one hour (perhaps even less) would be appropriate for this Fact Statement. In general, an Oracle feed's TTL policy should be calibrated to its semantic domain and target audience.
 
@@ -56,14 +56,14 @@ In a later iteration of this design, we may explore a potential mechanism to **r
   - COOP Publisher can collect [Min UTxO Ada](https://docs.cardano.org/native-tokens/minimum-ada-value-requirement) created by various operational transactions.
 - 2.2 Publishers can dynamically manage security parameters
   - By using a novel authentication scheme COOP Publishers are able to 'authorize' Fact Statement minting using ephemeral authentication tokens
-  
+
 ### Cardano features enabling Oracles
 
 Cardano's [Vasil hardfork combinator (HFC) event](https://iohk.io/en/blog/posts/2022/07/04/cardano-s-approaching-vasil-upgrade-what-to-expect/), expected on mainnet in August 2022, will introduce:
 
 - [Reference inputs (CIP-31)](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0031) – transactions can reference some of their inputs instead of consuming them, keeping those inputs intact for other transactions to consume or reference. Previously, transactions were required to consume their inputs, making those inputs unavailable to other transactions.
-- [Inline datums (CIP-32)](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0032) – transaction outputs will be able to store their datums directly. Previously, transaction outputs could only store hashes of datums, with the actual datums stored in the transaction body's (datum hash 🠖 datum) table. This incurred a significant burden on users, who would have to provide  the datums corresponding to the datum hashes for the inputs used in their transactions. This burden translated into an infrastructure requirement for an off-chain index from datum hashes to datums for all utxos on the blockchain, to allow users to efficiently retrieve the datums they need to provide in their transactions. This burden is eliminated for transaction outputs with inline datums.
-- [Reference scripts (CIP-33)](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0033) – inline scripts may be attached to transaction outputs, and subsequent transactions can reference those outputs to access their  scripts and use them during validation. Previously, transactions had to include all of their scripts in their transaction bodies, bloating transaction sizes and blockchain space usage. With reference scripts, a dApp can optimize its space usage on-chain by efficiently reusing a set of general and stable scripts across multiple transactions.
+- [Inline datums (CIP-32)](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0032) – transaction outputs will be able to store their datums directly. Previously, transaction outputs could only store hashes of datums, with the actual datums stored in the transaction body's (datum hash 🠖 datum) table. This incurred a significant burden on users, who would have to provide the datums corresponding to the datum hashes for the inputs used in their transactions. This burden translated into an infrastructure requirement for an off-chain index from datum hashes to datums for all utxos on the blockchain, to allow users to efficiently retrieve the datums they need to provide in their transactions. This burden is eliminated for transaction outputs with inline datums.
+- [Reference scripts (CIP-33)](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0033) – inline scripts may be attached to transaction outputs, and subsequent transactions can reference those outputs to access their scripts and use them during validation. Previously, transactions had to include all of their scripts in their transaction bodies, bloating transaction sizes and blockchain space usage. With reference scripts, a dApp can optimize its space usage on-chain by efficiently reusing a set of general and stable scripts across multiple transactions.
 
 Reference inputs are fundamentally important in the context of Oracles, which are primarily concerned with the dissemination of information. Prior to reference inputs, Oracle designs had to contend with exclusive consumption and mitigated the challenges of concurrent use by relying on off-chain coordination, redundant publication, and explicit re-publication of spent outputs. With reference inputs, Oracles can publish information on-chain once and have users access that information concurrently and non-exclusively. The blockchain ledger thus evolves from its resource management roots to include information management.
 
@@ -73,7 +73,7 @@ Inline datums and reference scripts are tools that may be useful in pursuit of f
 
 ### Collecting min UTxO ADAs
 
-Unspent transaction outputs (ie. UTxOs) created by COOP transactions can be 'eventually' spent and collected by involved parties.
+Unspent transaction outputs (i.e. UTxOs) created by COOP transactions can be 'eventually' spent and collected by involved parties.
 This supports financial sustainability by allowing participants to recover [Min UTxO Ada](https://docs.cardano.org/native-tokens/minimum-ada-value-requirement) paid when creating UTxOs.
 
 Note that all fact Statements published remain available on the blockchain ledger, even after Fact Statement UTxOs are spent.
@@ -91,10 +91,10 @@ Fee escrow protocol SHOULD lock the **Publishing Fee** in a @FeeV Plutus validat
 
 #### Properties
 
-1. Publisher MUST be able assert the existence of the valid Fee escrow by inspecting the submitted Fee transaction, before proceeding to doing any additional work.
+1. Publisher MUST be able to assert the existence of the valid Fee escrow by inspecting the submitted Fee transaction, before proceeding to doing any additional work.
 2. Publisher MUST be able to claim the Fee by providing a proof of a successful Publishing.
 3. Submitter MUST be able to claim the Fee by providing a proof of a failed Publishing.
-4. Submitter MUST be able to reclaim the Cardano operational fees (ie. minUtxoAda).
+4. Submitter MUST be able to reclaim the Cardano operational fees (i.e. minUtxoAda).
 
 Pros:
 
