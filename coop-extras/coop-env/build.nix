@@ -2,12 +2,8 @@
 , cardanoCli
 , cardanoNode
 , chainIndex
-, coopPabCli
-, coopPlutusCli
-, coopPublisherCli
-, jsFsStoreCli
-, plutusJsonCli
 , plutipLocalCluster
+, coopClis
 }:
 pkgs.mkShell {
   packages = with pkgs; [
@@ -23,13 +19,8 @@ pkgs.mkShell {
     chainIndex
     cardanoCli
     cardanoNode
-    coopPabCli
-    coopPlutusCli
-    coopPublisherCli
-    jsFsStoreCli
-    plutusJsonCli
     plutipLocalCluster
-  ];
+  ] ++ builtins.attrValues coopClis;
   shellHook = ''
     echo "Making proto and resources symlinks"
     rm -f coop-proto

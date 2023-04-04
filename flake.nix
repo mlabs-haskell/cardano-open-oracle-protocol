@@ -166,18 +166,7 @@
           compiler-nix-name = "ghc8107";
         };
         coopPabFlake = coopPabProj.flake { };
-
-        coopPabCli = pkgs.stdenv.mkDerivation {
-          name = "coop-pab-cli";
-          nativeBuildInputs = [ pkgs.makeWrapper ];
-          phases = [ "installPhase" ];
-          installPhase = ''
-            mkdir -p $out/bin
-            cp ${coopPabProj.getComponent "coop-pab:exe:coop-pab-cli"}/bin/coop-pab-cli $out/bin/coop-pab-cli
-            chmod +x $out/bin/coop-pab-cli
-            wrapProgram  $out/bin/coop-pab-cli --prefix PATH ":" ${coopPlutusCli}/bin/coop-plutus-cli
-          '';
-        };
+        coopPabCli = coopPabFlake.packages."coop-pab:exe:coop-pab-cli";
 
         # Extras
         plutusJson = import ./coop-extras/plutus-json/build.nix {
@@ -211,30 +200,49 @@
         };
         cardanoProtoExtrasFlake = cardanoProtoExtras.flake { };
 
+        coopClis = indexBy (drv: drv.exeName) [
+          coopPabCli
+          coopPlutusCli
+          coopPublisherCli
+          jsFsStoreCli
+          plutusJsonCli
+        ];
+
         coopEnvShell = import ./coop-extras/coop-env/build.nix {
           inherit pkgs;
-          plutipLocalCluster = plutip.packages.${system}."plutip:exe:local-cluster";
-          inherit coopPabCli coopPlutusCli jsFsStoreCli coopPublisherCli plutusJsonCli;
+          inherit coopClis;
           cardanoNode = coopPabProj.hsPkgs.cardano-node.components.exes.cardano-node;
           cardanoCli = coopPabProj.hsPkgs.cardano-cli.components.exes.cardano-cli;
           chainIndex = coopPabProj.hsPkgs.plutus-chain-index.components.exes.plutus-chain-index;
+          plutipLocalCluster = plutip.packages.${system}."plutip:exe:local-cluster";
         };
 
+        # Various helper functions
         renameAttrs = rnFn: pkgs.lib.attrsets.mapAttrs' (n: value: { name = rnFn n; inherit value; });
+        indexBy = keyFn: builtins.foldl' (indexed: x: indexed // { "${keyFn x}" = x; }) { };
+        fixNames = builtins.mapAttrs
+          (_: drv:
+            builtins.mapAttrs
+              (name: value:
+                if name == "name"
+                then "${drv.exeName}-${drv.version}"
+                else value
+              )
+              drv
+          );
       in
       rec {
         # Useful for nix repl
-        inherit pkgs pkgsWithOverlay pkgsForPlutarch plutusJsonCli;
+        inherit pkgs pkgsWithOverlay pkgsForPlutarch;
 
         # Standard flake attributes
-        packages = coopPlutusFlake.packages // coopPublisherFlake.packages // coopPabFlake.packages // coopHsTypesFlake.packages // plutusJsonFlake.packages // {
-          "coop-plutus-cli" = coopPlutusCli;
-          "coop-pab-cli" = coopPabCli;
-          "coop-publisher-cli" = coopPublisherCli;
-          "js-fs-store-cli" = jsFsStoreCli;
-          "plutus-json-cli" = plutusJsonCli;
-          "default" = coopPabCli;
-        };
+        packages = coopPlutusFlake.packages
+        // coopPublisherFlake.packages
+        // coopPabFlake.packages
+        // coopHsTypesFlake.packages
+        // plutusJsonFlake.packages
+        // coopClis
+        // { "default" = coopPabCli; };
 
         devShells = rec {
           dev-proto = coopProtoDevShell;
@@ -262,6 +270,9 @@
           cardanoProtoExtrasFlake.checks
           ) //
         { inherit pre-commit-check; } // devShells // packages;
+
+        # FIXME(bladyjoker): Bundlers don't work without `fixNames` because they rely on `builtins.parseDrvName` on `name` rather than `exeName` attribute.
+        bundlers = fixNames coopClis;
       })
     // {
       # Instruction for the Hercules CI to build on x86_64-linux only, to avoid errors about systems without agents.
