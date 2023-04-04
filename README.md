@@ -553,6 +553,7 @@ generate-keys $COOP_PAB_DIR
 ```
 
 Now we are ready to run the service (use Bash function `coop-run-tx-builder-grpc`):
+
 ```sh
 coop-pab-cli tx-builder-grpc --auth-wallet $AUTH_PKH --fee-wallet $FEE_PKH
 ```
@@ -618,7 +619,7 @@ echo "SELECT * FROM fact_statements" | sqlite3 $JS_STORE_DIR/json-store.db
 
 You expectedly should see:
 
-```
+```text
 id1|["apples", "oranges", "pears"]
 id2|{"name": "Drazen Popovic", "age": 35}
 id3|"Lorem ipsum"
