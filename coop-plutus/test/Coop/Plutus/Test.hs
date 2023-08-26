@@ -1,13 +1,13 @@
 module Coop.Plutus.Test (spec) where
 
 import Plutarch.Prelude (ClosedTerm, PBool (PTrue), PEq ((#==)), pconstant, pconstantData, (#))
-import Test.Hspec (Expectation, Spec, describe, runIO, shouldBe)
+import Test.Hspec (Expectation, Spec, describe, expectationFailure, runIO, shouldBe)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (NonEmptyList (getNonEmpty), Positive (getPositive), choose, forAll, generate)
 
 import Codec.Serialise (deserialiseOrFail)
 import Coop.Plutus (certV, exampleConsumer, fsV, mkAuthMp, mkCertMp, mkFsMp, pmustSpendAtLeastAa)
-import Coop.Plutus.Aux (hashTxInputs, pmustBurnOwnSingletonValue)
+import Coop.Plutus.Aux (hashTxInputs, pmustBurnOwnSingletonValue, punit)
 import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorrectCertVSpendingCtx, genCorrectConsumerCtx, genCorrectFsMpBurningCtx, genCorrectFsMpMintingCtx, genCorrectFsVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, genCorruptCertVSpendingCtx, genCorruptFsMpBurningCtx, genCorruptFsMpMintingCtx, genCorruptFsVSpendingCtx, genCorruptMustBurnOwnSingletonValueCtx, mkScriptContext)
 import Coop.Plutus.Types (PAuthMpParams, PCertMpParams, PFsMpParams)
 import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), AuthParams (AuthParams), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint), FsMpParams (FsMpParams), FsMpRedeemer (FsMpBurn, FsMpMint))
@@ -16,15 +16,16 @@ import Data.Foldable (Foldable (fold))
 import Data.Map qualified as Map
 import Data.Set qualified as Set
 import Data.Text (Text, unpack)
-import Plutarch (Config (Config, tracingMode), TracingMode (DetTracing), compile, pcon, printScript)
+import Plutarch (Config (Config, tracingMode), TracingMode (DetTracing, DoTracing), compile, pcon, printScript)
 import Plutarch.Api.V1 (PCurrencySymbol)
 import Plutarch.Builtin (PIsData (pdataImpl))
 import Plutarch.Evaluate (evalScript)
-import Plutarch.Test (pfails, psucceeds)
+import Plutarch.Test (pfails)
 import PlutusLedgerApi.V1.Address (scriptHashAddress)
+import PlutusLedgerApi.V1.Scripts (applyArguments)
 import PlutusLedgerApi.V1.Value (AssetClass, TokenName (TokenName), assetClass, currencySymbol)
 import PlutusLedgerApi.V2 (Address, CurrencySymbol, Script, ScriptPurpose (Minting), ValidatorHash (ValidatorHash), dataToBuiltinData, toData)
-import PlutusTx (Data)
+import PlutusTx (Data, applyCode, liftCode)
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
 coopAc :: AssetClass
@@ -209,45 +210,29 @@ spec = do
     describe "should-succeed" $ do
       prop "mint $FS" $
         let fsMpParams = FsMpParams coopAc fsVAddr (AuthParams authCs certCs)
+            fsMp = applyArguments (comp mkFsMp) [toData fsMpParams]
          in forAll (genCorrectFsMpMintingCtx fsMpParams fsCs) $
               \ctx ->
-                psucceeds
-                  ( mkFsMp
-                      # pconstantData @PFsMpParams fsMpParams
-                      # pdataImpl (pconstant FsMpMint)
-                      # pconstant ctx
-                  )
+                succeeds $ applyArguments fsMp [toData FsMpMint, toData ctx]
       prop "burn $FS" $
         let fsMpParams = FsMpParams coopAc fsVAddr (AuthParams authCs certCs)
+            fsMp = applyArguments (comp mkFsMp) [toData fsMpParams]
          in forAll (genCorrectFsMpBurningCtx fsMpParams fsCs) $
               \ctx ->
-                psucceeds
-                  ( mkFsMp
-                      # pconstantData @PFsMpParams fsMpParams
-                      # pdataImpl (pconstant FsMpBurn)
-                      # pconstant ctx
-                  )
+                succeeds $ applyArguments fsMp [toData FsMpBurn, toData ctx]
     describe "should-fail" $ do
       prop "mint $FS" $
         let fsMpParams = FsMpParams coopAc fsVAddr (AuthParams authCs certCs)
+            fsMp = applyArguments (comp mkFsMp) [toData fsMpParams]
          in forAll (genCorruptFsMpMintingCtx fsMpParams fsCs) $
               \ctx ->
-                pfails
-                  ( mkFsMp
-                      # pconstantData @PFsMpParams fsMpParams
-                      # pdataImpl (pconstant FsMpMint)
-                      # pconstant ctx
-                  )
+                fails $ applyArguments fsMp [toData FsMpMint, toData ctx]
       prop "burn $FS" $
         let fsMpParams = FsMpParams coopAc fsVAddr (AuthParams authCs certCs)
+            fsMp = applyArguments (comp mkFsMp) [toData fsMpParams]
          in forAll (genCorruptFsMpBurningCtx fsMpParams fsCs) $
               \ctx ->
-                pfails
-                  ( mkFsMp
-                      # pconstantData @PFsMpParams fsMpParams
-                      # pdataImpl (pconstant FsMpBurn)
-                      # pconstant ctx
-                  )
+                fails $ applyArguments fsMp [toData FsMpBurn, toData ctx]
   describe "@FsV" $ do
     describe "should-succeed" $ do
       prop "spend $FS" $
@@ -293,10 +278,12 @@ _ptraces' p traceMap traceMappedShouldBe =
     (Right _, _, traceLog) -> traceMap traceLog `shouldBe` traceMappedShouldBe
 
 comp :: ClosedTerm a -> Script
-comp t = either (error . unpack) id $ compile (Config {tracingMode = DetTracing}) t
+comp t = either (error . unpack) id $ compile (Config {tracingMode = DoTracing}) t
 
 passert :: ClosedTerm a -> Expectation
-passert p = pshouldBe p (pcon PTrue)
+passert p = pshouldBe p punit
+
+psucceeds = passert
 
 pshouldBe :: ClosedTerm a -> ClosedTerm b -> Expectation
 pshouldBe x y = do
@@ -309,15 +296,33 @@ pshouldBe x y = do
       (Left e, _, trace) -> fail $ "Script evaluation failed: " <> show e <> " with trace: " <> show trace
       (Right x', _, _) -> pure x'
 
+plutusUnit = comp punit
+
+pscriptSucceeds p = pscriptShouldBe p plutusUnit
+
 {- |
   Like `pshouldBe` but on `Script`
 -}
 pscriptShouldBe :: Script -> Script -> Expectation
 pscriptShouldBe x y =
-  printScript x `shouldBe` printScript y
+  evalScript x `shouldBe` evalScript y
 
 readPlutusDataCbor :: FilePath -> IO Data
 readPlutusDataCbor fname = do
   cborBytes <- LB.readFile fname
   let errOrDecoded = deserialiseOrFail @Data cborBytes
   either (\err -> error $ "File " <> fname <> " can't be parsed into PlutusData CBOR: " <> show err) return errOrDecoded
+
+-- | Asserts the term evaluates successfully without failing
+succeeds :: Script -> Expectation
+succeeds s =
+  case evalScript s of
+    (Left _, _, t) -> expectationFailure $ "Term failed to evaluate, here's the trace:\n" <> show t
+    (Right _, _, _) -> pure ()
+
+-- | Asserts the term evaluates without success
+fails :: Script -> Expectation
+fails s = do
+  case evalScript s of
+    (Left _, _, _) -> pure ()
+    (Right _, _, t) -> expectationFailure $ "Term succeeded, here's the trace:\n" <> show t
