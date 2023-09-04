@@ -300,11 +300,14 @@ declare -x GOD_PKH="c12aacc2604e89cd5dac1fb1e324ad552df1b18e2bd4230e8e15cfd5"
 declare -x SUBMITTER_PKH="b7e59f40866e6ec88635343b9cc285043d344afbbe001ae645db0553"
 ```
 
-Output shows some named wallets with their base16 public keys hash identifier. The `SUBMITTER_PKH` is the only wallet not used by the `COOP Publisher` that belongs to the user. In fact, we need to hide this wallet from the `local-cluster` to emulate a real scenario:
+Output shows some named wallets with their base16 public keys hash identifier. The `SUBMITTER_PKH` is the only wallet not used by the `COOP Publisher` that belongs to the user. We want to hide this wallet from the `local-cluster` to emulate a real-world (distributed) scenario where a third-party user will eventually sign the resulting COOP transaction:
 
 ```sh
 mv $WALLETS/signing-key-"$SUBMITTER_PKH".skey $WALLETS/my-signing-key-"$SUBMITTER_PKH".skey
 ```
+
+> NOTE:
+> If the `$SUBMITTER_PKH` signing key is not renamed, when the [Publisher gRPC](coop-proto/publisher-service.proto) service is invoked (below) it will use the key to automatically sign a COOP transaction and submit it to the Cardano Network. This can be useful in test-scenarios or when using COOP in an appropriately secured environment, purely as a publishing mechanism, i.e. in a centralized or federated model the COOP node signs and submits its own transactions. In this scenario the `FEE_PKH` can also be set to that of the `SUBMITTED_PKH` so that fees are automatically returned.
 
 All other essential wallets are owned by the COOP Publisher and are used throughout its lifecycle. We'll revisit their role as we progress through the tutorial.
 
