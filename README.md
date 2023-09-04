@@ -415,6 +415,10 @@ mintAuth: Minted $CERT
 mintAuth: Minted $AUTH
 ```
 
+> NOTE:
+> Validity is measured in milliseconds (ms). `60 * 60 * 1000` is `3600000 ms`
+> which means our certificates in this example are valid for one hour.
+
 The `coop-pab-cli mint-cert-redeemers` issues [Certificate redeemer
 tokens](coop-docs/02-plutus-protocol.md#cert-rdmr-token) to a special wallet
 that will be used in `coop-pab-cli garbage-collect` command to 'garbage collect'
@@ -731,6 +735,8 @@ collect it at any time after publishing.
 > Users can specify validity time for the [Fact Statement UTxOs](coop-docs/02-plutus-protocol.md#fs-validator) they created and adjust it to the needs of the dApps they are referenced with.
 > Some Fact Statements are going to be short lived, and some long lived, that largely depends on how the Fact Statement is used by a Cardano dApp.
 > Protocol enables Submitters to 'garbage collect' obsolete [Fact Statement UTxOs](coop-docs/02-plutus-protocol.md#fs-validator) and reclaim the [Min UTxO Ada](https://docs.cardano.org/native-tokens/minimum-ada-value-requirement) held within.
+>
+> Validity time is specified using a [Unix timestamp](https://www.unixtimestamp.com/) in milliseconds. When interacting with the GRPC service ensure that your tooling can convert its native timestamps to milliseconds.
 
 Let's issue a request against the [Publisher gRPC](coop-proto/publisher-service.proto) service:
 
