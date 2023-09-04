@@ -28,11 +28,15 @@ message TxOutRef {
 
 message ExtendedLedgerTime {
   enum Extended {
+    // Negative infinity: elapses immediately
     NEG_INF = 0;
+    // Finite time: elapses at `finite_ledger_time`
     FINITE = 1;
+    // Positive infinity: never elapses.
     POS_INF = 2;
   }
   Extended extended = 1;
+  // Unix timestamp in milliseconds (ms)
   uint64 finite_ledger_time = 2;
 }
 
