@@ -103,7 +103,7 @@ deployCoop coopPlutus aaWallet atLeastAaQ aaQToMint = do
 mkAuthDeployment :: CoopPlutus -> AssetClass -> Integer -> AuthDeployment
 mkAuthDeployment coopPlutus aaAc atLeastAaQ =
   let authMpParams = AuthMpParams aaAc atLeastAaQ
-      certMpParams = CertMpParams aaAc atLeastAaQ (mkValidatorAddress certV)
+      certMpParams = CertMpParams aaAc atLeastAaQ certAddr
       certV = Validator $ cp'certV coopPlutus
       certAddr = mkValidatorAddress certV
       certMp = MintingPolicy $ applyArguments (cp'mkCertMp coopPlutus) [toData certMpParams]

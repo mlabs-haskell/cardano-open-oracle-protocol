@@ -43,7 +43,7 @@ import Control.Applicative ((<|>))
 import Control.Concurrent.STM (newTVarIO)
 import Control.Lens ((^.), (^?))
 import Control.Monad (filterM)
-import Coop.Types (AuthDeployment (ad'certPolicy, ad'certValidator), CoopDeployment (cd'auth, cd'fsPolicy, cd'fsValidator), CoopPlutus)
+import Coop.Types (AuthDeployment (ad'authPolicy, ad'authSymbol, ad'certPolicy, ad'certValidator), CoopDeployment (cd'auth, cd'fsSymbol, cd'fsValidator), CoopPlutus)
 import Crypto.Hash (Blake2b_256 (Blake2b_256), hashWith)
 import Data.Aeson (ToJSON, decodeFileStrict)
 import Data.ByteArray (convert)
@@ -183,13 +183,13 @@ deplCertCs :: CoopDeployment -> CurrencySymbol
 deplCertCs = scriptCurrencySymbol . ad'certPolicy . cd'auth
 
 deplAuthCs :: CoopDeployment -> CurrencySymbol
-deplAuthCs = scriptCurrencySymbol . ad'certPolicy . cd'auth
+deplAuthCs = ad'authSymbol . cd'auth
 
 deplAuthMp :: CoopDeployment -> MintingPolicy
-deplAuthMp = ad'certPolicy . cd'auth
+deplAuthMp = ad'authPolicy . cd'auth
 
 deplFsCs :: CoopDeployment -> CurrencySymbol
-deplFsCs = scriptCurrencySymbol . cd'fsPolicy
+deplFsCs = cd'fsSymbol
 
 findOutsAt :: forall a w s. Typeable a => FromData a => Address -> (Value -> Maybe a -> Bool) -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
 findOutsAt addr p = do
