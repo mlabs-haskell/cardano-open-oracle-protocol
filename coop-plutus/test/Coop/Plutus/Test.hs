@@ -1,6 +1,6 @@
 module Coop.Plutus.Test (spec) where
 
-import Plutarch.Prelude (ClosedTerm, PBool (PTrue), PEq ((#==)), pconstant, pconstantData, (#))
+import Plutarch.Prelude (ClosedTerm, PEq ((#==)), pconstant, pconstantData, (#))
 import Test.Hspec (Expectation, Spec, describe, expectationFailure, runIO, shouldBe)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (NonEmptyList (getNonEmpty), Positive (getPositive), choose, forAll, generate)
@@ -9,14 +9,14 @@ import Codec.Serialise (deserialiseOrFail)
 import Coop.Plutus (certV, exampleConsumer, fsV, mkAuthMp, mkCertMp, mkFsMp, pmustSpendAtLeastAa)
 import Coop.Plutus.Aux (hashTxInputs, pmustBurnOwnSingletonValue, punit)
 import Coop.Plutus.Test.Generators (distribute, genAaInputs, genCertRdmrAc, genCorrectAuthMpBurningCtx, genCorrectAuthMpMintingCtx, genCorrectCertMpBurningCtx, genCorrectCertMpMintingCtx, genCorrectCertVSpendingCtx, genCorrectConsumerCtx, genCorrectFsMpBurningCtx, genCorrectFsMpMintingCtx, genCorrectFsVSpendingCtx, genCorrectMustBurnOwnSingletonValueCtx, genCorruptAuthMpBurningCtx, genCorruptAuthMpMintingCtx, genCorruptCertMpBurningCtx, genCorruptCertMpMintingCtx, genCorruptCertVSpendingCtx, genCorruptFsMpBurningCtx, genCorruptFsMpMintingCtx, genCorruptFsVSpendingCtx, genCorruptMustBurnOwnSingletonValueCtx, mkScriptContext)
-import Coop.Plutus.Types (PAuthMpParams, PCertMpParams, PFsMpParams)
+import Coop.Plutus.Types (PAuthMpParams, PCertMpParams)
 import Coop.Types (AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), AuthParams (AuthParams), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint), FsMpParams (FsMpParams), FsMpRedeemer (FsMpBurn, FsMpMint))
 import Data.ByteString.Lazy qualified as LB
 import Data.Foldable (Foldable (fold))
 import Data.Map qualified as Map
 import Data.Set qualified as Set
 import Data.Text (Text, unpack)
-import Plutarch (Config (Config, tracingMode), TracingMode (DetTracing, DoTracing), compile, pcon, printScript)
+import Plutarch (Config (Config, tracingMode), TracingMode (DoTracing), compile)
 import Plutarch.Api.V1 (PCurrencySymbol)
 import Plutarch.Builtin (PIsData (pdataImpl))
 import Plutarch.Evaluate (evalScript)
@@ -25,7 +25,7 @@ import PlutusLedgerApi.V1.Address (scriptHashAddress)
 import PlutusLedgerApi.V1.Scripts (applyArguments)
 import PlutusLedgerApi.V1.Value (AssetClass, TokenName (TokenName), assetClass, currencySymbol)
 import PlutusLedgerApi.V2 (Address, CurrencySymbol, Script, ScriptPurpose (Minting), ValidatorHash (ValidatorHash), dataToBuiltinData, toData)
-import PlutusTx (Data, applyCode, liftCode)
+import PlutusTx (Data)
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
 coopAc :: AssetClass
@@ -283,6 +283,7 @@ comp t = either (error . unpack) id $ compile (Config {tracingMode = DoTracing})
 passert :: ClosedTerm a -> Expectation
 passert p = pshouldBe p punit
 
+psucceeds :: ClosedTerm a -> Expectation
 psucceeds = passert
 
 pshouldBe :: ClosedTerm a -> ClosedTerm b -> Expectation
@@ -295,10 +296,6 @@ pshouldBe x y = do
     eval s = case evalScript s of
       (Left e, _, trace) -> fail $ "Script evaluation failed: " <> show e <> " with trace: " <> show trace
       (Right x', _, _) -> pure x'
-
-plutusUnit = comp punit
-
-pscriptSucceeds p = pscriptShouldBe p plutusUnit
 
 {- |
   Like `pshouldBe` but on `Script`
