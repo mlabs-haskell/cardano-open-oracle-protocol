@@ -60,12 +60,16 @@ data CoopPlutus = CoopPlutus
 
 -- | COOP deployment (per oracle)
 data CoopDeployment = CoopDeployment
-  { cd'coopAc :: AssetClass
+  { cd'coopAsset :: AssetClass
   -- ^ $COOP one-shot token denoting the COOP deployment
-  , cd'fsMp :: MintingPolicy
+  , cd'fsPolicy :: MintingPolicy
   -- ^ Deployed COOP Fact Statement minting policy
-  , cd'fsV :: Validator
+  , cd'fsSymbol :: CurrencySymbol
+  -- ^ Deployed COOP $FS currency symbol (policy id)
+  , cd'fsValidator :: Validator
   -- ^ Deployed COOP Fact Statement validator
+  , cd'fsAddress :: Address
+  -- ^ Deployed COOP Fact Statement validator address
   , cd'auth :: AuthDeployment
   -- ^ Deployed COOP authentication deployment
   }
@@ -137,14 +141,20 @@ data FsMpRedeemer = FsMpBurn | FsMpMint
 
 -- | COOP Authentication deployment
 data AuthDeployment = AuthDeployment
-  { ad'authorityAc :: AssetClass
+  { ad'authorityAsset :: AssetClass
   -- ^ Authentication authority asset class $AA that can authorize minting $AUTH and $CERT tokens
-  , ad'certV :: Validator
+  , ad'certValidator :: Validator
   -- ^ @CertV Certificate validator holding $CERTs and CertDatums
-  , ad'certMp :: MintingPolicy
+  , ad'certAddress :: Address
+  -- ^ @CertV Certificate validator address
+  , ad'certPolicy :: MintingPolicy
   -- ^ Minting policy for $CERT tokens
-  , ad'authMp :: MintingPolicy
-  -- ^ Minting policy ofr $AUTH tokens
+  , ad'certSymbol :: CurrencySymbol
+  -- ^ Currency symbol (policy id) for $CERT tokens
+  , ad'authPolicy :: MintingPolicy
+  -- ^ Minting policy for $AUTH tokens
+  , ad'authSymbol :: CurrencySymbol
+  -- ^ Currency symbol (policy id) for $AUTH tokens
   }
   deriving stock (Show, Generic, Eq)
   deriving anyclass (ToJSON, FromJSON)

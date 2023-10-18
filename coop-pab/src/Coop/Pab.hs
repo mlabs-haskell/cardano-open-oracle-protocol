@@ -22,7 +22,7 @@ import Cardano.Proto.Aux (
 import Control.Lens ((&), (.~), (^.))
 import Control.Monad (guard, when)
 import Coop.Pab.Aux (Trx (Trx), currencyValue, datumFromTxOut, datumFromTxOutOrFail, deplAuthCs, deplAuthMp, deplCertCs, deplCertVAddress, deplFsCs, deplFsVAddress, deplFsVHash, findOutsAt, findOutsAt', findOutsAtHolding', findOutsAtHoldingCurrency, findOutsAtHoldingCurrency', hasCurrency, hashTxInputs, interval', minUtxoAdaValue, mkMintOneShotTrx, submitTrx, submitTrx', toDatum, toRedeemer)
-import Coop.Types (AuthBatchId, AuthDeployment (AuthDeployment, ad'authMp, ad'authorityAc, ad'certMp, ad'certV), AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), AuthParams (AuthParams, ap'authTokenCs, ap'certTokenCs), CertDatum (CertDatum, cert'id, cert'validity), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint), CoopDeployment (CoopDeployment, cd'auth, cd'fsMp, cd'fsV), CoopPlutus (cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkOneShotMp), CoopState (CoopState), FactStatementId, FsDatum (FsDatum, fd'fsId, fs'gcAfter, fs'submitter), FsMpParams (FsMpParams), FsMpRedeemer (FsMpBurn, FsMpMint), cp'certV)
+import Coop.Types (AuthBatchId, AuthDeployment (AuthDeployment, ad'authPolicy, ad'authorityAsset, ad'certPolicy, ad'certValidator), AuthMpParams (AuthMpParams), AuthMpRedeemer (AuthMpBurn, AuthMpMint), AuthParams (AuthParams, ap'authTokenCs, ap'certTokenCs), CertDatum (CertDatum, cert'id, cert'validity), CertMpParams (CertMpParams), CertMpRedeemer (CertMpBurn, CertMpMint), CoopDeployment (CoopDeployment, cd'auth, cd'fsPolicy, cd'fsValidator), CoopPlutus (cp'fsV, cp'mkAuthMp, cp'mkCertMp, cp'mkFsMp, cp'mkOneShotMp), CoopState (CoopState), FactStatementId, FsDatum (FsDatum, fd'fsId, fs'gcAfter, fs'submitter), FsMpParams (FsMpParams), FsMpRedeemer (FsMpBurn, FsMpMint), cp'certV)
 import Data.Bool (bool)
 import Data.Foldable (toList)
 import Data.List (nub, partition)
@@ -105,13 +105,17 @@ mkAuthDeployment coopPlutus aaAc atLeastAaQ =
   let authMpParams = AuthMpParams aaAc atLeastAaQ
       certMpParams = CertMpParams aaAc atLeastAaQ (mkValidatorAddress certV)
       certV = Validator $ cp'certV coopPlutus
+      certAddr = mkValidatorAddress certV
       certMp = MintingPolicy $ applyArguments (cp'mkCertMp coopPlutus) [toData certMpParams]
+      certSym = scriptCurrencySymbol certMp
       authMp = MintingPolicy $ applyArguments (cp'mkAuthMp coopPlutus) [toData authMpParams]
-   in AuthDeployment aaAc certV certMp authMp
+      authSym = scriptCurrencySymbol authMp
+   in AuthDeployment aaAc certV certAddr certMp certSym authMp authSym
 
 mkCoopDeployment :: CoopPlutus -> AssetClass -> AuthDeployment -> CoopDeployment
 mkCoopDeployment coopPlutus coopAc authDeployment =
   let fsV = Validator (cp'fsV coopPlutus)
+      fsAddr = mkValidatorAddress fsV
       fsMp =
         MintingPolicy $
           applyArguments
@@ -119,16 +123,17 @@ mkCoopDeployment coopPlutus coopAc authDeployment =
             [ toData
                 ( FsMpParams
                     coopAc
-                    (mkValidatorAddress fsV)
+                    fsAddr
                     (authParamsFromDeployment authDeployment)
                 )
             ]
-   in CoopDeployment coopAc fsMp fsV authDeployment
+      fsSym = scriptCurrencySymbol fsMp
+   in CoopDeployment coopAc fsMp fsSym fsV fsAddr authDeployment
   where
     authParamsFromDeployment ad =
       AuthParams
-        { ap'authTokenCs = scriptCurrencySymbol (ad'authMp ad)
-        , ap'certTokenCs = scriptCurrencySymbol (ad'certMp ad)
+        { ap'authTokenCs = scriptCurrencySymbol (ad'authPolicy ad)
+        , ap'certTokenCs = scriptCurrencySymbol (ad'certPolicy ad)
         }
 
 mintCertRedeemers :: CoopPlutus -> Integer -> Contract w s Text AssetClass
@@ -152,8 +157,8 @@ mintCertRedeemers coopPlutus q = do
 
 mkMintCertTrx :: CoopDeployment -> PaymentPubKeyHash -> AssetClass -> POSIXTimeRange -> Map TxOutRef ChainIndexTxOut -> (Trx i o a, AssetClass)
 mkMintCertTrx coopDeployment self redeemerAc validityInterval aaOuts =
-  let certMp = (ad'certMp . cd'auth) coopDeployment
-      certV = (ad'certV . cd'auth) coopDeployment
+  let certMp = (ad'certPolicy . cd'auth) coopDeployment
+      certV = (ad'certValidator . cd'auth) coopDeployment
       certVAddr = validatorHash certV
       aaOrefs = Map.keys aaOuts
       certId = hashTxInputs aaOuts
@@ -204,8 +209,8 @@ burnCerts coopDeployment certRdmrAc = do
   when (null obsoleteCertOuts) (throwError "burnCerts: There should be some obsolete $CERT inputs")
 
   (now, _) <- currentNodeClientTimeRange
-  let certMp = (ad'certMp . cd'auth) coopDeployment
-      certV = (ad'certV . cd'auth) coopDeployment
+  let certMp = (ad'certPolicy . cd'auth) coopDeployment
+      certV = (ad'certValidator . cd'auth) coopDeployment
       certRdmdrOrefs = Map.keys certRdmrOuts
       certOrefs = Map.keys obsoleteCertOuts
       certVal = foldMap (\out -> inv $ currencyValue (out ^. ciTxOutValue) certCs) (toList obsoleteCertOuts)
@@ -311,7 +316,7 @@ mintAuthAndCert coopDeployment authWallets nAuthTokensPerWallet certRdmrAc from 
 
 mkBurnAuthsTrx :: CoopDeployment -> PaymentPubKeyHash -> Map TxOutRef ChainIndexTxOut -> Trx i o a
 mkBurnAuthsTrx coopDeployment self authOuts = do
-  let authMp = (ad'authMp . cd'auth) coopDeployment
+  let authMp = (ad'authPolicy . cd'auth) coopDeployment
       authCs = scriptCurrencySymbol authMp
       authOrefs = Map.keys authOuts
       authVal = foldMap (\out -> inv $ currencyValue (out ^. ciTxOutValue) authCs) (toList authOuts)
@@ -339,10 +344,10 @@ getState coopDeployment = do
   let logI m = logInfo @String ("getState: " <> m)
   logI "Starting"
 
-  let certVAddr = mkValidatorAddress . ad'certV . cd'auth $ coopDeployment
-      certCs = scriptCurrencySymbol . ad'certMp . cd'auth $ coopDeployment
-      fsVAddr = mkValidatorAddress . cd'fsV $ coopDeployment
-      fsCs = scriptCurrencySymbol . cd'fsMp $ coopDeployment
+  let certVAddr = mkValidatorAddress . ad'certValidator . cd'auth $ coopDeployment
+      certCs = scriptCurrencySymbol . ad'certPolicy . cd'auth $ coopDeployment
+      fsVAddr = mkValidatorAddress . cd'fsValidator $ coopDeployment
+      fsCs = scriptCurrencySymbol . cd'fsPolicy $ coopDeployment
 
   certOuts <- findOutsAtHoldingCurrency certVAddr certCs
   fsOuts <- findOutsAtHoldingCurrency fsVAddr fsCs
@@ -372,19 +377,19 @@ findOutsAtCertV coopDeployment p = do
 
   logI "Starting"
 
-  let certVAddr = (mkValidatorAddress . ad'certV . cd'auth) coopDeployment
+  let certVAddr = (mkValidatorAddress . ad'certValidator . cd'auth) coopDeployment
   findOutsAt @CertDatum
     certVAddr
     (maybe False . p)
 
 findOutsAtCertVWithCERT :: CoopDeployment -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
-findOutsAtCertVWithCERT coopDeployment = findOutsAtCertV coopDeployment (\v _ -> hasCurrency v ((scriptCurrencySymbol . ad'certMp . cd'auth) coopDeployment))
+findOutsAtCertVWithCERT coopDeployment = findOutsAtCertV coopDeployment (\v _ -> hasCurrency v ((scriptCurrencySymbol . ad'certPolicy . cd'auth) coopDeployment))
 
 findOutsAtHoldingAa :: PaymentPubKeyHash -> CoopDeployment -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
 findOutsAtHoldingAa wallet coopDeployment = do
   let logI m = logInfo @String ("findOutsAtHoldingAa: " <> m)
   logI "Starting"
-  let aaAc = (ad'authorityAc . cd'auth) coopDeployment
+  let aaAc = (ad'authorityAsset . cd'auth) coopDeployment
   found <- findOutsAtHolding' wallet aaAc
   logI "Finished"
   return found
@@ -567,8 +572,8 @@ mkMintFsTrx ::
   (Value, PaymentPubKeyHash) ->
   Trx i o a
 mkMintFsTrx coopDeployment now minutes publishingSpec (feeVal, feeCollectorPpkh) = do
-  let fsMp = cd'fsMp coopDeployment
-      fsV = cd'fsV coopDeployment
+  let fsMp = cd'fsPolicy coopDeployment
+      fsV = cd'fsValidator coopDeployment
       fsVHash = deplFsVHash coopDeployment
       fsCs = deplFsCs coopDeployment
       authCs = deplAuthCs coopDeployment
@@ -702,8 +707,8 @@ runGcFsTx coopDeployment submit req = do
 
 mkGcFsTrx :: CoopDeployment -> PaymentPubKeyHash -> [((TxOutRef, ChainIndexTxOut), FsDatum)] -> POSIXTime -> Trx i o a
 mkGcFsTrx coopDeployment submitterPkh fsOutsWithDatum now = do
-  let fsMp = cd'fsMp coopDeployment
-      fsV = cd'fsV coopDeployment
+  let fsMp = cd'fsPolicy coopDeployment
+      fsV = cd'fsValidator coopDeployment
       fsCs = deplFsCs coopDeployment
 
       totalFsValToBurn =
