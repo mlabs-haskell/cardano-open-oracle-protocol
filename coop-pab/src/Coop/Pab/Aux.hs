@@ -43,7 +43,7 @@ import Control.Applicative ((<|>))
 import Control.Concurrent.STM (newTVarIO)
 import Control.Lens ((^.), (^?))
 import Control.Monad (filterM)
-import Coop.Types (AuthDeployment (ad'authMp, ad'certMp, ad'certV), CoopDeployment (cd'auth, cd'fsMp, cd'fsV), CoopPlutus)
+import Coop.Types (AuthDeployment (ad'authPolicy, ad'authSymbol, ad'certPolicy, ad'certValidator), CoopDeployment (cd'auth, cd'fsSymbol, cd'fsValidator), CoopPlutus)
 import Crypto.Hash (Blake2b_256 (Blake2b_256), hashWith)
 import Data.Aeson (ToJSON, decodeFileStrict)
 import Data.ByteArray (convert)
@@ -169,27 +169,27 @@ datumFromTxOutOrFail out msg = do
   maybe (throwError msg) return mayDat
 
 deplCertVAddress :: CoopDeployment -> Address
-deplCertVAddress = mkValidatorAddress . ad'certV . cd'auth
+deplCertVAddress = mkValidatorAddress . ad'certValidator . cd'auth
 
 deplFsVAddress :: CoopDeployment -> Address
 deplFsVAddress depl =
-  let fsV = cd'fsV depl in mkValidatorAddress fsV
+  let fsV = cd'fsValidator depl in mkValidatorAddress fsV
 
 deplFsVHash :: CoopDeployment -> ValidatorHash
 deplFsVHash depl =
-  let fsV = cd'fsV depl in validatorHash fsV
+  let fsV = cd'fsValidator depl in validatorHash fsV
 
 deplCertCs :: CoopDeployment -> CurrencySymbol
-deplCertCs = scriptCurrencySymbol . ad'certMp . cd'auth
+deplCertCs = scriptCurrencySymbol . ad'certPolicy . cd'auth
 
 deplAuthCs :: CoopDeployment -> CurrencySymbol
-deplAuthCs = scriptCurrencySymbol . ad'authMp . cd'auth
+deplAuthCs = ad'authSymbol . cd'auth
 
 deplAuthMp :: CoopDeployment -> MintingPolicy
-deplAuthMp = ad'authMp . cd'auth
+deplAuthMp = ad'authPolicy . cd'auth
 
 deplFsCs :: CoopDeployment -> CurrencySymbol
-deplFsCs = scriptCurrencySymbol . cd'fsMp
+deplFsCs = cd'fsSymbol
 
 findOutsAt :: forall a w s. Typeable a => FromData a => Address -> (Value -> Maybe a -> Bool) -> Contract w s Text (Map TxOutRef ChainIndexTxOut)
 findOutsAt addr p = do

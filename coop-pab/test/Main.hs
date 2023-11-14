@@ -10,7 +10,7 @@ import Control.Monad (void)
 import Control.Monad.Reader (ReaderT)
 import Coop.Pab (burnAuths, burnCerts, deployCoop, findOutsAtCertVWithCERT, findOutsAtHoldingAa, mintAuthAndCert, mintCertRedeemers, mkMintAuthTrx, mkMintCertTrx, runGcFsTx, runMintFsTx, runRedistributeAuthsTrx)
 import Coop.Pab.Aux (DeployMode (DEPLOY_DEBUG), ciValueOf, datumFromTxOut, deplFsCs, deplFsVAddress, findOutsAt', findOutsAtHolding, findOutsAtHolding', findOutsAtHoldingCurrency, interval', loadCoopPlutus, mkMintOneShotTrx, submitTrx)
-import Coop.Types (AuthDeployment (ad'authorityAc, ad'certV), CoopDeployment (cd'auth, cd'coopAc), CoopPlutus (cp'mkOneShotMp), FsDatum)
+import Coop.Types (AuthDeployment (ad'authorityAsset, ad'certValidator), CoopDeployment (cd'auth, cd'coopAsset), CoopPlutus (cp'mkOneShotMp), FsDatum)
 import Data.ByteString (ByteString)
 import Data.Default (def)
 import Data.Foldable (Foldable (toList))
@@ -81,8 +81,8 @@ tests coopPlutus =
                   logInfo @String "Running as godWallet"
                   self <- ownFirstPaymentPubKeyHash
                   coopDeployment <- deployCoop coopPlutus aaWallet 3 6
-                  let aaAc = ad'authorityAc . cd'auth $ coopDeployment
-                      coopAc = cd'coopAc coopDeployment
+                  let aaAc = ad'authorityAsset . cd'auth $ coopDeployment
+                      coopAc = cd'coopAsset coopDeployment
                   aaOuts <- findOutsAtHolding' aaWallet aaAc
                   coopOuts <- findOutsAtHolding' self coopAc
                   return $
@@ -110,7 +110,7 @@ tests coopPlutus =
                     let validityInterval = interval now (now + 100_000)
                         (mintCertTrx, certAc) = mkMintCertTrx coopDeployment self certRdmrAc validityInterval aaOuts
                     void $ submitTrx @Void mintCertTrx
-                    certOuts <- findOutsAtHolding (mkValidatorAddress . ad'certV . cd'auth $ coopDeployment) certAc
+                    certOuts <- findOutsAtHolding (mkValidatorAddress . ad'certValidator . cd'auth $ coopDeployment) certAc
                     return [ciValueOf certAc out | out <- toList certOuts]
                 )
           )
