@@ -1,6 +1,4 @@
-{-# LANGUAGE BlockArguments #-}
-
-module Coop.Plutus.Aux (
+module Coop.Validation.Aux (
   phasCurrency,
   punit,
   ptryFromData,
@@ -28,32 +26,47 @@ module Coop.Plutus.Aux (
   pfindOwnAddr,
   pmustBurnOwnSingletonValue,
   pfoldTxRefs,
-) where
+  pdpair,
+  punwords,
+  plookupSymbol,
+  pvalueWithoutAda,
+  plistSingleton,
+  pqtokenName,
+  pqtokenName',
+  passetClassValue,
+  pgetTokenNameIfSingle,
+)
+where
 
 import Crypto.Hash (Blake2b_256 (Blake2b_256), hashWith)
 import Data.ByteArray (convert)
 import Data.ByteString (ByteString, cons)
-import Data.List (sort, zipWith)
+import Data.List (intersperse, sort, zipWith)
+import LambdaBuffers.Runtime.Plutarch (PAssetClass)
 import Plutarch (popaque, pto)
-import Plutarch.Api.V1.AssocMap (plookup, psingleton)
+import Plutarch.Api.V1.AssocMap (PMap (PMap), plookup, psingleton)
+import Plutarch.Api.V1.Tuple (pbuiltinPairFromTuple, ptuple)
 import Plutarch.Api.V1.Value (
   AmountGuarantees (Positive),
+  padaSymbol,
   pnoAdaValue,
   pnormalize,
   pvalueOf,
  )
 import Plutarch.Api.V1.Value qualified as PValue
-import Plutarch.Api.V2 (AmountGuarantees (NonZero), KeyGuarantees (Sorted), PAddress, PCurrencySymbol, PDatum, PDatumHash, PExtended, PInterval (PInterval), PLowerBound (PLowerBound), PMaybeData (PDJust, PDNothing), PMintingPolicy, POutputDatum (PNoOutputDatum, POutputDatum, POutputDatumHash), PPOSIXTime, PPubKeyHash, PScriptContext, PScriptPurpose (PMinting, PSpending), PTokenName, PTuple, PTxInInfo, PTxOut, PTxOutRef, PUpperBound, PValue (PValue))
-import Plutarch.Bool (PBool (PTrue))
+import Plutarch.Api.V2 (AmountGuarantees (NonZero), KeyGuarantees (Sorted), PAddress, PCurrencySymbol, PDatum, PDatumHash, PExtended, PInterval (PInterval), PLowerBound (PLowerBound), PMaybeData (PDJust, PDNothing), PMintingPolicy, POutputDatum (PNoOutputDatum, POutputDatum, POutputDatumHash), PPOSIXTime, PPubKeyHash, PScriptContext, PScriptPurpose (PMinting, PSpending), PTokenName (PTokenName), PTuple, PTxInInfo, PTxOut, PTxOutRef, PUpperBound, PValue (PValue))
+import Plutarch.Bool (PBool (PTrue), pnot)
 import Plutarch.DataRepr (pdcons)
 import Plutarch.Extra.Interval (pcontains)
+import Plutarch.Extra.TermCont (pguardC, pletC, pmatchC)
+import Plutarch.Lift (PUnsafeLiftDecl)
 import Plutarch.List (PIsListLike, PListLike (pelimList, pnil), pany)
 import Plutarch.Monadic qualified as P
 import Plutarch.Num (PNum (pnegate, (#+)))
-import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList (PCons, PNil), PData, PEq ((#==)), PInteger (), PIsData, PMaybe (PJust, PNothing), PPartialOrd ((#<=)), PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pconstantData, pdata, pdnil, pelem, pfield, pfind, pfix, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pletFields, pmatch, psndBuiltin, ptrace, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
+import Plutarch.Prelude (ClosedTerm, PAsData, PBool (PFalse), PBuiltinList (PCons, PNil), PBuiltinPair, PByteString, PData, PEq ((#==)), PInteger (), PIsData, PMaybe (PJust, PNothing), PPartialOrd ((#<=)), PString, PTryFrom, PUnit, S, Term, getField, pcon, pconstant, pconstantData, pdata, pdnil, pelem, pfield, pfilter, pfind, pfix, pfoldl, pfromData, pfstBuiltin, phoistAcyclic, pif, plam, plet, pletFields, pmatch, pshow, psndBuiltin, ptrace, ptraceError, ptryFrom, (#), (#$), (#&&), type (:-->))
 import Plutarch.TermCont (tcont, unTermCont)
 import PlutusLedgerApi.V2 (Extended (PosInf), TxId (getTxId), TxInInfo (TxInInfo), TxOutRef (txOutRefId, txOutRefIdx), UpperBound (UpperBound), fromBuiltin)
-import Prelude (Bool (False, True), Functor (fmap), Monoid (mconcat, mempty), Num (fromInteger), Semigroup ((<>)), fst, ($), (.), (<$>))
+import Prelude (Applicative (pure), Bool (False, True), Functor (fmap), Monoid (mconcat, mempty), Num (fromInteger), Semigroup ((<>)), fst, ($), (.), (<$>))
 
 -- | Checks if there's a CurrencySymbol in a Value
 phasCurrency :: forall (s :: S). Term s (PCurrencySymbol :--> PValue 'Sorted 'Positive :--> PBool)
@@ -188,12 +201,12 @@ pfindMap = phoistAcyclic $
 
 {- | Minting policy for OneShot tokens
 
-- check a given `TxOutRef` is consumed
-- check `q` $ONE-SHOT tokens are minted
+ - check a given `TxOutRef` is consumed
+ - check `q` $ONE-SHOT tokens are minted
 
-Notes:
+ Notes:
 
-- guarantees $ONE-SHOT tokens are only minted once
+ - guarantees $ONE-SHOT tokens are only minted once
 -}
 mkOneShotMp ::
   ClosedTerm
@@ -403,16 +416,16 @@ pmustSpendAtLeast = phoistAcyclic $
 
 {- | Must spend and burn 'own' singleton AssetClass
 
-- check that the 'own' non $ADA token spent is a singleton
-- check that the quantity is entirely burned
+ - check that the 'own' non $ADA token spent is a singleton
+ - check that the quantity is entirely burned
 
-WARN: Use this function only when the input contains the entire quantity of an AssetClass!!!
+ WARN: Use this function only when the input contains the entire quantity of an AssetClass!!!
 
-Attack scenario:
+ Attack scenario:
 
-- only 2 x assetClass "mintingPolicyA" "someTokenName" are minted and paid to legitValidator in 2 different UTxOs
-- legitValidator validates spending using this function
-- Alice creates a transaction that spends both UTxOs containins these tokens BUT
+ - only 2 x assetClass "mintingPolicyA" "someTokenName" are minted and paid to legitValidator in 2 different UTxOs
+ - legitValidator validates spending using this function
+ - Alice creates a transaction that spends both UTxOs containins these tokens BUT
   - burns only one of them
   - pays to somewhere else the other one
 -}
@@ -461,3 +474,47 @@ hashTxInputs inputs =
       txIds = fmap (fromBuiltin . getTxId . txOutRefId) sortedOrefs
       hashedOref = convert @_ @ByteString . hashWith Blake2b_256 . mconcat $ zipWith cons ixs txIds
    in hashedOref
+
+pdpair :: PIsData a => PIsData b => Term s a -> Term s b -> Term s (PBuiltinPair (PAsData a) (PAsData b))
+pdpair l r = pfromData . pbuiltinPairFromTuple . pdata $ ptuple # pdata l # pdata r
+
+punwords ::
+  forall (s :: S).
+  [Term s PString] ->
+  Term s PString
+punwords = mconcat . intersperse " "
+
+plookupSymbol :: forall (g :: AmountGuarantees). ClosedTerm (PValue 'Sorted g :--> PCurrencySymbol :--> PBuiltinList (PBuiltinPair (PAsData PTokenName) (PAsData PInteger)))
+plookupSymbol = phoistAcyclic $ plam \val sym -> unTermCont $ do
+  PValue valueMap <- pmatchC val
+  PJust tnNamexQuantities <- pmatchC $ plookup # sym # valueMap
+  PMap tnNamexQuantities' <- pmatchC tnNamexQuantities
+  pure tnNamexQuantities'
+
+pvalueWithoutAda :: ClosedTerm (PValue s g :--> PValue s g)
+pvalueWithoutAda = phoistAcyclic $ plam $ \v ->
+  pcon $ PValue $ pcon $ PMap $ pfilter # plam (\x -> pnot # (pfromData (pfstBuiltin # x) #== padaSymbol)) # pto (pto v)
+
+plistSingleton :: PUnsafeLiftDecl a => ClosedTerm (a :--> PBuiltinList a)
+plistSingleton = phoistAcyclic $ plam \x -> pcon $ PCons x (pcon PNil)
+
+-- | `pqtokenName' tokenNameBytes quantity` same as `pqtokenName` but receives bytes instead of token name
+pqtokenName' :: ClosedTerm (PByteString :--> PInteger :--> PBuiltinPair (PAsData PTokenName) (PAsData PInteger))
+pqtokenName' = phoistAcyclic $ plam \tokenNameBytes quantity -> pqtokenName # pcon (PTokenName tokenNameBytes) # quantity
+
+-- | `pqtokenName tokenName quantity` aka 'quantified token name' creates a pair of token name and integer
+pqtokenName :: ClosedTerm (PTokenName :--> PInteger :--> PBuiltinPair (PAsData PTokenName) (PAsData PInteger))
+pqtokenName = phoistAcyclic $ plam pdpair
+
+passetClassValue :: ClosedTerm (PAssetClass :--> PInteger :--> PValue 'Sorted 'NonZero)
+passetClassValue = phoistAcyclic $ plam \asset quantity -> PValue.psingleton # (pfield @"_0" # asset) # (pfield @"_1" # asset) # quantity
+
+pgetTokenNameIfSingle :: ClosedTerm (PValue 'Sorted g :--> PCurrencySymbol :--> PTokenName)
+pgetTokenNameIfSingle = phoistAcyclic $ plam \value symbol -> unTermCont $ do
+  PCons qtokenName rest <- pmatchC $ plookupSymbol # value # symbol
+  gotQuantity <- pletC . pfromData $ psndBuiltin # qtokenName
+  pguardC (punwords ["Wanted 1 but got", pshow gotQuantity]) $
+    gotQuantity #== pconstant 1
+  pguardC (punwords ["Expected only a single quantified token name but got", pshow rest]) $
+    rest #== pcon PNil
+  pure $ pfromData $ pfstBuiltin # qtokenName

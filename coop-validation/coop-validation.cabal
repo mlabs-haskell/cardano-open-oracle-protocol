@@ -1,11 +1,12 @@
 cabal-version: 3.0
-name:          coop-plutus
+name:          coop-validation
 version:       0.1.0.0
 license:       MIT
 license-file:  LICENSE
 maintainer:    info@mlabs.city
 author:        mlabs-haskell
-description:   COOP Plutus programs (validators and minting policies)
+description:
+  COOP validation (validators and minting policies) written in Plutarch
 
 flag dev
   description: Enable non-strict compilation for development
@@ -28,6 +29,7 @@ common common-language
     NoStarIsType
     BangPatterns
     BinaryLiterals
+    BlockArguments
     ConstrainedClassMethods
     ConstraintKinds
     DataKinds
@@ -88,24 +90,34 @@ common common-language
 library
   import:          common-language
   exposed-modules:
-    Coop.Plutus
-    Coop.Plutus.Aux
-    Coop.Plutus.Types
+    Coop.Validation
+    Coop.Validation.Aux
+    Coop.Validation.Policies.Authentication
+    Coop.Validation.Policies.Aux
+    Coop.Validation.Policies.Certificate
+    Coop.Validation.Policies.FactStatement
+    Coop.Validation.Policies.Main
+    Coop.Validation.Queries
+    Coop.Validation.Validators.Certificate
+    Coop.Validation.Validators.Main
 
   hs-source-dirs:  src
   build-depends:
     , base
     , bytestring
-    , coop-hs-types
     , cryptonite
     , generics-sop
+    , lbf-coop-plutus-api-plutarch
+    , lbf-plutus-plutarch
+    , lbf-prelude-plutarch
+    , lbr-plutarch
     , memory
     , plutarch
     , plutarch-extra
     , plutus-ledger-api
     , plutus-tx
 
-executable coop-plutus-cli
+executable coop-validation-cli
   import:         common-language
   main-is:        Main.hs
   hs-source-dirs: app
@@ -114,12 +126,11 @@ executable coop-plutus-cli
     , aeson
     , base
     , bytestring
-    , coop-hs-types
-    , coop-plutus
+    , coop-validation
     , optparse-applicative
     , plutarch
 
-test-suite coop-plutus-tests
+test-suite coop-validation-tests
   import:         common-language
   type:           exitcode-stdio-1.0
   hs-source-dirs: test
@@ -132,8 +143,7 @@ test-suite coop-plutus-tests
     , base
     , bytestring
     , containers
-    , coop-hs-types
-    , coop-plutus
+    , coop-validation
     , hspec
     , plutarch
     , plutarch-test

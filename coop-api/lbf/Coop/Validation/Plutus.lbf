@@ -1,0 +1,200 @@
+module Coop.Validation.Plutus
+
+import Prelude (Eq, Integer, List)
+import Plutus.V1 (PlutusData, Bytes, Extended, POSIXTime, PubKeyHash, CurrencySymbol, Address, AssetClass, POSIXTimeRange, TokenName)
+
+-- # Main ($MAIN) policy API
+
+sum MainPolicyRedeemer = Create InputLocation | Delete
+derive Eq MainPolicyRedeemer
+derive PlutusData MainPolicyRedeemer
+
+-- # Main validator API
+
+record MainDatum = {
+  protocol : Protocol,
+  -- ^ Protocol addresses and currency symbols
+  authenticationAuthorityAsset : AssetClass,
+  -- ^ $AA (authentication authority) asset required to authorize Certificate and Authentication creation ($CERT + $AUTH minting)
+  requiredAtLeast : Integer
+  -- ^ $AA asset quantity required to authorize Certificate and Authentication creation ($CERT + $AUTH minting)
+}
+derive Eq MainDatum
+derive PlutusData MainDatum
+
+sum MainRedeemer = Noop
+derive Eq MainRedeemer
+derive PlutusData MainRedeemer
+
+record Protocol = {
+  factStatementsAddress : Address,
+  -- ^ @Facts address
+  certificatesAddress : Address,
+  -- ^ @Certs address
+  factStatementSymbol : CurrencySymbol,
+  -- ^ $FS symbol
+  certificatesSymbol : CurrencySymbol,
+  -- ^ $CERT symbol
+  authenticationSymbol : CurrencySymbol
+  -- ^ $AUTH symbol
+}
+derive Eq Protocol
+derive PlutusData Protocol
+
+-- # Fact Statement validator (@Facts) API
+
+record FactStatementDatum = {
+  factStatement : FactStatement,
+  -- ^ A fact statement is just Plutus Data and opaque to the Protocol
+  externalId : FactStatementExternalId,
+  -- ^ An external fact statement ID is just bytes assigned and managed by the oracle
+  gcAfter : Extended POSIXTime,
+  -- ^ Time after which the fact statement can be deleted
+  submitter : PubKeyHash
+  -- ^ Public key hash of the transaction submitter that will receive the UTxO $ADA once deleted
+  }
+derive Eq FactStatementDatum
+derive PlutusData FactStatementDatum
+
+prod FactStatement = PlutusData
+derive Eq FactStatement
+derive PlutusData FactStatement
+
+prod FactStatementExternalId = Bytes
+derive Eq FactStatementExternalId
+derive PlutusData FactStatementExternalId
+
+prod FactStatementId = TokenName
+derive Eq FactStatementId
+derive PlutusData FactStatementId
+
+-- # Fact Statement policy ($FS) API
+
+record FactStatementPolicyRedeemer = {
+  mainLocation : ReferenceLocation,
+  -- ^ @Main reference input location
+  actions : List FactStatementPolicyAction
+  -- ^ FactStatement policy actions to validate
+  }
+derive Eq FactStatementPolicyRedeemer
+derive PlutusData FactStatementPolicyRedeemer
+
+sum FactStatementPolicyAction = Create CreateFactStatement | Delete DeleteFactStatement
+derive Eq FactStatementPolicyAction
+derive PlutusData FactStatementPolicyAction
+
+record CreateFactStatement = {
+  id : FactStatementId,
+  factStatementLocation : OutputLocation,
+  authenticationLocation : InputLocation,
+  certificateLocation : ReferenceLocation
+  }
+derive Eq CreateFactStatement
+derive PlutusData CreateFactStatement
+
+record DeleteFactStatement = {
+  id : FactStatementId,
+  factStatementLocation : InputLocation
+  }
+derive Eq DeleteFactStatement
+derive PlutusData DeleteFactStatement
+
+-- # Certificate validator (@Certs) API
+
+record CertificateDatum = {
+  validity : POSIXTimeRange,
+  -- ^ Certificate validity interval after which associated $AUTH tokens can't be used to authorize $FS minting
+  redeemerAsset : AssetClass
+  -- ^ $CERT-RMDR asset class that must be spent to 'garbage collect' the @CertV UTxO after the certificate had expired
+  }
+derive Eq CertificateDatum
+derive PlutusData CertificateDatum
+
+record CertificateValidatorRedeemer = {
+  mainLocation : ReferenceLocation,
+  -- ^ @Main reference input location
+  action : CertificateValidatorAction
+  -- ^ Certificate validator action to validate
+  }
+derive Eq CertificateValidatorRedeemer
+derive PlutusData CertificateValidatorRedeemer
+
+sum CertificateValidatorAction = Delete
+derive Eq CertificateValidatorAction
+derive PlutusData CertificateValidatorAction
+
+-- # Certificate policy ($CERT) API
+
+record CertificatePolicyRedeemer = {
+  mainLocation : ReferenceLocation,
+  -- ^ @Main reference input location
+  actions : List CertificatePolicyAction
+  -- ^ Certificate policy actions to validate
+  }
+derive Eq CertificatePolicyRedeemer
+derive PlutusData CertificatePolicyRedeemer
+
+-- Certificate identifier (associated $AUTH assets use the underlying token name as their own)
+prod CertificateId = TokenName
+derive Eq CertificateId
+derive PlutusData CertificateId
+
+sum CertificatePolicyAction = Create OutputLocation CertificateId | Delete InputLocation CertificateId
+derive Eq CertificatePolicyAction
+derive PlutusData CertificatePolicyAction
+
+-- # Authentication ($AUTH) policy API
+
+record AuthenticationPolicyRedeemer = {
+  mainLocation : ReferenceLocation,
+  -- ^ @Main reference input location
+  actions : List AuthenticationPolicyAction
+  -- ^ Authentication policy actions to validate
+  }
+derive Eq AuthenticationPolicyRedeemer
+derive PlutusData AuthenticationPolicyRedeemer
+
+sum AuthenticationPolicyAction = Create CreateAuthentication | Delete DeleteAuthentication
+derive Eq AuthenticationPolicyAction
+derive PlutusData AuthenticationPolicyAction
+
+record CreateAuthentication = {
+  certificateId : CertificateId,
+  -- ^ Certificate identifier ($AUTH and $CERT assets share this as the token name)
+  quantity : Integer
+  -- ^ How many $AUTH[certificateId] are minted
+  }
+derive Eq CreateAuthentication
+derive PlutusData CreateAuthentication
+
+record DeleteAuthentication = {
+  authenticationLocation : InputLocation,
+  -- ^ Input location where the quantity x $AUTH[certificateId] are
+  certificateId : CertificateId,
+  -- ^ Certificate identifier ($AUTH and $CERT assets share this as the token name)
+  quantity : Integer
+  -- ^ How many $AUTH[certificateId] are burned
+  }
+derive Eq DeleteAuthentication
+derive PlutusData DeleteAuthentication
+
+-- $AUTH policy initial parameters
+record AuthenticationPolicyParams = {
+  certificatesSymbol : CurrencySymbol
+  -- ^ $CERT symbol
+  }
+derive Eq AuthenticationPolicyParams
+derive PlutusData AuthenticationPolicyParams
+
+-- Location API
+prod InputLocation = Integer
+derive Eq InputLocation
+derive PlutusData InputLocation
+
+prod ReferenceLocation = Integer
+derive Eq ReferenceLocation
+derive PlutusData ReferenceLocation
+
+prod OutputLocation = Integer
+derive Eq OutputLocation
+derive PlutusData OutputLocation
