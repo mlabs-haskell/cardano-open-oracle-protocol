@@ -21,6 +21,7 @@ import Coop.Types (AuthMpParams (amp'authAuthorityAc, amp'requiredAtLeastAaQ), A
 import PlutusLedgerApi.V1.Interval (interval)
 import PlutusLedgerApi.V2 qualified as Value
 import PlutusTx.Prelude (Group (inv))
+import Test.QuickCheck.Gen qualified as Q
 
 mkScriptContext :: ScriptPurpose -> [TxInInfo] -> [TxInInfo] -> Value -> [TxOut] -> [PubKeyHash] -> ScriptContext
 mkScriptContext purpose ins refs mints outs sigs =
@@ -350,12 +351,13 @@ genCorrectFsMpMintingCtx fsMpParams fsCs = do
   certRefs <- for certIds (genCertInput certVAddr certCs certRdmrAc validity)
   authIns <- for certIds (genAuthInput authCs)
   (otherIns, otherMint, otherOuts) <- genOthers 5
+  gcAfter <- genExtendedTime
   let authsBurned = mconcat [Value.singleton authCs (TokenName certId) (-1) | certId <- certIds]
       fsVOuts =
         [ TxOut
           fsVAddr
           (Value.singleton fsCs (TokenName . toBuiltin $ hashTxInputs [authIn]) 1)
-          (toOutputDatum $ FsDatum (toBuiltinData True) "deadbeef" (Finite 100) submitter)
+          (toOutputDatum $ FsDatum (toBuiltinData True) "deadbeef" gcAfter submitter)
           Nothing
         | authIn <- authIns
         ]
@@ -543,6 +545,11 @@ genTokenName = TokenName <$> genBuiltinByteString "tn-" 32
 
 genCurrencySymbol :: Gen CurrencySymbol
 genCurrencySymbol = CurrencySymbol <$> genBuiltinByteString "cs-" 28
+
+genExtendedTime :: Gen (Extended POSIXTime)
+genExtendedTime = Q.oneof [return NegInf, return PosInf, genFinite]
+  where
+    genFinite = Finite . POSIXTime <$> chooseInteger (0, 100)
 
 genAuthenticatonId :: Gen BuiltinByteString
 genAuthenticatonId = genBuiltinByteString "authid-" 28
