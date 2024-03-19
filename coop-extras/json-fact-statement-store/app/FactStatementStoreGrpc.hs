@@ -18,7 +18,7 @@ import Data.Traversable (for)
 import Database.Beam (SqlValable (val_), runSelectReturningOne)
 import Database.Beam.Query (SqlEq ((==.)), all_, filter_, select)
 import Database.Beam.Sqlite (runBeamSqliteDebug)
-import Database.SQLite.Simple (open)
+import Database.SQLite.Simple (Connection, withConnection)
 import Network.GRPC.HTTP2.Encoding as Encoding (
   gzip,
   uncompressed,
@@ -50,15 +50,15 @@ data FactStatementStoreGrpcOpts = FactStatementStoreGrpcOpts
 makeLenses ''FactStatementStoreGrpcOpts
 
 factStatementStoreService :: FactStatementStoreGrpcOpts -> IO ()
-factStatementStoreService opts = do
-  let routes :: [ServiceHandler]
-      routes =
-        [Server.unary (RPC :: RPC FactStatementStore "getFactStatement") (handleReq $ opts ^. db)]
-
-  runServer
-    routes
-    (fromString $ opts ^. grpcAddress, opts ^. grpcPort)
-    (opts ^. tlsCertFile, opts ^. tlsKeyFile)
+factStatementStoreService opts =
+  withConnection (opts ^. db) $ \dbConn ->
+    let routes :: [ServiceHandler]
+        routes =
+          [Server.unary (RPC :: RPC FactStatementStore "getFactStatement") (handleReq dbConn)]
+     in runServer
+          routes
+          (fromString $ opts ^. grpcAddress, opts ^. grpcPort)
+          (opts ^. tlsCertFile, opts ^. tlsKeyFile)
 
 runServer :: [ServiceHandler] -> (Warp.HostPreference, Int) -> (FilePath, FilePath) -> IO ()
 runServer routes (h, p) (certFile, keyFile) = do
@@ -76,10 +76,8 @@ runServer routes (h, p) (certFile, keyFile) = do
 
 type FsT = FactStatementT Identity
 
-handleReq :: FilePath -> Server.UnaryHandler IO GetFactStatementRequest GetFactStatementResponse
-handleReq dbPath _ req = do
-  putStrLn $ "Establishing the database connection to: " <> dbPath
-  fsDb <- open dbPath
+handleReq :: Connection -> Server.UnaryHandler IO GetFactStatementRequest GetFactStatementResponse
+handleReq dbConn _ req = do
   let fsTbl' = fsTbl fsStoreSettings
       ids = nub $ req ^. fsIds
 
@@ -87,7 +85,7 @@ handleReq dbPath _ req = do
     for
       ids
       ( \i -> do
-          (mayFsT :: Maybe FsT) <- runBeamSqliteDebug Prelude.putStrLn fsDb $ runSelectReturningOne (select $ filter_ (\fs -> _factStatementId fs ==. val_ i) (all_ fsTbl'))
+          (mayFsT :: Maybe FsT) <- runBeamSqliteDebug Prelude.putStrLn dbConn $ runSelectReturningOne (select $ filter_ (\fs -> _factStatementId fs ==. val_ i) (all_ fsTbl'))
           maybe
             (return (Left $ Text.pack "Not found requested Fact Statement with ID " <> (Text.pack . show $ i)))
             ( \fs -> do
