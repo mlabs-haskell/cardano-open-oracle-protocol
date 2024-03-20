@@ -10,7 +10,7 @@ import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8)
 import Database.Beam.Query (insert, insertValues, runInsert)
 import Database.Beam.Sqlite (runBeamSqliteDebug)
-import Database.SQLite.Simple (open)
+import Database.SQLite.Simple (withConnection)
 
 data InsertFsOpts = InsertFsOpts
   { _db :: FilePath
@@ -22,9 +22,8 @@ data InsertFsOpts = InsertFsOpts
 makeLenses ''InsertFsOpts
 
 insertFs :: InsertFsOpts -> IO ()
-insertFs opts = do
-  conn <- open (opts ^. db)
-  runBeamSqliteDebug putStrLn conn $ do
+insertFs opts = withConnection (opts ^. db) $ \dbConn ->
+  runBeamSqliteDebug putStrLn dbConn $
     runInsert $
       insert (fsTbl fsStoreSettings) $
         insertValues

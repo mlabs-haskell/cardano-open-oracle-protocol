@@ -86,6 +86,7 @@ executable coop-publisher-cli
   main-is:        Main.hs
   hs-source-dirs: app
   other-modules:  Coop.Cli.PublisherGrpc
+  ghc-options:    -threaded
   build-depends:
     , base
     , containers

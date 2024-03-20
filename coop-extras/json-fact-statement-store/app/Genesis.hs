@@ -6,7 +6,7 @@ import BeamConfig (factStatementsCreateTable)
 import Cardano.Proto.Aux ()
 import Control.Lens (makeLenses, (^.))
 import Data.String (IsString (fromString))
-import Database.SQLite.Simple (execute_, open)
+import Database.SQLite.Simple (execute_, withConnection)
 
 newtype GenesisOpts = GenesisOpts
   { _db :: FilePath
@@ -16,6 +16,5 @@ newtype GenesisOpts = GenesisOpts
 makeLenses ''GenesisOpts
 
 genesis :: GenesisOpts -> IO ()
-genesis opts = do
-  conn <- open (opts ^. db)
-  execute_ conn (fromString factStatementsCreateTable)
+genesis opts = withConnection (opts ^. db) $ \dbConn ->
+  execute_ dbConn (fromString factStatementsCreateTable)
