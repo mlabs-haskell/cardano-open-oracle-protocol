@@ -48,13 +48,13 @@ import Proto.TxBuilderService_Fields (factStatements, fs)
 
 data PublisherGrpcOpts = PublisherGrpcOpts
   { _grpcAddress :: String
-  , _grpcPort :: Int
+  , _grpcPort :: Word16
   , _tlsCertFile :: FilePath
   , _tlsKeyFile :: FilePath
   , _fsStoreAddress :: String
   , _fsStorePort :: Word16
   , _txBuilderAddress :: String
-  , _txBuilderPort :: Int
+  , _txBuilderPort :: Word16
   }
   deriving stock (Show, Eq)
 
@@ -64,8 +64,8 @@ publisherService :: PublisherGrpcOpts -> IO ()
 publisherService opts =
   let setup =
         (,)
-          <$> mkClient (opts ^. fsStoreAddress) (fromIntegral $ opts ^. fsStorePort)
-          <*> mkClient (opts ^. txBuilderAddress) (fromIntegral $ opts ^. txBuilderPort)
+          <$> mkClient (opts ^. fsStoreAddress) (opts ^. fsStorePort)
+          <*> mkClient (opts ^. txBuilderAddress) (opts ^. txBuilderPort)
 
       cleanup = traverseOf_ both closeClient
 
@@ -168,11 +168,11 @@ publisherService opts =
               (opts ^. tlsCertFile, opts ^. tlsKeyFile)
    in bracket setup cleanup $ uncurry serve
 
-runServer :: [ServiceHandler] -> (Warp.HostPreference, Int) -> (FilePath, FilePath) -> IO ()
+runServer :: [ServiceHandler] -> (Warp.HostPreference, Word16) -> (FilePath, FilePath) -> IO ()
 runServer routes (h, p) (certFile, keyFile) = do
   let warpSettings =
         Warp.defaultSettings
-          & Warp.setPort p
+          & Warp.setPort (fromIntegral p)
           & Warp.setHost h
   Server.runGrpc
     (tlsSettings certFile keyFile)

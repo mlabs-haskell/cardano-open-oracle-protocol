@@ -15,6 +15,7 @@ import Data.String (IsString (fromString))
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Traversable (for)
+import Data.Word (Word16)
 import Database.Beam (SqlValable (val_), runSelectReturningOne)
 import Database.Beam.Query (SqlEq ((==.)), all_, filter_, select)
 import Database.Beam.Sqlite (runBeamSqliteDebug)
@@ -41,7 +42,7 @@ import Prelude hiding (error, succ)
 data FactStatementStoreGrpcOpts = FactStatementStoreGrpcOpts
   { _db :: FilePath
   , _grpcAddress :: String
-  , _grpcPort :: Int
+  , _grpcPort :: Word16
   , _tlsCertFile :: FilePath
   , _tlsKeyFile :: FilePath
   }
@@ -60,11 +61,11 @@ factStatementStoreService opts =
           (fromString $ opts ^. grpcAddress, opts ^. grpcPort)
           (opts ^. tlsCertFile, opts ^. tlsKeyFile)
 
-runServer :: [ServiceHandler] -> (Warp.HostPreference, Int) -> (FilePath, FilePath) -> IO ()
+runServer :: [ServiceHandler] -> (Warp.HostPreference, Word16) -> (FilePath, FilePath) -> IO ()
 runServer routes (h, p) (certFile, keyFile) = do
   let warpSettings =
         Warp.defaultSettings
-          & Warp.setPort p
+          & Warp.setPort (fromIntegral p)
           & Warp.setHost h
   Server.runGrpc
     (tlsSettings certFile keyFile)
